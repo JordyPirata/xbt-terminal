@@ -14,10 +14,12 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
   comisiones, muestreo del valor). `btcb2t` (alias `attach`) es la pantalla:
   opera todo por el socket, sin config ni keys. Protocolo en design.md §6.13.
-- **Corriendo en local:** daemon `--live` desde 2026-10-26 21:54 UTC (pid
-  304722) y pantalla (pid 304778), con todo hasta T-73. **Bot armado** desde
-  las 21:54:48 UTC con `max_move_pct = "1.0"` y `move_window_ms = 2000`. En `ps`
-  cada comando sale dos veces (el padre `uv run`); no son dos daemons.
+- **En local:** daemon parado el 2026-10-26 para renombrar el proyecto a
+  `xbt-terminal` (carpeta `~/Code/xbt-terminal`, paquete `xbt_terminal`; el
+  comando `btcb2t` y sus carpetas XDG no cambian). Relanzar con
+  `uv run btcb2t daemon --live` y rearmar con `bot on` (config del bot:
+  `max_move_pct = "1.0"`, `move_window_ms = 2000`). En `ps` cada comando sale
+  dos veces (el padre `uv run`); no son dos daemons.
 - **Lo último (detalle en decisions.md y `specs/archive/tasks-done.md`):**
   - T-69/T-70/T-71 (D-69): evento `value` cada 5 min en el journal; en
     resultados (`r`), `Tab` → pestaña "Valor de la cuenta"; se refresca sola
