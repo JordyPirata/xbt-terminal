@@ -81,6 +81,7 @@ dicen en su propia nota.
 | D-69 | 2026-10-25 | Valor de la cuenta muestreado en el journal (requirements v0.22, T-69) |
 | D-70 | 2026-10-26 | Decisión del bot en O(L² log L) en el peor caso, con oráculo y presupuesto de latencia (requirements v0.25, T-72) |
 | D-71 | 2026-10-26 | El bot no dispara tras un movimiento brusco del mid (requirements v0.26, T-73) |
+| D-72 | 2026-10-26 | La ventana del movimiento conserva el mid que regía al empezar (T-74) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1741,3 +1742,19 @@ sirve. El usuario nota más bots y cambios muy repentinos.
 - El mid y no los trades: el book refleja el barrido y el rebote, y el bot ya
   se despierta con cada cambio de book.
 **Toca:** RF-19, CA-08, design.md §6.9, T-73.
+
+## D-72 · 2026-10-26 · La ventana del movimiento conserva el mid que regía al empezar (T-74)
+**Contexto:** d-60003f (2026-10-26 23:42:42 UTC) disparó con `move` 0 en los
+dos venues y dejó colgada la venta en Neoxa. Los trades públicos de Neoxa
+enseñan un barrido comprador de 0.0038496 a 0.00387863 entre .390 y .626, tras
+~37 s sin trades; el bot vendió contra ese bid y otra venta de 0.168 XBT se lo
+llevó a las .750. El filtro de D-71 no lo vio: la ventana olvidaba todos los
+mids de antes de `move_window_ms`, también el que seguía vigente al empezarla.
+Tras un book quieto más que la ventana, un salto en un solo cambio dejaba solo
+el mid nuevo y daba 0 %. Casi todos los `bot_fire` desde D-71 llevan `move` 0:
+el máximo de 0.27 % de los primeros datos estaba medido por debajo.
+**Decisión:** la ventana olvida los mids de antes de su inicio salvo el último,
+que es el que regía al empezarla. RF-19 no cambia: "se ha movido en los últimos
+`move_window_ms`" ya incluía ese mid. Los `move` de `bot_fire` de antes de este
+cambio no sirven para ajustar `max_move_pct`.
+**Toca:** RF-19, CA-08, design.md §6.9, T-74.

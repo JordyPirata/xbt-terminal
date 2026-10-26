@@ -549,6 +549,20 @@ class TestMovimientoBrusco:
             (fire,) = rig.events("bot_fire")
             assert fire["data"]["move"] == {"nk": "0", "nx": "0"}
 
+    async def test_salto_tras_un_book_quieto_cuenta(self, tmp_path):
+        """D-72: si el book lleva más de la ventana quieto, el mid vigente al
+        empezar la ventana sigue contando (d-60003f disparó con move 0)."""
+        limits = replace(BOT, max_move_pct=D("1"), move_window_ms=2000)
+        async with BotRig(tmp_path, limits=limits) as rig:
+            rig.books(nx=("0.00690000", "0.00705000"))  # sin cruce, mid 0.006975
+            await rig.until(lambda: rig.hub.state["nx"].book.mid == D("0.006975"))
+            rig.bot.arm()
+            rig.clock.now += 5_000  # el book se queda quieto más que la ventana
+            rig.books()  # salta a mid 0.00725 (+3.9 %) en un solo cambio
+            await rig.until(lambda: rig.bot.last_skip and rig.bot.last_skip.reason == "volatile")
+            assert rig.bot.last_skip.detail.startswith("nx: mid 3.94 %")
+            assert not rig.orders.doubles
+
     async def test_sin_filtro_dispara_y_apunta_el_movimiento(self, rig):
         rig.books(nx=("0.00690000", "0.00705000"))
         await rig.until(lambda: rig.hub.state["nx"].book.mid == D("0.006975"))

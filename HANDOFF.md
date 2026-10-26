@@ -4,10 +4,10 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-26, 23:35 UTC)
+## Estado (2026-10-27, 00:00 UTC)
 
 - Spec en **v0.26** (changelog en `specs/archive/changelog.md`). Hechas T-61 a
-  T-65 y T-67 a T-73. 1363 tests, ruff limpio, `spec_trace` 67/72 (sin test:
+  T-65 y T-67 a T-74. 1364 tests, ruff limpio, `spec_trace` 67/72 (sin test:
   RNF-01, RNF-21/T-32, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43, D-57).
   Árbol limpio en `main`.
 - **Arquitectura:** `btcb2t daemon [--live]` es el único proceso que habla con
@@ -35,6 +35,11 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
     tarda hasta `move_window_ms` en volver a disparar). `bot_fire.move` apunta el
     movimiento de cada venue, con filtro o sin él. Al frenar, `diag.log` dice
     "sin disparar por movimiento brusco".
+  - T-74 (D-72): la ventana de T-73 olvidaba también el mid vigente al
+    empezarla; tras un book quieto, un salto en un solo cambio daba `move` 0.
+    Así disparó d-60003f (23:42:42 UTC, venta en Neoxa colgada, 0.0038 XBT
+    comprados de más en NonKYC). **El daemon en marcha aún lleva el código
+    viejo y el bot está `halted`**: reiniciarlo para aplicar T-74.
 - **Piernas colgadas:** 12 de 472 dobles del bot dejaron una pierna sin llenar,
   11 en Neoxa (las dos de hoy: d-f65e93 13:47 y d-e988bd 20:54 UTC, compra en
   Neoxa sin llenar). Causa vista en d-e988bd con los trades públicos de Neoxa:
@@ -58,10 +63,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Hasta las 22:59 UTC del 26:
-   18 disparos (22:32 a 22:41), 0 colgadas, 0 frenadas, `move` máximo 0.27 %;
-   poca muestra, se deja en 1.0. Mirar el `move` de los
-   `bot_fire` desde las 21:54 UTC del 26, las dobles colgadas nuevas y cuántas
+1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Solo con los `bot_fire`
+   posteriores al reinicio con T-74: los de antes llevan `move` 0 casi siempre
+   (D-72) y no sirven. Mirar el `move`, las dobles colgadas nuevas y cuántas
    veces frenó (`grep "movimiento brusco" ~/.local/state/btcb2t/diag.log`). Si
    frena mucho sin colgadas, subirlo; si sigue habiendo colgadas con `move`
    alto, bajarlo. Consulta rápida:

@@ -178,3 +178,4 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 ### T-58 Órdenes y fills de NonKYC de otros mercados · `done` · RF-05, RF-08, RF-09 · D-63
 ### T-59 Fee corregida de un fill · `done` · RF-11, RF-25 · dep T-57 · D-64
 ### T-60 Fees en token valoradas en resultados · `done` · RF-24, RF-25 · dep T-59 · D-65
+### T-74 Salto tras un book quieto · `done` · RF-19, CA-08 · dep T-73 · D-72

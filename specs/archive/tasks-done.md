@@ -872,3 +872,10 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
 - Análisis previo (D-71): 12 de 472 dobles del bot con una pierna sin llenar;
   la red no es (WiFi −40 dBm, 3.6 ms al router, 0 % de pérdida; confirmaciones
   normales; sin caídas del WS antes de 10 de 12) y la neta no las distingue.
+
+### T-74 Salto tras un book quieto · `done` · RF-19, CA-08 · dep T-73 · D-72
+- La ventana de mids de `BotService` conserva el último mid de antes de su
+  inicio (el que regía al empezarla); sin él, un salto tras más de
+  `move_window_ms` de book quieto daba `move` 0 (d-60003f).
+- Hecho: `BotService._forget` borra el primero solo si el segundo también ha
+  salido de la ventana. Test `test_salto_tras_un_book_quieto_cuenta`.

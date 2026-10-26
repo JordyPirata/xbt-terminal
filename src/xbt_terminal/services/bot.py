@@ -229,7 +229,9 @@ class BotService:
         self._forget(window, now)
 
     def _forget(self, window: deque[tuple[int, Decimal]], now: int) -> None:
-        while window and now - window[0][0] > self._limits.move_window_ms:
+        """Olvida los mids de antes de la ventana menos el último: es el que
+        regía al empezarla, y sin él un salto tras un book quieto da 0 (D-72)."""
+        while len(window) > 1 and now - window[1][0] > self._limits.move_window_ms:
             window.popleft()
 
     def _move_pct(self, vid: VenueId, now: int) -> Decimal | None:

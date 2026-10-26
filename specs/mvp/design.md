@@ -384,8 +384,9 @@ Coste de `decide` (D-70, RNF-23): la profundidad hasta un precio sale de sumas
 acumuladas con `bisect`, y los pares de referencias se podan por monotonía de la
 neta; con 50 niveles y `max_walk_pct`, por debajo de 1 ms.
 
-Movimiento brusco (D-71): `BotService` guarda `(hora, mid)` de cada venue en
-cada cambio de book durante `move_window_ms`; `VenueView.move_pct` es
+Movimiento brusco (D-71, D-72): `BotService` guarda `(hora, mid)` de cada venue en
+cada cambio de book durante `move_window_ms`, más el último de antes, que es
+el que regía al empezar la ventana (D-72); `VenueView.move_pct` es
 `(máx − mín) / mín × 100` de esa ventana. Con `max_move_pct`, `decide` da
 `Skip("volatile")` si algún venue lo pasa. `bot_fire` lleva `move` por venue.
 
