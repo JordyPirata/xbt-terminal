@@ -5,9 +5,9 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.core.bot import Fire, Skip, decide, inventory_veto
-from btcb2_terminal.core.inventory import InventoryTarget, base_pct, inventory
-from btcb2_terminal.core.models import Balance, D
+from xbt_terminal.core.bot import Fire, Skip, decide, inventory_veto
+from xbt_terminal.core.inventory import InventoryTarget, base_pct, inventory
+from xbt_terminal.core.models import Balance, D
 
 from .test_bot import ARMED, LIMITS, NOW, crossed
 

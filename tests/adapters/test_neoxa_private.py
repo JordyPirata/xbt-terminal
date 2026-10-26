@@ -12,11 +12,11 @@ import httpx
 import pytest
 import respx
 
-from btcb2_terminal.adapters.base import ReadOnlyError, UncertainError, Venue, VenueError
-from btcb2_terminal.adapters.neoxa import REST_URL, NeoxaVenue
-from btcb2_terminal.config import Credentials
-from btcb2_terminal.core.models import Balance, ConnState, D, Fill, Order, OrderRequest
-from btcb2_terminal.core.secrets import Secret
+from xbt_terminal.adapters.base import ReadOnlyError, UncertainError, Venue, VenueError
+from xbt_terminal.adapters.neoxa import REST_URL, NeoxaVenue
+from xbt_terminal.config import Credentials
+from xbt_terminal.core.models import Balance, ConnState, D, Fill, Order, OrderRequest
+from xbt_terminal.core.secrets import Secret
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "neoxa"
 API = REST_URL + "/exchange"

@@ -5,10 +5,10 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.core.models import ConnState
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.ui.panels import BookPanel, CrossPanel
-from btcb2_terminal.ui.status import STALE_AFTER_MS, StatusBar, VenueLink, render_status
+from xbt_terminal.core.models import ConnState
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.ui.panels import BookPanel, CrossPanel
+from xbt_terminal.ui.status import STALE_AFTER_MS, StatusBar, VenueLink, render_status
 
 from ..fakes import T0, FakeFeed
 from ..services.test_account import FakePrivate
@@ -142,7 +142,7 @@ class TestEnPantalla:
         )
 
     async def test_canal_privado_desde_la_cuenta(self):
-        from btcb2_terminal.services.account import AccountService
+        from xbt_terminal.services.account import AccountService
 
         venue = FakePrivate()
         account = AccountService({"nk": venue}, retry_s=0.01, clock=lambda: NOW)
@@ -238,7 +238,7 @@ def test_fallos_internos(n, label):
 @pytest.mark.spec("RF-14")
 async def test_un_cambio_de_estado_se_pinta_al_llegar(monkeypatch):
     """Sin esperar al refresco periódico, que aquí se pone en 60 s."""
-    from btcb2_terminal.ui import app as app_module
+    from xbt_terminal.ui import app as app_module
 
     monkeypatch.setattr(app_module, "STATUS_EVERY_S", 60.0)
     t = TestEnPantalla()

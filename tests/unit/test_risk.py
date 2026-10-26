@@ -7,8 +7,8 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.core.models import Balance, D, MarketSpec, Order, OrderRequest
-from btcb2_terminal.core.risk import RiskContext, RiskLimits, check
+from xbt_terminal.core.models import Balance, D, MarketSpec, Order, OrderRequest
+from xbt_terminal.core.risk import RiskContext, RiskLimits, check
 
 NOW = 1_760_000_000_000
 

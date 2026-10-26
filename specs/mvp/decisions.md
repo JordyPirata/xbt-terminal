@@ -816,7 +816,7 @@ dejaba rastro de su causa ni de los reintentos.
 - La redacción va en el **formatter**, no en un `logging.Filter`: el filtro ve el
   mensaje antes de formatear y no ve el traceback; redactar la línea final cubre
   mensaje, argumentos y excepción.
-- `NullHandler` en `btcb2_terminal/__init__.py` y `propagate = False` al
+- `NullHandler` en `xbt_terminal/__init__.py` y `propagate = False` al
   instalar: sin ellos, `logging.lastResort` escribiría avisos en stderr encima de
   la TUI.
 - `[log]` es opcional (por defecto `info`) para no romper los `config.toml`

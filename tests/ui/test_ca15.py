@@ -8,13 +8,13 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.core.models import D
-from btcb2_terminal.services.daemon import run_daemon
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.remote import RemoteEngine, probe
-from btcb2_terminal.ui.app import BTCB2App, ConfirmScreen
-from btcb2_terminal.ui.status import StatusBar
+from xbt_terminal.core.models import D
+from xbt_terminal.services.daemon import run_daemon
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.remote import RemoteEngine, probe
+from xbt_terminal.ui.app import BTCB2App, ConfirmScreen
+from xbt_terminal.ui.status import StatusBar
 
 from ..fakes import FakeFeed
 from ..services.test_bot_service import BOT, BotRig

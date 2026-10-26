@@ -9,13 +9,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import Balance, D
-from btcb2_terminal.core.results import read_rows
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.core.valuation import series
-from btcb2_terminal.services.faults import Faults
-from btcb2_terminal.services.valuation import ValueRecorder
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import Balance, D
+from xbt_terminal.core.results import read_rows
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.core.valuation import series
+from xbt_terminal.services.faults import Faults
+from xbt_terminal.services.valuation import ValueRecorder
 
 T0 = int(datetime(2026, 10, 25, 12, 0, tzinfo=UTC).timestamp() * 1000)
 EVERY_S = 300

@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from btcb2_terminal.__main__ import build_engine, client_view, main
-from btcb2_terminal.adapters.dryrun import DryRunVenue
-from btcb2_terminal.adapters.neoxa import NeoxaVenue
-from btcb2_terminal.adapters.nonkyc import NonKYCVenue
-from btcb2_terminal.config import load_settings
-from btcb2_terminal.core.bot import FeeToken
-from btcb2_terminal.paths import AlreadyRunning, InstanceLock
-from btcb2_terminal.services.wire import ClientView
-from btcb2_terminal.ui.app import BTCB2App
-from btcb2_terminal.ui.clipboard import system_copy
+from xbt_terminal.__main__ import build_engine, client_view, main
+from xbt_terminal.adapters.dryrun import DryRunVenue
+from xbt_terminal.adapters.neoxa import NeoxaVenue
+from xbt_terminal.adapters.nonkyc import NonKYCVenue
+from xbt_terminal.config import load_settings
+from xbt_terminal.core.bot import FeeToken
+from xbt_terminal.paths import AlreadyRunning, InstanceLock
+from xbt_terminal.services.wire import ClientView
+from xbt_terminal.ui.app import BTCB2App
+from xbt_terminal.ui.clipboard import system_copy
 
 EXAMPLE = Path(__file__).parents[2] / "config.example.toml"
 
@@ -253,7 +253,7 @@ def served(monkeypatch):
             InstanceLock(engine.results.directory).acquire()
         on_ready()
 
-    monkeypatch.setattr("btcb2_terminal.__main__.run_daemon", fake_run)
+    monkeypatch.setattr("xbt_terminal.__main__.run_daemon", fake_run)
     return seen
 
 
@@ -379,7 +379,7 @@ def connected(monkeypatch, tmp_path):
     """Un daemon que contesta en live con bot y su config; `run` guarda la app y
     mira que el cliente no tome el lock. Construir venues es un fallo: el cliente
     no habla con los venues (D-66)."""
-    from btcb2_terminal.services.remote import Hello
+    from xbt_terminal.services.remote import Hello
 
     seen = {}
 
@@ -394,9 +394,9 @@ def connected(monkeypatch, tmp_path):
     def no_venues(*a, **kw):
         raise AssertionError("el cliente no crea venues")
 
-    monkeypatch.setattr("btcb2_terminal.__main__.probe", fake_probe)
-    monkeypatch.setattr("btcb2_terminal.__main__.build_venues", no_venues)
-    monkeypatch.setattr("btcb2_terminal.__main__.load_settings", no_venues)
+    monkeypatch.setattr("xbt_terminal.__main__.probe", fake_probe)
+    monkeypatch.setattr("xbt_terminal.__main__.build_venues", no_venues)
+    monkeypatch.setattr("xbt_terminal.__main__.load_settings", no_venues)
     monkeypatch.setattr(BTCB2App, "run", fake_run)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "sin-config"))  # no hay config.toml
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))

@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.adapters.streaming import Backoff, LatencyMeter, StreamingVenue
-from btcb2_terminal.core.models import BookSnapshot, ConnState, D, Level, Trade
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.adapters.streaming import Backoff, LatencyMeter, StreamingVenue
+from xbt_terminal.core.models import BookSnapshot, ConnState, D, Level, Trade
 
 WS_BOOK = BookSnapshot("nk", (Level(D("0.0072"), D("1")),), (Level(D("0.0073"), D("1")),), 1, 7)
 REST_BOOK = BookSnapshot("nk", (Level(D("0.0071"), D("1")),), (Level(D("0.0074"), D("1")),), 2)

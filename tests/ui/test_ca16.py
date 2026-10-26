@@ -6,11 +6,11 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.models import D
-from btcb2_terminal.services.control import ControlServer
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.remote import RemoteEngine
-from btcb2_terminal.ui.app import BTCB2App, ConfirmScreen
+from xbt_terminal.core.models import D
+from xbt_terminal.services.control import ControlServer
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.remote import RemoteEngine
+from xbt_terminal.ui.app import BTCB2App, ConfirmScreen
 
 from ..services.test_double_orders import Setup
 from .test_orders_ui import type_command, until

@@ -4,10 +4,10 @@ resultados, con la serie del rango, los huecos sin interpolar y el resumen."""
 import pytest
 from textual.widgets import DataTable, TabbedContent
 
-from btcb2_terminal.core.models import D
-from btcb2_terminal.ui import app as app_module
-from btcb2_terminal.ui.app import ResultsScreen
-from btcb2_terminal.ui.panels import ValueChart
+from xbt_terminal.core.models import D
+from xbt_terminal.ui import app as app_module
+from xbt_terminal.ui.app import ResultsScreen
+from xbt_terminal.ui.panels import ValueChart
 
 from ..unit.test_results import DAY, T0, plain_double
 from ..unit.test_valuation import EVERY, value_row

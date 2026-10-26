@@ -8,11 +8,11 @@ import json
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.base import ReadOnlyError, VenueError
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import Balance, ConnState, D, FeeUpdate, Fill, Order
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.services.account import AccountService
+from xbt_terminal.adapters.base import ReadOnlyError, VenueError
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import Balance, ConnState, D, FeeUpdate, Fill, Order
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.services.account import AccountService
 
 T0 = 1_792_497_600_000
 

@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from btcb2_terminal.config import ConfigError, load_config
+from xbt_terminal.config import ConfigError, load_config
 
 from .test_config import EXAMPLE, example_with
 

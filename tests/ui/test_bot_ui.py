@@ -4,10 +4,10 @@ lanzar los suyos."""
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.ui.app import ConfirmScreen, HelpScreen
-from btcb2_terminal.ui.panels import CommandLine
-from btcb2_terminal.ui.status import StatusBar
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.ui.app import ConfirmScreen, HelpScreen
+from xbt_terminal.ui.panels import CommandLine
+from xbt_terminal.ui.status import StatusBar
 
 from ..services.test_bot_service import BotRig
 from .local import local_app

@@ -5,14 +5,14 @@ import httpx
 import pytest
 import respx
 
-from btcb2_terminal.adapters.base import Depositor, ReadOnlyError, VenueError
-from btcb2_terminal.adapters.neoxa import REST_URL as NX_URL
-from btcb2_terminal.adapters.neoxa import NeoxaVenue
-from btcb2_terminal.adapters.nonkyc import REST_URL as NK_URL
-from btcb2_terminal.adapters.nonkyc import NonKYCVenue
-from btcb2_terminal.config import Credentials
-from btcb2_terminal.core.models import D, DepositAddress
-from btcb2_terminal.core.secrets import Secret
+from xbt_terminal.adapters.base import Depositor, ReadOnlyError, VenueError
+from xbt_terminal.adapters.neoxa import REST_URL as NX_URL
+from xbt_terminal.adapters.neoxa import NeoxaVenue
+from xbt_terminal.adapters.nonkyc import REST_URL as NK_URL
+from xbt_terminal.adapters.nonkyc import NonKYCVenue
+from xbt_terminal.config import Credentials
+from xbt_terminal.core.models import D, DepositAddress
+from xbt_terminal.core.secrets import Secret
 
 CREDS = Credentials(Secret("fake-key"), Secret("fake-secret"))
 NK_BTC = "bc1qfakefakefakefakefakefakefakefakex9vz"

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import D, Order
-from btcb2_terminal.core.secrets import Redactor, Secret
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import D, Order
+from xbt_terminal.core.secrets import Redactor, Secret
 
 CANARY = "nk_sec_CANARIO_77e1"
 

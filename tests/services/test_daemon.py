@@ -5,9 +5,9 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.services.account import AccountService
-from btcb2_terminal.services.daemon import run_daemon
-from btcb2_terminal.services.engine import Engine
+from xbt_terminal.services.account import AccountService
+from xbt_terminal.services.daemon import run_daemon
+from xbt_terminal.services.engine import Engine
 
 from .test_account import FakePrivate, order
 from .test_orders import NOW

@@ -730,7 +730,7 @@ y no coincidiría.
   `<datos>/btcb2t.lock` antes de montar la app, en todos los modos, y lo suelta
   al salir. La segunda instancia sale con el pid de la primera.
 - Log de diagnóstico (`diaglog.py`, RNF-19, D-33): `<datos>/diag.log`, 1 MB × 5
-  ficheros, `0600`, UTC. Logger `btcb2_terminal` (cada módulo con
+  ficheros, `0600`, UTC. Logger `xbt_terminal` (cada módulo con
   `getLogger(__name__)`), sin propagar al root y con un `NullHandler` desde la
   importación, para que nada llegue a stderr. El formatter pasa la línea entera,
   traceback incluido, por el `Redactor`. Nivel en `[log] level` (opcional,

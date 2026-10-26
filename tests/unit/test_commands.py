@@ -1,6 +1,6 @@
 import pytest
 
-from btcb2_terminal.core.commands import (
+from xbt_terminal.core.commands import (
     BotCommand,
     CancelAll,
     CancelOrder,
@@ -17,7 +17,7 @@ from btcb2_terminal.core.commands import (
     ShowResults,
     parse,
 )
-from btcb2_terminal.core.models import D
+from xbt_terminal.core.models import D
 
 
 @pytest.mark.spec("RF-06")

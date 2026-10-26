@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-from btcb2_terminal.core.commands import CancelVenue
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.secrets import Redactor, Secret
-from btcb2_terminal.services.account import AccountService
-from btcb2_terminal.services.faults import Faults, supervised
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.orders import Failed, Sent
+from xbt_terminal.core.commands import CancelVenue
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.secrets import Redactor, Secret
+from xbt_terminal.services.account import AccountService
+from xbt_terminal.services.faults import Faults, supervised
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.orders import Failed, Sent
 
 from ..fakes import T0, FakeFeed
 from .test_account import FakePrivate
@@ -80,7 +80,7 @@ class TestFaults:
             waits.append(s)
             await real_sleep(0)
 
-        monkeypatch.setattr("btcb2_terminal.services.faults.asyncio.sleep", sleep)
+        monkeypatch.setattr("xbt_terminal.services.faults.asyncio.sleep", sleep)
 
         async def work():
             calls.append(1)

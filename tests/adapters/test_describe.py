@@ -5,7 +5,7 @@ journal y el motivo de paro del bot."""
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError, describe
+from xbt_terminal.adapters.base import VenueError, describe
 
 
 @pytest.mark.spec("RF-11")

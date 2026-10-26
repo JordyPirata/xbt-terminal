@@ -1,4 +1,4 @@
-# btcb2-terminal
+# xbt-terminal
 
 Terminal de consola para operar BTCB2 contra BTC en NonKYC y Neoxa desde una
 sola pantalla: dos gráficos, dos libros de órdenes, panel de spread cruzado,
@@ -132,7 +132,7 @@ specs/                  la spec manda: leer specs/README.md primero
   mvp/tasks.md          en qué orden, trazado a la spec
   mvp/decisions.md      decisiones y respuestas, append-only (con índice arriba)
   archive/              historia: changelog, estados viejos, detalle de tareas done
-src/btcb2_terminal/
+src/xbt_terminal/
   core/                 lógica pura, sin red: book, velas, riesgo, comandos, journal
   adapters/             un adaptador por venue + dry-run
   services/             estado vivo que conecta adaptadores y UI

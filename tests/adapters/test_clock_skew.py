@@ -4,7 +4,7 @@
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.streaming import skew_ms
+from xbt_terminal.adapters.streaming import skew_ms
 
 from .test_supervisor import FakeVenue
 

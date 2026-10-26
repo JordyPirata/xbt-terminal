@@ -8,15 +8,15 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.adapters.private import (
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.adapters.private import (
     OrderTracker,
     PrivateSource,
     fan_in,
     poll_private,
     refresh,
 )
-from btcb2_terminal.core.models import ConnState, D, FeeUpdate, Fill, Order, PastFill
+from xbt_terminal.core.models import ConnState, D, FeeUpdate, Fill, Order, PastFill
 
 T0 = 1_792_497_600_000
 

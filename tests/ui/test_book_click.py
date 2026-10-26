@@ -8,9 +8,9 @@ ventas 0.00730000 × 0.5 y 0.00730100 × 3 (acumulado 0.5 y 3.5)."""
 
 import pytest
 
-from btcb2_terminal.core.models import BookSnapshot, ConnState, D, Level
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.ui.panels import BookPanel, CommandLine
+from xbt_terminal.core.models import BookSnapshot, ConnState, D, Level
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.ui.panels import BookPanel, CommandLine
 
 from ..fakes import FakeFeed, book
 from .local import local_app
@@ -107,7 +107,7 @@ class TestClic:
             assert rig.app.query_one(CommandLine).value == "buy nk 3.5000 0.00730100"
 
     async def test_enter_abre_el_dialogo(self, tmp_path):
-        from btcb2_terminal.ui.app import ConfirmScreen
+        from xbt_terminal.ui.app import ConfirmScreen
 
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:

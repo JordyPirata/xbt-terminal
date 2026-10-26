@@ -3,8 +3,8 @@ sale en rojo y queda contado en la barra de estado."""
 
 import pytest
 
-from btcb2_terminal.ui.app import ConfirmScreen
-from btcb2_terminal.ui.status import StatusBar
+from xbt_terminal.ui.app import ConfirmScreen
+from xbt_terminal.ui.status import StatusBar
 
 from ..services.test_faults import Buggy, full_disk
 from .test_orders_ui import Rig, ready, type_command, until

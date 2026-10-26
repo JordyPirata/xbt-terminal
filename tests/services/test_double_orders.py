@@ -5,14 +5,14 @@ import json
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.adapters.dryrun import DryRunVenue
-from btcb2_terminal.core.commands import DoubleOrder
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import Balance, BookSnapshot, D, Level
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.orders import (
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.adapters.dryrun import DryRunVenue
+from xbt_terminal.core.commands import DoubleOrder
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import Balance, BookSnapshot, D, Level
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.orders import (
     DoubleRejected,
     DoubleSent,
     OrderService,

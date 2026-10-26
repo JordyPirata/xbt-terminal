@@ -4,11 +4,11 @@ reabrir y copia exacta."""
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.services.deposits import DepositService
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.ui.app import DepositScreen
-from btcb2_terminal.ui.qr import qr_lines
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.services.deposits import DepositService
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.ui.app import DepositScreen
+from xbt_terminal.ui.qr import qr_lines
 
 from ..fakes import FakeFeed
 from ..services.test_deposits_service import FakeDepositor

@@ -1,5 +1,5 @@
 [project]
-name = "btcb2-terminal"
+name = "xbt-terminal"
 version = "0.1.0"
 description = "Terminal TUI para operar manualmente BTCB2 en NonKYC y Neoxa"
 readme = "README.md"
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-btcb2t = "btcb2_terminal.__main__:main"
+btcb2t = "xbt_terminal.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -31,7 +31,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/btcb2_terminal"]
+packages = ["src/xbt_terminal"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

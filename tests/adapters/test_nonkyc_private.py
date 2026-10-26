@@ -17,8 +17,8 @@ import pytest
 import respx
 import websockets
 
-from btcb2_terminal.adapters.base import ReadOnlyError, UncertainError, Venue, VenueError
-from btcb2_terminal.adapters.nonkyc import (
+from xbt_terminal.adapters.base import ReadOnlyError, UncertainError, Venue, VenueError
+from xbt_terminal.adapters.nonkyc import (
     REST_URL,
     NonKYCVenue,
     login_frame,
@@ -26,9 +26,9 @@ from btcb2_terminal.adapters.nonkyc import (
     parse_order,
     sign,
 )
-from btcb2_terminal.config import Credentials
-from btcb2_terminal.core.models import Balance, ConnState, D, Fill, Order, OrderRequest
-from btcb2_terminal.core.secrets import Secret
+from xbt_terminal.config import Credentials
+from xbt_terminal.core.models import Balance, ConnState, D, Fill, Order, OrderRequest
+from xbt_terminal.core.secrets import Secret
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "nonkyc"
 NOW = 1_792_530_500_000

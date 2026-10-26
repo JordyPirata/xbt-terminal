@@ -8,9 +8,9 @@ import httpx
 import pytest
 import respx
 
-from btcb2_terminal.adapters.base import MarketData, VenueError
-from btcb2_terminal.adapters.nonkyc import MAX_TRADES, REST_URL, NonKYCVenue
-from btcb2_terminal.core.models import D, Level
+from xbt_terminal.adapters.base import MarketData, VenueError
+from xbt_terminal.adapters.nonkyc import MAX_TRADES, REST_URL, NonKYCVenue
+from xbt_terminal.core.models import D, Level
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "nonkyc"
 NOW = 1_792_509_000_000

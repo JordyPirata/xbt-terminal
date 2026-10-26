@@ -2,8 +2,8 @@
 
 import pytest
 
-from btcb2_terminal.ui.app import HelpScreen
-from btcb2_terminal.ui.panels import CommandLine
+from xbt_terminal.ui.app import HelpScreen
+from xbt_terminal.ui.panels import CommandLine
 
 from .test_double_ui import Rig, until
 

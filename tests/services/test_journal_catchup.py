@@ -4,11 +4,11 @@ una orden nuestra que pasó entonces, se apuntan; lo ajeno no."""
 
 import pytest
 
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import D, Fill, PastFill
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.services.account import AccountService
-from btcb2_terminal.services.orders import OrderService
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import D, Fill, PastFill
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.services.account import AccountService
+from xbt_terminal.services.orders import OrderService
 
 from .test_account import T0, Rig, order, until
 

@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.results import ResultsService
-from btcb2_terminal.ui.app import ResultsScreen
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.results import ResultsService
+from xbt_terminal.ui.app import ResultsScreen
 
 from ..fakes import FakeFeed
 from ..unit.test_results import DAY, T0, plain_double
@@ -126,7 +126,7 @@ def test_el_resumen_avisa_de_las_fees_en_token(tmp_path):
 @pytest.mark.spec("RF-24", "RF-25")
 async def test_al_abrir_pide_el_precio_y_resta_la_fee(tmp_path):
     """D-65: 0.0025 NKYC a 0.0001 BTC = 25 sats menos que los 200 sin la fee."""
-    from btcb2_terminal.core.models import D
+    from xbt_terminal.core.models import D
 
     from ..unit.test_results import fill
 

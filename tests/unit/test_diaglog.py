@@ -5,14 +5,14 @@ import stat
 
 import pytest
 
-from btcb2_terminal.config import ConfigError, load_config
-from btcb2_terminal.core.secrets import Redactor, Secret
-from btcb2_terminal.diaglog import LOG_FILE, setup_diagnostics
+from xbt_terminal.config import ConfigError, load_config
+from xbt_terminal.core.secrets import Redactor, Secret
+from xbt_terminal.diaglog import LOG_FILE, setup_diagnostics
 
 from .test_config import EXAMPLE, example_with
 
 CANARY = "nk_sec_CANARIO_31"
-log = logging.getLogger("btcb2_terminal.prueba")
+log = logging.getLogger("xbt_terminal.prueba")
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def test_la_key_no_llega_al_log(diag):
 def test_formato_con_hora_nivel_y_modulo(diag):
     log.warning("ws caído")
     (line,) = diag.read_text().splitlines()
-    assert "WARNING" in line and "btcb2_terminal.prueba" in line and line.endswith("ws caído")
+    assert "WARNING" in line and "xbt_terminal.prueba" in line and line.endswith("ws caído")
     assert line[:4].isdigit()  # empieza por la fecha
 
 

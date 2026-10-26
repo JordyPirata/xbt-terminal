@@ -3,8 +3,8 @@ valorados en BTC al mid de cada venue."""
 
 import pytest
 
-from btcb2_terminal.core.inventory import inventory
-from btcb2_terminal.core.models import Balance, D
+from xbt_terminal.core.inventory import inventory
+from xbt_terminal.core.models import Balance, D
 
 NK = {"BTC": Balance("BTC", D("0.001"), D("0.0005")), "BTCB2": Balance("BTCB2", D("0.2"), D("0.1"))}
 NX = {"BTC": Balance("BTC", D("0.003")), "BTCB2": Balance("BTCB2", D("0"), D("0.05"))}

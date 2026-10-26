@@ -8,21 +8,21 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.base import UncertainError, VenueError
-from btcb2_terminal.adapters.dryrun import DryRunVenue
-from btcb2_terminal.config import BotConfig
-from btcb2_terminal.core.bot import DAY_MS, BotLimits, FeeToken
-from btcb2_terminal.core.double import start
-from btcb2_terminal.core.inventory import InventoryTarget
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level, OrderRequest
-from btcb2_terminal.core.risk import RiskLimits
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.services.account import AccountService
-from btcb2_terminal.services.bot import BotService
-from btcb2_terminal.services.faults import Faults
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.orders import OrderService
+from xbt_terminal.adapters.base import UncertainError, VenueError
+from xbt_terminal.adapters.dryrun import DryRunVenue
+from xbt_terminal.config import BotConfig
+from xbt_terminal.core.bot import DAY_MS, BotLimits, FeeToken
+from xbt_terminal.core.double import start
+from xbt_terminal.core.inventory import InventoryTarget
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level, OrderRequest
+from xbt_terminal.core.risk import RiskLimits
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.services.account import AccountService
+from xbt_terminal.services.bot import BotService
+from xbt_terminal.services.faults import Faults
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.orders import OrderService
 
 from ..fakes import T0, FakeFeed
 

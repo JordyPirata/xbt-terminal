@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.core.bot import (
+from xbt_terminal.core.bot import (
     DAY_MS,
     HOUR_MS,
     BotLimits,
@@ -24,7 +24,7 @@ from btcb2_terminal.core.bot import (
     tick,
     token_fee,
 )
-from btcb2_terminal.core.models import D, Level
+from xbt_terminal.core.models import D, Level
 
 from ..fakes import spec
 

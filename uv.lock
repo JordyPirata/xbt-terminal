@@ -16,7 +16,7 @@ wheels = [
 ]
 
 [[package]]
-name = "btcb2-terminal"
+name = "xbt-terminal"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

@@ -11,8 +11,8 @@ import pytest
 import respx
 from websockets.asyncio.server import serve
 
-from btcb2_terminal.adapters.neoxa import REST_URL, NeoxaVenue
-from btcb2_terminal.core.models import BookSnapshot, ConnState, D, Level, Trade
+from xbt_terminal.adapters.neoxa import REST_URL, NeoxaVenue
+from xbt_terminal.core.models import BookSnapshot, ConnState, D, Level, Trade
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "neoxa"
 FRAMES = json.loads((FIXTURES / "ws_frames.json").read_text(encoding="utf-8"))

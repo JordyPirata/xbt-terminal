@@ -3,7 +3,7 @@
 import pytest
 import segno
 
-from btcb2_terminal.ui.qr import qr_lines
+from xbt_terminal.ui.qr import qr_lines
 
 ADDRESS = "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
 TOP = {" ": (0, 0), "▀": (1, 0), "▄": (0, 1), "█": (1, 1)}  # carácter → (arriba, abajo) claros

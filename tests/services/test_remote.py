@@ -5,10 +5,10 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.models import Balance, D
-from btcb2_terminal.services.control import ControlServer
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.remote import DaemonGone, RemoteEngine, probe
+from xbt_terminal.core.models import Balance, D
+from xbt_terminal.services.control import ControlServer
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.remote import DaemonGone, RemoteEngine, probe
 
 from .test_control import FakeBot
 from .test_uncertain import Rig
@@ -77,7 +77,7 @@ class TestEstado:
         assert remote.can_trade == {"nk": True, "nx": False}
 
     async def test_saldos_y_ordenes_de_la_cuenta(self, tmp_path):
-        from btcb2_terminal.services.account import AccountService
+        from xbt_terminal.services.account import AccountService
 
         from .test_account import FakePrivate, order
 

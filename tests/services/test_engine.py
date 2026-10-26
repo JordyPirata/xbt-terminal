@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.adapters.base import UncertainError
-from btcb2_terminal.core.models import D
-from btcb2_terminal.services.engine import Engine, Notice
+from xbt_terminal.adapters.base import UncertainError
+from xbt_terminal.core.models import D
+from xbt_terminal.services.engine import Engine, Notice
 
 from . import test_double_orders as double
 from .test_orders import LIMITS
@@ -146,7 +146,7 @@ class TestCerrar:
 @pytest.mark.spec("RF-32", "CA-17")
 class TestValorDeLaCuenta:
     def test_el_motor_muestrea_si_hay_cuenta_y_journal(self, tmp_path):
-        from btcb2_terminal.services.account import AccountService
+        from xbt_terminal.services.account import AccountService
 
         s = Rig(tmp_path)
         account = AccountService({"nk": s.venue}, journal=s.journal)

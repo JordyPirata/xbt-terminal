@@ -4,13 +4,13 @@ la recomendada, recarga al reabrir y avisos sin keys o sin saldos."""
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.core.bot import BotLimits
-from btcb2_terminal.core.inventory import InventoryTarget
-from btcb2_terminal.core.models import Balance, D
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.rebalance import RebalanceService
-from btcb2_terminal.ui.app import RebalanceScreen
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.core.bot import BotLimits
+from xbt_terminal.core.inventory import InventoryTarget
+from xbt_terminal.core.models import Balance, D
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.rebalance import RebalanceService
+from xbt_terminal.ui.app import RebalanceScreen
 
 from ..fakes import FakeFeed
 from ..services.test_rebalance_service import FakeFees
@@ -134,7 +134,7 @@ class TestSaldosDeLaApp:
         assert "saldos" in make_app(service()).rebalance_holdings()
 
     async def test_con_la_cuenta_y_los_mids(self, tmp_path):
-        from btcb2_terminal.services.account import AccountService
+        from xbt_terminal.services.account import AccountService
 
         from .test_orders_ui import ready
 

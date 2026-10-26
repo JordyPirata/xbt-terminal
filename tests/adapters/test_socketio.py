@@ -4,8 +4,8 @@ from decimal import Decimal
 
 import pytest
 
-from btcb2_terminal.adapters import socketio as sio
-from btcb2_terminal.adapters.socketio import Packet, ProtocolError
+from xbt_terminal.adapters import socketio as sio
+from xbt_terminal.adapters.socketio import Packet, ProtocolError
 
 NS = "/exchange"
 

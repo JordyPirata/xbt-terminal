@@ -5,14 +5,14 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.core.models import D
-from btcb2_terminal.services.control import ControlServer
-from btcb2_terminal.services.deposits import DepositRow, DepositService
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.rebalance import RebalanceService
-from btcb2_terminal.services.remote import RemoteEngine
-from btcb2_terminal.services.results import ResultsService
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.core.models import D
+from xbt_terminal.services.control import ControlServer
+from xbt_terminal.services.deposits import DepositRow, DepositService
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.rebalance import RebalanceService
+from xbt_terminal.services.remote import RemoteEngine
+from xbt_terminal.services.results import ResultsService
 
 from ..ui.test_results_ui import write
 from ..unit.test_results import T0, fill, plain_double

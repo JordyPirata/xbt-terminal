@@ -7,15 +7,15 @@ import json
 
 import pytest
 
-from btcb2_terminal.adapters.dryrun import DryRunVenue
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.services.account import AccountService
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.orders import OrderService
-from btcb2_terminal.ui.app import ConfirmScreen
-from btcb2_terminal.ui.panels import (
+from xbt_terminal.adapters.dryrun import DryRunVenue
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.services.account import AccountService
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.orders import OrderService
+from xbt_terminal.ui.app import ConfirmScreen
+from xbt_terminal.ui.panels import (
     BalancesPanel,
     BookPanel,
     ChartPanel,

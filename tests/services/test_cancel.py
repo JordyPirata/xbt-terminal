@@ -5,10 +5,10 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.core.commands import CancelAll, CancelOrder, CancelVenue
-from btcb2_terminal.core.models import D, OrderRequest
-from btcb2_terminal.services.orders import CancelPlan, CancelRefused
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.core.commands import CancelAll, CancelOrder, CancelVenue
+from xbt_terminal.core.models import D, OrderRequest
+from xbt_terminal.services.orders import CancelPlan, CancelRefused
 
 from .test_double_orders import Setup
 

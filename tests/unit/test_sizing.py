@@ -3,8 +3,8 @@ Mercado de prueba de NonKYC: lote 0.0001, fee taker 0.2 %."""
 
 import pytest
 
-from btcb2_terminal.core.models import Balance, D
-from btcb2_terminal.core.sizing import size_from_percent
+from xbt_terminal.core.models import Balance, D
+from xbt_terminal.core.sizing import size_from_percent
 
 from ..fakes import spec
 

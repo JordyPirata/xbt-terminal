@@ -11,9 +11,9 @@ from decimal import Decimal
 
 import pytest
 
-from btcb2_terminal.core.book import L2Book
-from btcb2_terminal.core.bot import BotLimits, BotState, Fire, Skip, VenueView, arm, decide
-from btcb2_terminal.core.models import BookSnapshot, ConnState, D, Level
+from xbt_terminal.core.book import L2Book
+from xbt_terminal.core.bot import BotLimits, BotState, Fire, Skip, VenueView, arm, decide
+from xbt_terminal.core.models import BookSnapshot, ConnState, D, Level
 
 from ..fakes import spec
 from ..services.test_bot_service import BOT, BotRig

@@ -5,9 +5,9 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.adapters.base import Venue, VenueError
-from btcb2_terminal.adapters.dryrun import DryRunVenue
-from btcb2_terminal.core.models import Balance, D, Order, OrderRequest
+from xbt_terminal.adapters.base import Venue, VenueError
+from xbt_terminal.adapters.dryrun import DryRunVenue
+from xbt_terminal.core.models import Balance, D, Order, OrderRequest
 
 from ..fakes import FakeFeed, spec
 

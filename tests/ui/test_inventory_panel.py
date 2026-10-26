@@ -2,9 +2,9 @@
 
 import pytest
 
-from btcb2_terminal.core.inventory import InventoryTarget, inventory
-from btcb2_terminal.core.models import Balance, D
-from btcb2_terminal.ui.panels import AccountView, render_balances
+from xbt_terminal.core.inventory import InventoryTarget, inventory
+from xbt_terminal.core.models import Balance, D
+from xbt_terminal.ui.panels import AccountView, render_balances
 
 TARGET = InventoryTarget(D("25"), D("10"))
 BAL = {

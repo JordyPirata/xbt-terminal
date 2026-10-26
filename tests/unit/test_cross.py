@@ -6,8 +6,8 @@ Neoxa   bid 0.00735714  ask 0.00742999
 
 import pytest
 
-from btcb2_terminal.core.cross import Quote, cross, sats, venue_stats
-from btcb2_terminal.core.models import D
+from xbt_terminal.core.cross import Quote, cross, sats, venue_stats
+from xbt_terminal.core.models import D
 
 NK = Quote("nk", D("0.00727748"), D("0.00730299"), taker_fee=D("0.002"))
 NX = Quote("nx", D("0.00735714"), D("0.00742999"), taker_fee=D("0.002"))

@@ -3,7 +3,7 @@ import pickle
 
 import pytest
 
-from btcb2_terminal.core.secrets import Redactor, Secret
+from xbt_terminal.core.secrets import Redactor, Secret
 
 CANARY = "nex_CANARIO_9f3a1c77d2"
 

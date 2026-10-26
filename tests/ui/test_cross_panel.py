@@ -9,10 +9,10 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.cross import Quote
-from btcb2_terminal.core.models import BookDelta, BookSnapshot, D, Level
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.ui.panels import CrossPanel, render_cross
+from xbt_terminal.core.cross import Quote
+from xbt_terminal.core.models import BookDelta, BookSnapshot, D, Level
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.ui.panels import CrossPanel, render_cross
 
 from ..fakes import T0, FakeFeed
 from .local import local_app

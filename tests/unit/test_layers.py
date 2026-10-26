@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-PKG = Path(__file__).resolve().parents[2] / "src/btcb2_terminal"
+PKG = Path(__file__).resolve().parents[2] / "src/xbt_terminal"
 
 
 def imported_layers(layer: str) -> dict[str, set[str]]:
@@ -28,7 +28,7 @@ def imported_layers(layer: str) -> dict[str, set[str]]:
                     else [a.name for a in node.names]
                 )
                 for mod in mods:
-                    if mod and mod.startswith("btcb2_terminal."):
+                    if mod and mod.startswith("xbt_terminal."):
                         found.add(mod.split(".")[1])
         out[path.name] = found
     return out
@@ -66,7 +66,7 @@ def services_imported(layer: str) -> dict[str, set[str]]:
                 parts = node.module.split(".")
                 if node.level == 2 and parts[0] == "services":
                     found.add(parts[1] if len(parts) > 1 else "*")
-                elif parts[:2] == ["btcb2_terminal", "services"]:
+                elif parts[:2] == ["xbt_terminal", "services"]:
                     found.add(parts[2] if len(parts) > 2 else "*")
         out[path.name] = found
     return out

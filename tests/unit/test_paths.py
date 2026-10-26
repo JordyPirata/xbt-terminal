@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from btcb2_terminal.config import ConfigError, load_settings
-from btcb2_terminal.paths import (
+from xbt_terminal.config import ConfigError, load_settings
+from xbt_terminal.paths import (
     AlreadyRunning,
     InstanceLock,
     env_permission_problem,

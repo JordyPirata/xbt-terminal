@@ -10,8 +10,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from btcb2_terminal.core.models import D
-from btcb2_terminal.core.results import compute, range_start, read_rows
+from xbt_terminal.core.models import D
+from xbt_terminal.core.results import compute, range_start, read_rows
 
 T0 = int(datetime(2026, 10, 22, 12, 0, tzinfo=UTC).timestamp() * 1000)
 DAY = 86_400_000

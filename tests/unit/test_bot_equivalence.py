@@ -9,9 +9,9 @@ from decimal import Decimal
 
 import pytest
 
-from btcb2_terminal.core.bot import BotLimits, BotState, VenueView, arm, decide
-from btcb2_terminal.core.inventory import InventoryTarget
-from btcb2_terminal.core.models import Level, MarketSpec
+from xbt_terminal.core.bot import BotLimits, BotState, VenueView, arm, decide
+from xbt_terminal.core.inventory import InventoryTarget
+from xbt_terminal.core.models import Level, MarketSpec
 
 from . import bot_reference as ref
 

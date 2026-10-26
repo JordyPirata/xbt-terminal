@@ -5,11 +5,11 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.commands import CancelAll, DoubleOrder, PlaceOrder
-from btcb2_terminal.core.models import D
-from btcb2_terminal.services.control import ControlServer
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.orders import (
+from xbt_terminal.core.commands import CancelAll, DoubleOrder, PlaceOrder
+from xbt_terminal.core.models import D
+from xbt_terminal.services.control import ControlServer
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.orders import (
     CancelPlan,
     CancelRefused,
     CancelResult,
@@ -21,7 +21,7 @@ from btcb2_terminal.services.orders import (
     Rejected,
     Sent,
 )
-from btcb2_terminal.services.remote import DaemonGone, DaemonRefused, RemoteEngine
+from xbt_terminal.services.remote import DaemonGone, DaemonRefused, RemoteEngine
 
 from .test_double_orders import Setup as DoubleSetup
 from .test_uncertain import Rig

@@ -4,9 +4,9 @@ CA-14): una por venue y activo, pedidas en cada carga y con el error aislado."""
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.core.models import D, WithdrawalFee
-from btcb2_terminal.services.rebalance import RebalanceService
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.core.models import D, WithdrawalFee
+from xbt_terminal.services.rebalance import RebalanceService
 
 FEES = {
     ("nk", "BTC"): "0.00005", ("nk", "BTCB2"): "0.0027",

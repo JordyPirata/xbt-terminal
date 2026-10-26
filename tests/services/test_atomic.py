@@ -8,9 +8,9 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.commands import DoubleOrder
-from btcb2_terminal.core.models import D
-from btcb2_terminal.services.orders import DoubleSent, Rejected, Sent, Uncertain
+from xbt_terminal.core.commands import DoubleOrder
+from xbt_terminal.core.models import D
+from xbt_terminal.services.orders import DoubleSent, Rejected, Sent, Uncertain
 
 from . import test_double_orders as double
 from .test_orders import NOW, buy, sell

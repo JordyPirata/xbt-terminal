@@ -9,9 +9,9 @@ import httpx
 import pytest
 import respx
 
-from btcb2_terminal.adapters.base import MarketData, VenueError
-from btcb2_terminal.adapters.neoxa import REST_URL, NeoxaVenue
-from btcb2_terminal.core.models import D, Level
+from xbt_terminal.adapters.base import MarketData, VenueError
+from xbt_terminal.adapters.neoxa import REST_URL, NeoxaVenue
+from xbt_terminal.core.models import D, Level
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "neoxa"
 API = REST_URL + "/exchange"

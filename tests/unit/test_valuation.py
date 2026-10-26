@@ -4,10 +4,10 @@ journal como serie con su resumen."""
 
 import pytest
 
-from btcb2_terminal.core.inventory import inventory
-from btcb2_terminal.core.models import Balance, D
-from btcb2_terminal.core.results import compute
-from btcb2_terminal.core.valuation import (
+from xbt_terminal.core.inventory import inventory
+from xbt_terminal.core.models import Balance, D
+from xbt_terminal.core.results import compute
+from xbt_terminal.core.valuation import (
     ValueSample,
     VenueValue,
     last_stretch,

@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.core.models import D
-from btcb2_terminal.services.results import ResultsService
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.core.models import D
+from xbt_terminal.services.results import ResultsService
 
 from ..unit.test_results import DAY, T0, fill, plain_double
 

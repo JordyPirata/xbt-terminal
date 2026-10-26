@@ -8,8 +8,8 @@ ventas 0.00730000 × 0.5 y 0.00730100 × 3 (acumulado 0.5 y 3.5)."""
 
 import pytest
 
-from btcb2_terminal.core.models import D
-from btcb2_terminal.ui.panels import LADDER_W, BookPanel, depth_bar
+from xbt_terminal.core.models import D
+from xbt_terminal.ui.panels import LADDER_W, BookPanel, depth_bar
 
 from .test_book_click import ASK_X, BID_CUM_X, BID_X, ready
 from .test_double_ui import Rig

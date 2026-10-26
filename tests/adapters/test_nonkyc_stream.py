@@ -14,10 +14,10 @@ import pytest
 import respx
 from websockets.asyncio.server import serve
 
-from btcb2_terminal.adapters.nonkyc import REST_URL, NonKYCVenue
-from btcb2_terminal.adapters.streaming import iso_ms
-from btcb2_terminal.core.book import L2Book
-from btcb2_terminal.core.models import BookDelta, BookSnapshot, ConnState, D, Level, Trade
+from xbt_terminal.adapters.nonkyc import REST_URL, NonKYCVenue
+from xbt_terminal.adapters.streaming import iso_ms
+from xbt_terminal.core.book import L2Book
+from xbt_terminal.core.models import BookDelta, BookSnapshot, ConnState, D, Level, Trade
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "nonkyc"
 FRAMES = json.loads((FIXTURES / "ws_frames.json").read_text(encoding="utf-8"))

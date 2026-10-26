@@ -4,10 +4,10 @@ forma de las reales del 2026-10-23, recortadas."""
 import pytest
 import respx
 
-from btcb2_terminal.adapters.base import ReadOnlyError, VenueError, WithdrawalFees
-from btcb2_terminal.adapters.neoxa import REST_URL as NX_URL
-from btcb2_terminal.adapters.nonkyc import REST_URL as NK_URL
-from btcb2_terminal.core.models import D, WithdrawalFee
+from xbt_terminal.adapters.base import ReadOnlyError, VenueError, WithdrawalFees
+from xbt_terminal.adapters.neoxa import REST_URL as NX_URL
+from xbt_terminal.adapters.nonkyc import REST_URL as NK_URL
+from xbt_terminal.core.models import D, WithdrawalFee
 
 from .test_deposits import Limiter, http, neoxa, nonkyc  # noqa: F401  (fixture)
 

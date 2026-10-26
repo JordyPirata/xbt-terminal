@@ -1,7 +1,7 @@
 import pytest
 
-from btcb2_terminal.core.candles import TIMEFRAME_MS, CandleBuilder
-from btcb2_terminal.core.models import Candle, D, Trade
+from xbt_terminal.core.candles import TIMEFRAME_MS, CandleBuilder
+from xbt_terminal.core.models import Candle, D, Trade
 
 MIN = 60_000
 T0 = 1_759_996_800_000  # múltiplo exacto de 1 h

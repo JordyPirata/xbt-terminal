@@ -3,11 +3,11 @@ del daemon, opera por el socket y salir no le cambia nada."""
 
 import pytest
 
-from btcb2_terminal.core.bot import BotState
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.remote import RemoteEngine
-from btcb2_terminal.ui.app import BTCB2App, ConfirmScreen, OrdersScreen
-from btcb2_terminal.ui.status import StatusBar
+from xbt_terminal.core.bot import BotState
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.remote import RemoteEngine
+from xbt_terminal.ui.app import BTCB2App, ConfirmScreen, OrdersScreen
+from xbt_terminal.ui.status import StatusBar
 
 from ..services.test_remote import Daemon
 from .test_orders_ui import NOW, type_command, until
@@ -165,7 +165,7 @@ class TestOpera:
             assert rig.app.last_error and "depósitos" in rig.app.last_message
 
     async def test_resultados_del_daemon(self, tmp_path):
-        from btcb2_terminal.ui.app import ResultsScreen
+        from xbt_terminal.ui.app import ResultsScreen
 
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)

@@ -1,7 +1,7 @@
 import pytest
 
-from btcb2_terminal.core.book import BookRow, L2Book
-from btcb2_terminal.core.models import BookDelta, BookSnapshot, D, Level
+from xbt_terminal.core.book import BookRow, L2Book
+from xbt_terminal.core.models import BookDelta, BookSnapshot, D, Level
 
 
 def lv(price: str, qty: str, amm: bool = False) -> Level:

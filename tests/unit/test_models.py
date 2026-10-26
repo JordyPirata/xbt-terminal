@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from btcb2_terminal.core.models import (
+from xbt_terminal.core.models import (
     Balance,
     D,
     Level,

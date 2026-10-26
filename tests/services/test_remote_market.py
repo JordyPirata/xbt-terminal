@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.models import BookSnapshot, Candle, ConnState, D, Level, Trade
-from btcb2_terminal.services.control import ControlServer
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.remote import RemoteEngine
+from xbt_terminal.core.models import BookSnapshot, Candle, ConnState, D, Level, Trade
+from xbt_terminal.services.control import ControlServer
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.remote import RemoteEngine
 
 from .test_orders import NOW
 from .test_uncertain import Rig

@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.models import BookDelta, ConnState, D, Level, Trade
-from btcb2_terminal.services.market import MarketHub
+from xbt_terminal.core.models import BookDelta, ConnState, D, Level, Trade
+from xbt_terminal.services.market import MarketHub
 
 from ..fakes import T0, FakeFeed, book
 

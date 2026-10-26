@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
-from btcb2_terminal.core.bot import (
+from xbt_terminal.core.bot import (
     DAY_MS,
     HOUR_MS,
     HUNDRED,
@@ -23,8 +23,8 @@ from btcb2_terminal.core.bot import (
     Skip,
     VenueView,
 )
-from btcb2_terminal.core.inventory import InventoryTarget, base_pct
-from btcb2_terminal.core.models import BASE_LABEL, ZERO, VenueId
+from xbt_terminal.core.inventory import InventoryTarget, base_pct
+from xbt_terminal.core.models import BASE_LABEL, ZERO, VenueId
 
 
 @dataclass(frozen=True, slots=True)

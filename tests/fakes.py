@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import asyncio
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.core.candles import TIMEFRAME_MS
-from btcb2_terminal.core.models import BookSnapshot, Candle, D, Level, MarketSpec
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.core.candles import TIMEFRAME_MS
+from xbt_terminal.core.models import BookSnapshot, Candle, D, Level, MarketSpec
 
 T0 = 1_792_497_600_000  # alineado a la hora: T0 % 3_600_000 == 0
 

@@ -6,16 +6,16 @@ import json
 
 import pytest
 
-from btcb2_terminal.adapters.base import UncertainError
-from btcb2_terminal.adapters.dryrun import DryRunVenue
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.orders import OrderService
-from btcb2_terminal.ui.app import ConfirmScreen
-from btcb2_terminal.ui.panels import CommandLine
-from btcb2_terminal.ui.status import StatusBar
+from xbt_terminal.adapters.base import UncertainError
+from xbt_terminal.adapters.dryrun import DryRunVenue
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.orders import OrderService
+from xbt_terminal.ui.app import ConfirmScreen
+from xbt_terminal.ui.panels import CommandLine
+from xbt_terminal.ui.status import StatusBar
 
 from ..fakes import T0, FakeFeed
 from ..services.test_orders import LIMITS
@@ -214,7 +214,7 @@ async def test_el_dialogo_no_espera_a_la_red(tmp_path):
     """D-18: con la cuenta al día, de Enter al diálogo sin peticiones lentas."""
     import time
 
-    from btcb2_terminal.services.account import AccountService
+    from xbt_terminal.services.account import AccountService
 
     rig = Rig(tmp_path)
     account = AccountService({"nk": rig.venue}, retry_s=0.01, clock=lambda: NOW)

@@ -3,7 +3,7 @@ ignora OSC 52, así que se prueba `wl-copy`, `xclip` o `xsel`."""
 
 import pytest
 
-from btcb2_terminal.ui.clipboard import system_copy
+from xbt_terminal.ui.clipboard import system_copy
 
 ADDRESS = "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
 

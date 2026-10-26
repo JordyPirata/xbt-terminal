@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from btcb2_terminal.config import ConfigError, load_config, load_credentials, load_settings
-from btcb2_terminal.core.models import D
+from xbt_terminal.config import ConfigError, load_config, load_credentials, load_settings
+from xbt_terminal.core.models import D
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = ROOT / "config.example.toml"

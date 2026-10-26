@@ -2,8 +2,8 @@
 pantalla. En producción la app es el cliente del daemon (D-66) y no crea su
 `Engine`; aquí se le da uno con las mismas piezas que corre el daemon."""
 
-from btcb2_terminal.services.engine import RECONCILE_EVERY_S, Engine
-from btcb2_terminal.ui.app import BTCB2App
+from xbt_terminal.services.engine import RECONCILE_EVERY_S, Engine
+from xbt_terminal.ui.app import BTCB2App
 
 
 def local_app(hub, *, reconcile_every_s=RECONCILE_EVERY_S, max_clock_skew_s=None, **kw):

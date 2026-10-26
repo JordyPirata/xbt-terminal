@@ -6,10 +6,10 @@ El venue es un DryRunVenue con NonKYC 0.00720000 / 0.00730000 (ver test_orders).
 
 import pytest
 
-from btcb2_terminal.adapters.base import UncertainError, VenueError
-from btcb2_terminal.core.commands import DoubleOrder
-from btcb2_terminal.core.models import D, OrderRequest
-from btcb2_terminal.services.orders import (
+from xbt_terminal.adapters.base import UncertainError, VenueError
+from xbt_terminal.core.commands import DoubleOrder
+from xbt_terminal.core.models import D, OrderRequest
+from xbt_terminal.services.orders import (
     DoubleSent,
     OrderService,
     Rejected,

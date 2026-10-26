@@ -4,9 +4,9 @@ activo, pedidas en cada carga y con el error de un venue aislado."""
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.core.models import DepositAddress
-from btcb2_terminal.services.deposits import DepositRow, DepositService
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.core.models import DepositAddress
+from xbt_terminal.services.deposits import DepositRow, DepositService
 
 
 class FakeDepositor:

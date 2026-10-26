@@ -6,8 +6,8 @@ from decimal import Decimal
 
 import pytest
 
-from btcb2_terminal.core.models import Balance, D, WithdrawalFee
-from btcb2_terminal.core.rebalance import Holding, break_even, holdings, plan
+from xbt_terminal.core.models import Balance, D, WithdrawalFee
+from xbt_terminal.core.rebalance import Holding, break_even, holdings, plan
 
 SAT = D("0.00000001")
 

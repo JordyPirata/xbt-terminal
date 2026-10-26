@@ -8,8 +8,8 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.core.double import DoubleState, Leg, hanging, on_order, start
-from btcb2_terminal.core.models import D, Order, OrderRequest
+from xbt_terminal.core.double import DoubleState, Leg, hanging, on_order, start
+from xbt_terminal.core.models import D, Order, OrderRequest
 
 T0 = 1_792_497_600_000
 AFTER_MS = 30_000

@@ -7,13 +7,13 @@ import stat
 
 import pytest
 
-from btcb2_terminal.core.bot import BotState
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.secrets import Redactor, Secret
-from btcb2_terminal.services.control import ControlServer
-from btcb2_terminal.services.engine import Engine
-from btcb2_terminal.services.faults import Faults
-from btcb2_terminal.services.wire import Snapshot, decode
+from xbt_terminal.core.bot import BotState
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.secrets import Redactor, Secret
+from xbt_terminal.services.control import ControlServer
+from xbt_terminal.services.engine import Engine
+from xbt_terminal.services.faults import Faults
+from xbt_terminal.services.wire import Snapshot, decode
 
 from .test_uncertain import Rig
 

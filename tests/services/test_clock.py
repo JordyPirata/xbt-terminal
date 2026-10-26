@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from btcb2_terminal.services.orders import OrderService, Pending, Rejected
+from xbt_terminal.services.orders import OrderService, Pending, Rejected
 
 from .test_orders import LIMITS, NOW, Setup, buy, codes
 

@@ -6,7 +6,7 @@ respaldo, fallos de la cuenta y bugs con su traceback. Cada línea pasa entera
 (mensaje y traceback) por el `Redactor` y el fichero se crea `0600`. Nunca se
 escribe en stdout ni stderr: la TUI ocupa la pantalla (RNF-19).
 
-Los módulos usan `logging.getLogger(__name__)`, todos bajo `btcb2_terminal`.
+Los módulos usan `logging.getLogger(__name__)`, todos bajo `xbt_terminal`.
 
 Spec: RNF-19, RNF-18 · design.md §8 · Tarea: T-31
 """
@@ -22,7 +22,7 @@ from typing import IO, Any
 
 from .core.secrets import Redactor
 
-LOGGER = "btcb2_terminal"
+LOGGER = "xbt_terminal"
 LOG_FILE = "diag.log"
 MAX_BYTES = 1_000_000
 BACKUPS = 5
@@ -78,7 +78,7 @@ def setup_diagnostics(
     backups: int = BACKUPS,
     name: str = LOG_FILE,
 ) -> DiagHandler:
-    """Instala el handler en el logger `btcb2_terminal`. `data` ya existe (`0700`).
+    """Instala el handler en el logger `xbt_terminal`. `data` ya existe (`0700`).
     `name`: la TUI conectada usa otro fichero, para no rotar el del daemon (D-61)."""
     handler = DiagHandler(
         Path(data) / name, maxBytes=max_bytes, backupCount=backups, encoding="utf-8"

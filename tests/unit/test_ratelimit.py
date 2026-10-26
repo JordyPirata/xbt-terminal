@@ -7,7 +7,7 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.ratelimit import RateLimiter
+from xbt_terminal.core.ratelimit import RateLimiter
 
 
 class Clock:

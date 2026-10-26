@@ -7,10 +7,10 @@ import time
 
 import pytest
 
-from btcb2_terminal.core.models import BookDelta, D, Level
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.ui.app import TooSmall
-from btcb2_terminal.ui.panels import AMM_TAG, BookPanel, ChartPanel, CommandLine, CrossPanel
+from xbt_terminal.core.models import BookDelta, D, Level
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.ui.app import TooSmall
+from xbt_terminal.ui.panels import AMM_TAG, BookPanel, ChartPanel, CommandLine, CrossPanel
 
 from ..fakes import T0, FakeFeed, book
 from .local import local_app
@@ -212,7 +212,7 @@ async def test_las_filas_del_book_caben_sin_partirse():
 )
 def test_formato_del_eje_por_timeframe(tf, fmt):
     """En 4h la hora sola se repite cada día, y en 1d no dice nada: se añade la fecha."""
-    from btcb2_terminal.ui.panels import axis_format
+    from xbt_terminal.ui.panels import axis_format
 
     assert axis_format(tf) == fmt
 
@@ -231,7 +231,7 @@ def test_formato_del_eje_por_timeframe(tf, fmt):
 )
 def test_reparto_de_columnas(count, canvas, expected):
     """D-24: cada vela recibe un número entero de columnas, igual para todas."""
-    from btcb2_terminal.ui.panels import candle_layout
+    from xbt_terminal.ui.panels import candle_layout
 
     assert candle_layout(count, canvas) == expected
 
@@ -240,7 +240,7 @@ def test_reparto_de_columnas(count, canvas, expected):
 def test_eje_y_se_ajusta_a_los_cuerpos_no_a_las_mechas():
     """D-67: una mecha suelta no aplasta las velas; el eje Y va de los cuerpos y
     la mecha que se sale queda cortada en el borde."""
-    from btcb2_terminal.core.models import Candle
+    from xbt_terminal.core.models import Candle
 
     candles = (
         Candle(0, D("10"), D("50"), D("9"), D("11"), D("1")),

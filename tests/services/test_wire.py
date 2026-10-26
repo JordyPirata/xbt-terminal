@@ -7,11 +7,11 @@ from decimal import Decimal
 
 import pytest
 
-from btcb2_terminal.core.bot import BotState
-from btcb2_terminal.core.double import DoubleState, Leg
-from btcb2_terminal.core.models import Balance, ConnState, D, Fill, Order, OrderRequest
-from btcb2_terminal.services.account import VenueAccount
-from btcb2_terminal.services.wire import decode, encode, loads
+from xbt_terminal.core.bot import BotState
+from xbt_terminal.core.double import DoubleState, Leg
+from xbt_terminal.core.models import Balance, ConnState, D, Fill, Order, OrderRequest
+from xbt_terminal.services.account import VenueAccount
+from xbt_terminal.services.wire import decode, encode, loads
 
 
 def round_trip(tp, obj):

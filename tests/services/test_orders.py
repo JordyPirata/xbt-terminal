@@ -8,15 +8,15 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from btcb2_terminal.adapters.base import VenueError
-from btcb2_terminal.adapters.dryrun import DryRunVenue
-from btcb2_terminal.core.commands import Percent, PlaceOrder
-from btcb2_terminal.core.journal import Journal
-from btcb2_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level, Order
-from btcb2_terminal.core.risk import RiskLimits
-from btcb2_terminal.core.secrets import Redactor
-from btcb2_terminal.services.market import MarketHub
-from btcb2_terminal.services.orders import Failed, OrderService, Pending, Rejected, Sent
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.adapters.dryrun import DryRunVenue
+from xbt_terminal.core.commands import Percent, PlaceOrder
+from xbt_terminal.core.journal import Journal
+from xbt_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level, Order
+from xbt_terminal.core.risk import RiskLimits
+from xbt_terminal.core.secrets import Redactor
+from xbt_terminal.services.market import MarketHub
+from xbt_terminal.services.orders import Failed, OrderService, Pending, Rejected, Sent
 
 from ..fakes import T0, FakeFeed, spec
 
@@ -146,7 +146,7 @@ class TestRechazos:
 
     async def test_order_size_suma_los_dos_venues(self, tmp_path):
         """Un venue sin keys no cuenta; con los dos, el tope sube."""
-        from btcb2_terminal.adapters.dryrun import DryRunVenue
+        from xbt_terminal.adapters.dryrun import DryRunVenue
 
         s = Setup(tmp_path)
         s.book("nx", "0.00720000", "0.00730000")
@@ -156,7 +156,7 @@ class TestRechazos:
 
     async def test_order_size_sin_mid_del_otro_venue(self, tmp_path):
         """Sin mid de un venue no hay inventario total: rechazo (fallar cerrado)."""
-        from btcb2_terminal.adapters.dryrun import DryRunVenue
+        from xbt_terminal.adapters.dryrun import DryRunVenue
 
         s = Setup(tmp_path)
         bal = {"BTC": Balance("BTC", D("0.005"))}
@@ -283,7 +283,7 @@ class Counting:
 
 def cached(tmp_path, *, age_ms=0, btc="0.005", orders=()):
     """Setup con AccountService ya cargado (como tras su primer refresco)."""
-    from btcb2_terminal.services.account import AccountService
+    from xbt_terminal.services.account import AccountService
 
     s = Setup(tmp_path)
     account = AccountService({"nk": s.venue}, clock=lambda: NOW)

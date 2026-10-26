@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from btcb2_terminal.core.commands import CancelVenue
+from xbt_terminal.core.commands import CancelVenue
 
 from .test_orders import Setup, buy
 

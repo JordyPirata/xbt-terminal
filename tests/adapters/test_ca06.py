@@ -11,8 +11,8 @@ import httpx
 import pytest
 from websockets.asyncio.server import serve
 
-from btcb2_terminal.adapters.nonkyc import NonKYCVenue
-from btcb2_terminal.core.models import BookSnapshot, ConnState, D
+from xbt_terminal.adapters.nonkyc import NonKYCVenue
+from xbt_terminal.core.models import BookSnapshot, ConnState, D
 
 from .test_nonkyc_stream import FakeNonKYC, FreeLimiter, rest  # noqa: F401  (fixture)
 

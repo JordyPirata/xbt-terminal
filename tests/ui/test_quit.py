@@ -3,8 +3,8 @@ confirmando si quedan órdenes abiertas."""
 
 import pytest
 
-from btcb2_terminal.services.account import AccountService
-from btcb2_terminal.ui.app import ConfirmScreen
+from xbt_terminal.services.account import AccountService
+from xbt_terminal.ui.app import ConfirmScreen
 
 from ..services.test_account import FakePrivate, order
 from ..services.test_exit import slow

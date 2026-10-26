@@ -2,8 +2,8 @@
 
 import pytest
 
-from btcb2_terminal.core.models import D, Order, OrderRequest
-from btcb2_terminal.core.reconcile import WINDOW_MS, candidates
+from xbt_terminal.core.models import D, Order, OrderRequest
+from xbt_terminal.core.reconcile import WINDOW_MS, candidates
 
 SENT = 1_792_530_500_000
 REQ = OrderRequest("nx", "buy", D("0.01"), D("0.00725"), "t-abc123")
