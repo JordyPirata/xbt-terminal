@@ -1,0 +1,69 @@
+# Terminal BTCB2 — configuración. Copiar a config.toml.
+# Los secretos NO van aquí: van en .env
+# Solo pares BTCB2 contra BTC (RNF-10): nada de USDT/USDC. Importes en BTC.
+
+[venues.nk]
+name    = "NonKYC"
+symbol  = "BTCB2/BTC"
+maker_fee = "0.002"          # no las expone por API; confirmadas con fills reales (D-42)
+taker_fee = "0.002"
+# fee_discount_pct = "25"    # RF-24: pagando las fees en NKYC (D-63)
+# fee_token = "NKYC"         # con las dos: el bot cuenta con el descuento solo
+# fee_token_min = "1"        # mientras haya al menos 1 NKYC disponible
+
+[venues.nx]
+name    = "Neoxa"
+symbol  = "BTCB2_BTC"
+maker_fee = "0.001"          # /exchange/pairs, 2026-10-20
+taker_fee = "0.002"
+# fee_discount_pct = "50"    # RF-24: pagando con el token de Neoxa; sin fee_token, solo en el panel cruzado
+
+[ui]
+book_levels = 15             # RF-02
+default_timeframe = "1m"     # RF-03
+
+[polling]
+neoxa_private_every_s = 3    # RF-09
+balances_every_s      = 10   # RF-05
+rest_fallback_every_s = 1    # RF-01
+# value_every_s       = 300  # RF-32: valor de la cuenta en el journal (mín. 60)
+
+[risk]                       # RF-10, PA-03 (D-19)
+max_order_pct          = "25"       # % del inventario total (BTC, los dos venues) por orden
+max_mid_deviation_pct  = "5"        # %
+max_venue_exposure     = "0.01"     # BTC custodiados por venue (D-07)
+stale_after_s          = 15
+hanging_leg_after_s    = 30       # RF-07, PA-08
+max_clock_skew_s       = 5        # s de desfase de reloj con un venue; más, sin live (RNF-16)
+
+[ratelimit.nx]               # RNF-03, ya con el 20% de margen
+general_per_min   = 480
+orders_per_10s    = 8
+cancels_per_10s   = 16
+
+[ratelimit.nk]               # D-10: NonKYC no publica límites; 300/min supuesto - 20%
+general_per_min   = 240
+
+[bot]                        # fase 2, RF-18 a RF-22 (design.md §6.9). Sin esta sección, no hay bot
+enabled = false              # en live solo se arma con true; en dry-run, siempre
+min_net_pct = "0.5"          # % neto mínimo con los precios límite y la fee taker
+max_slippage_pct = "0.2"     # % sobre el mejor ask/bid de las límites agresivas
+# max_walk_pct = { nk = "0.8" }  # opcional (D-60): hasta qué % del mejor precio puede
+                             # tomar escalones cada venue; sin la clave, solo el mejor
+# max_move_pct = "1.0"       # opcional (D-71): no dispara si el mid de un venue se movió
+                             # más de este % en la ventana; sin la clave, sin filtro
+# move_window_ms = 2000      # ventana del movimiento (100 a 60000 ms)
+max_qty = "100"              # BTCB2 por disparo
+fill_timeout_ms = 3000       # lo que no llene en este tiempo se cancela
+cooldown_s = 10              # entre disparos (mínimo 2)
+max_trades_per_hour = 20
+max_daily_btc = "0.01"       # BTC de compra enviados por día UTC; al llegar, se para
+max_consecutive_failures = 3 # disparos rechazados seguidos; al llegar, se para
+
+[inventory]                  # RF-26: ratio por venue. Sin esta sección, el bot no lo mira
+target_base_pct = "25"       # % del valor de cada venue en BTCB2
+band_pct = "10"              # puntos a cada lado (15-35 %); el bot no dispara si
+                             # deja un venue fuera y más lejos del objetivo
+
+[log]
+level = "info"               # RNF-19: debug | info | warning | error (diag.log en los datos)

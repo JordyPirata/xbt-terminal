@@ -1,0 +1,21 @@
+{
+ "id": "6a0000000000000000000001",
+ "userProvidedId": "t-abc123",
+ "market": {
+  "id": "6a9ac7b05eba1fc0c907c000",
+  "symbol": "BTCB2/BTC"
+ },
+ "side": "buy",
+ "type": "limit",
+ "price": "0.00710000",
+ "quantity": "0.2000",
+ "executedQuantity": "0.0000",
+ "remainQuantity": "0.0100",
+ "remainTotal": "0.00007250",
+ "remainTotalWithFee": "0.00007265",
+ "lastTradeAt": 0,
+ "status": "Cancelled",
+ "isActive": false,
+ "createdAt": 1792530334660,
+ "updatedAt": 1792530500000
+}

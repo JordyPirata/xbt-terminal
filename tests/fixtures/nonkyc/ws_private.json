@@ -1,0 +1,21 @@
+{
+ "login_ok": {
+  "jsonrpc": "2.0",
+  "result": true,
+  "id": 1
+ },
+ "login_bad": {
+  "jsonrpc": "2.0",
+  "error": {
+   "code": 1002,
+   "message": "Valid API keys must be supplied"
+  },
+  "id": 1
+ },
+ "active_orders": {
+  "jsonrpc": "2.0",
+  "method": "activeOrders",
+  "result": [],
+  "id": 4
+ }
+}

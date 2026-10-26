@@ -1,0 +1,26 @@
+[
+ {
+  "asset": "USDT",
+  "name": "Tether USDT",
+  "available": "1.50000000",
+  "pending": "0.00000000",
+  "held": "0.00000000",
+  "assetid": "000000000000000000000001"
+ },
+ {
+  "asset": "BTC",
+  "name": "Bitcoin",
+  "available": "0.00210000",
+  "pending": "0.00010000",
+  "held": "0.00150005",
+  "assetid": "000000000000000000000002"
+ },
+ {
+  "asset": "BTCB2",
+  "name": "XBT (BTCB2 / Blake2b fork)",
+  "available": "0.25000000",
+  "pending": "0.00000000",
+  "held": "0.10000000",
+  "assetid": "000000000000000000000003"
+ }
+]

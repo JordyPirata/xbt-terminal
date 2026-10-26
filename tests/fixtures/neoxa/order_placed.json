@@ -1,0 +1,16 @@
+{
+ "success": true,
+ "order": {
+  "order_id": "ORD-TEST0005-EEEE0005",
+  "pair": "BTCB2_BTC",
+  "side": "buy",
+  "price": 0.00725,
+  "quantity": 0.01,
+  "quantity_filled": 0,
+  "quantity_remaining": 0.01,
+  "status": "open",
+  "post_only": false
+ },
+ "trades": [],
+ "message": "Order placed in order book"
+}

@@ -1,0 +1,8 @@
+{
+ "success": true,
+ "message": "Order cancelled",
+ "order": {
+  "order_id": "ORD-TEST0005-EEEE0005",
+  "status": "cancelled"
+ }
+}

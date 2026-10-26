@@ -1,0 +1,36 @@
+[
+ {
+  "id": "6b0000000000000000000001",
+  "market": {
+   "id": "6a9ac7b05eba1fc0c907c000",
+   "symbol": "BTCB2/BTC"
+  },
+  "orderid": "6a0000000000000000000002",
+  "side": "sell",
+  "triggeredBy": "buy",
+  "price": "0.00750000",
+  "quantity": "0.0250",
+  "fee": "0.00000038",
+  "totalWithFee": "0.00018712",
+  "alternateFeeAsset": null,
+  "alternateFee": null,
+  "timestamp": 1792530420000
+ },
+ {
+  "id": "6b0000000000000000000000",
+  "market": {
+   "id": "6a9ac7b05eba1fc0c907c000",
+   "symbol": "BTCB2/BTC"
+  },
+  "orderid": "6a00000000000000000000ff",
+  "side": "buy",
+  "triggeredBy": "buy",
+  "price": "0.00720000",
+  "quantity": "0.0100",
+  "fee": "0.00000014",
+  "totalWithFee": "0.00007214",
+  "alternateFeeAsset": null,
+  "alternateFee": null,
+  "timestamp": 1792520000000
+ }
+]

@@ -1,0 +1,29 @@
+{
+ "success": true,
+ "balances": {
+  "USDT": {
+   "available": 2.7e-07,
+   "locked": 0,
+   "total": 2.7e-07,
+   "in_orders": 0
+  },
+  "NEOXEX": {
+   "available": 0.0012345,
+   "locked": 0,
+   "total": 0.0012345,
+   "in_orders": 0
+  },
+  "BTCB2": {
+   "available": 0.25,
+   "locked": 0,
+   "total": 0.25,
+   "in_orders": 0.1
+  },
+  "BTC": {
+   "available": 0.0021,
+   "locked": 0,
+   "total": 0.0021,
+   "in_orders": 0.00150005
+  }
+ }
+}

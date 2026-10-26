@@ -1,0 +1,3337 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "version": "1.3.0",
+    "title": "NonKYC REST API",
+    "summary": "",
+    "description": "### Base API url\n```\nhttps://api.nonkyc.io/api/v2/\n```\n### Ready to use API libraries:\nGitHub: [https://github.com/NonKYC](https://github.com/NonKYC)\n\n### Datetime Formatting\nTimestamps returned as String are in ISO8601 format in UTC. Example: \"2021-12-01T00:00:00Z\" or \"2021-12-01T00:00:00.000Z\".   If a timestamp is returned as a Number, then that is a Unix timestamp in milliseconds.\n\n### Precision Formatting\nAll finance data such as price, quantity, and fee should be string representation of arbitrary precision numbers to prevent floating point issues. Example: \"9823.23932892\".   Integers should be represented in integer format and not a string.\n\n### Authentication\nThere are two authentication methods available for you to choose from.  Basic Auth & HmacSha256 Signed Requests.  Signed requests are more secure as it prevents replay attacks and accidental duplicate calls.\nto make authenticated requests you must include the apiKey (public api key), nonce(Current timestamp in unix milliseconds) and signature in your request headers (X-API-KEY, X-API-NONCE and X-API-SIGN).\n\nThe signature is created by hashing the following string using the HMAC-SHA256 algorithm. The API secret (apiSecret) is used as the key for the HMAC calculation\n\n- For Get requests : Concatenate the API Key, Request URL and Nonce into a single string.\n\n- For Post requests : Concatenate the API Key, Request URL,Request Body and Nonce into a single string.\n\na python example showcasing how to send a signed request\n```python\nimport json\nimport requests\nfrom time import time\nimport hashlib\nimport hmac\n\napiKey = \"Your Api Key\"\nsecretKey = \"Your Secret key\"\n\nurl = 'https://api.nonkyc.io/api/v2/cancelorder'\nnonce = str(int(time()*1e3))\n\nreq_body =  {'id' :'5845454765457',}\njson_body_data = json.dumps(req_body,separators=(',',':'))\n\ndata_to_sign = f\"{apiKey}{url}{json_body_data}{nonce}\"\nsignature = hmac.new(secretKey.encode(), data_to_sign.encode(),hashlib.sha256).hexdigest()\n\nheaders =  {\n\"X-API-KEY\": apiKey,\n\"X-API-NONCE\": nonce,\n\"X-API-SIGN\": signature,\n\"Content-Type\": \"application/json\"\n}\nresponse = requests.post(url, data=json_body_data, headers=headers)\n```\n### Error codes\n<details>\n<description><b>Error Codes</b></description>\n<table class=\"table table-striped\">\n<thead>\n<tr>\n  <td style=\"padding-top: 2px; padding-bottom: 2px;\">Error Code</td>\n  <td style=\"padding-top: 2px; padding-bottom: 2px;\">HTTP Status Code</td>\n  <td style=\"padding-top: 2px; padding-bottom: 2px;\">Message</td>\n  <td style=\"padding-top: 2px; padding-bottom: 2px;\">Details</td>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Unknown error</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">An unknown error occurred somewhere in the system</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">402</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Method not found</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">The requested API method was not found</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">403</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">401</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Action is forbidden for Account</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">429</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">429</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Too many requests</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Action is being rate limited for Account (Private)</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">500</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">500</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Internal Server Error</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">503</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">503</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Service Unavailable</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Try it again later</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">504</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">504</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Gateway Timeout</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Check the result of your request later</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">1001</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">401</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Authorization required</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">1002</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">401</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Authorization failed</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">1003</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">403</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Action is forbidden for this API key</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Check permissions for API key</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">1004</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">401</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Unsupported authorisation method</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Use Basic authentication</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">2001</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Symbol not found</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">2002</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Currency not found</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">10001</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Validation error</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Input not valid</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20001</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Insufficient funds</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Insufficient funds for creating order or any Account (Private) operation</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20002</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Order not found</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Attempt to get active order that  not existing, filled, canceled or expired.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20003</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Limit exceeded</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Withdrawal limit exceeded</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20004</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Transaction not found</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Requested transaction not found</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20005</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Payout not found</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20006</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Payout already committed</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20007</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Payout already rolled back</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20008</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Duplicate clientOrderId</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\"></td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20010</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Address generation error</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Unable to generate a new deposit address.  Try request later.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20011</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Withdrawal not found</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">The referenced withdrawal was not found.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20012</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Withdrawals disabled</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Withdrawals are disabled for this currency or system wide.  Check system status page.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20013</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Withdrawal amount below minimum</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Minimum withdrawal amount for any currency is Withdraw Fee * 2.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20014</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Withdrawal address invalid</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Ensure the address you are withdrawing to is correct.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20015</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Payment ID Required</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">This currency requires a paymentId when making a withdrawal request.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20016</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Invalid confirmation code</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">The provided confirmation code is incorrect.</td>\n</tr>\n<tr>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">20017</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">400</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">Withdraw already confirmed</td>\n<td style=\"padding-top: 2px; padding-bottom: 2px;\">The withdrawal request has already been confirmed.</td>\n</tr>\n</tbody>\n</table>\n</details>\n"
+  },
+  "paths": {
+    "/asset/getlist": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "List assets",
+        "description": "Get a list of assets available in nonkyc",
+        "operationId": "asset-getlist",
+        "responses": {
+          "200": {
+            "description": "Assets list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Asset"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/asset/info": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Get an asset info",
+        "description": "Get an asset info by id or ticker",
+        "operationId": "asset-info",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Id of an asset",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ticker",
+            "in": "query",
+            "description": "Ticker of an asset",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/market/getlist": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "List markets",
+        "description": "Get a list of markets available in nonkyc",
+        "responses": {
+          "200": {
+            "description": "Markets list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Market"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/market/info": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Get a market info",
+        "description": "Get market info by market id or market symbol",
+        "operationId": "market-getbyid",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Market id example '61d316e154a758877d2f689c'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "Market symbol such as 'TRX/USDT'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Market Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Market"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Market not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/pool/getlist": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "List pools",
+        "description": "Get list of liquidity pools available in nonkyc",
+        "operationId": "pool-getlist",
+        "responses": {
+          "200": {
+            "description": "Pool List",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LiquidityPool"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pool not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/pool/info": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "Get a pool info",
+        "description": "Get liquidity pool by pool id or pool symbol",
+        "operationId": "get-pool",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Pool id like '61d316e154a758877d2f689c'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "Pool symbol like 'BTC/USDT'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pool Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiquidityPool"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Pool not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/market/orderbook": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "Get a Market orderbook",
+        "description": "Get a market orderbook by market symbol or market id",
+        "parameters": [
+          {
+            "name": "marketId",
+            "in": "query",
+            "description": "the market id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "the market symbol in this format 'BTC_USDT' or 'BTC/USDT'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "limit the number of bids and the number of asks",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Market Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderBook2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/market/candles": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "description": "Get market candle ticks by market symbol",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "Market symbol ex 'BTC/USDT'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Unix timestamp in seconds. ex 1696669429",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Unix timestamp in seconds. ex 1696669429",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "description": "Timeframe in minutes: 5, 15, 30, 60, 180, 240, 480, 720, 1440",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "countBack",
+            "in": "query",
+            "description": "Number of candles to fetch",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "firstDataRequest",
+            "in": "query",
+            "description": "0 for false, 1 for true",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Candlestick Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Candlesticks"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/info": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "summary": "Get exchange Info",
+        "description": "Informations about the exchange.",
+        "operationId": "get-exchange-info",
+        "responses": {
+          "200": {
+            "description": "Information about the exchange.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Info"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/time": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "summary": "Get Server Time",
+        "description": "Get the exchange server time.",
+        "operationId": "get-server-time",
+        "responses": {
+          "200": {
+            "description": "time of the exchange.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "serverTime": {
+                      "type": "integer"
+                    }
+                  },
+                  "x-examples": {
+                    "Example 1": {
+                      "serverTime": 1712132253536
+                    }
+                  }
+                },
+                "examples": {
+                  "Example 1": {
+                    "value": {
+                      "serverTime": 1712132253536
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/summary": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "summary": "CMC summary information for all markets",
+        "description": "CMC description information for all markets.",
+        "responses": {
+          "200": {
+            "description": "description information for all markets.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Info"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/cmcassets": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "CMC datafeed endpoint A1",
+        "responses": {
+          "200": {
+            "description": "Assets Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/cmctickers": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "CMC datafeed endpoint A2",
+        "responses": {
+          "200": {
+            "description": "Tickers Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/cmcorderbook/{symbol}": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "CMC datafeed endpoint A3",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "description": "ex 'BTC_USDT' or 'BTC/USDT'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Orderbook Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/cmctrades/{symbol}": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "CMC datafeed endpoint A4",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "description": "ex 'BTC_USDT' or 'BTC/USDT'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trades Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/markets": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "Get Markets Listing.",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Optional 'spot' or 'pool'",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Markets Listing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Markets"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/trades": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "Get historical trades for a market.",
+        "operationId": "trades",
+        "parameters": [
+          {
+            "name": "market",
+            "in": "query",
+            "description": "Market ID as given in the /markets api result",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Only display trades since this trade ID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historical trades for a market.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Trades"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/orderbook/snapshot": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "summary": "Get an Orderbook Snapshot",
+        "description": "Get market orderbook snapshot.",
+        "parameters": [
+          {
+            "name": "market",
+            "in": "query",
+            "description": "Market ID as given in the /markets api result",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Orderbook snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Snapshot"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/pairs": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "Details on cryptoassets traded on an exchange.",
+        "responses": {
+          "200": {
+            "description": "Pair Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Pair"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/ticker/{symbol}": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "Market related statistics for single market for the last 24 hours.",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "description": "ex 'BTC/USDT' or 'BTC_USDT'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticker Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ticker"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/tickers": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "description": "Market related statistics for all markets for the last 24 hours.",
+        "responses": {
+          "200": {
+            "description": "Ticker Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ticker"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/orderbook": {
+      "get": {
+        "tags": [
+          "Supplementary Endpoints"
+        ],
+        "summary": "Get Orderbook info",
+        "description": "Order book depth of a given market pair, returns bids and asks",
+        "parameters": [
+          {
+            "name": "ticker_id",
+            "in": "query",
+            "description": "Can be either formatted as BTC_USDT or BTC/USDT",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Orderbook Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderBook"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/market/trades": {
+      "get": {
+        "tags": [
+          "Markets"
+        ],
+        "summary": "List Market trades",
+        "description": "Get the latest market trades",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "Market symbol ex BTC_USDT or BTC/USDT",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Limit the number of results",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HistoricalTrade"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/pool/trades": {
+      "get": {
+        "tags": [
+          "Pools"
+        ],
+        "summary": "List pool trades",
+        "description": "Historical liquidity pool trade data for any given trading pair.",
+        "parameters": [
+          {
+            "name": "ticker_id",
+            "in": "query",
+            "description": "Can be either formatted as BTC_USDT or BTC/USDT",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HistoricalTrade"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Currency not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/balances": {
+      "get": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "Get Balance",
+        "description": "Get detailed acccount balance information",
+        "responses": {
+          "200": {
+            "description": "Array of main balances",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Balance"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/getdepositaddress/{ticker}": {
+      "get": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "Get deposit address",
+        "description": "Get deposit address",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "description": "Ticker for currency,  like 'BTC'",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deposit Address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositAddress"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/createorder": {
+      "post": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "Create an order",
+        "description": "Make a new spot market trade order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userProvidedId": {
+                    "type": "string",
+                    "description": "A unique id string assigned by the user"
+                  },
+                  "symbol": {
+                    "type": "string",
+                    "description": "Formatted like DOGE/BTC"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "sell",
+                      "buy"
+                    ],
+                    "default": "sell"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "limit",
+                      "market"
+                    ],
+                    "description": "Order type. limit or market",
+                    "default": "limit"
+                  },
+                  "quantity": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "string"
+                  },
+                  "strictValidate": {
+                    "type": "boolean",
+                    "description": "Strict validate amount and price precision without truncation.  Setting true will return an error if your quantity/price exceeds the correct decimal places.  Default false will truncate values to allowed number of decimal places.",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "symbol",
+                  "side",
+                  "quantity"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New order with ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/cancelorder": {
+      "post": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "Cancel an order",
+        "description": "Cancel an open spot trade order",
+        "operationId": "cancel-order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Order ID to cancel"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ID of cancelled order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/cancelallorders": {
+      "post": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "Cancel all open orders",
+        "description": "Cancel a batch of open orders in a spot market",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/cancelallorders"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "IDs of Cancelled orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/createwithdrawal": {
+      "post": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "Make a withdrawal",
+        "description": "Make a new withdrawal request",
+        "operationId": "create-withdrawal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ticker": {
+                    "type": "string",
+                    "description": "Asset ticker ex 'BTC'"
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "description": "Quantity to withdraw"
+                  },
+                  "address": {
+                    "type": "string",
+                    "description": "Address to withdraw to.  Must be a validated address on your Account (Private)."
+                  },
+                  "paymentid": {
+                    "type": "string",
+                    "description": "If required, provide payment id."
+                  }
+                },
+                "required": [
+                  "ticker",
+                  "quantity",
+                  "address"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New withdrawal request record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Withdrawal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/getdeposits": {
+      "get": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "List account deposits",
+        "description": "Get a list of your Account deposits.  Ordered by created timestamp descending",
+        "operationId": "get-deposits",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "description": "Formatted like 'BTC'",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "limit the number of results",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "description": "skip this many records",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "get deposits after this timestamp (in milliseconds)",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deposit listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Deposit"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/getwithdrawals": {
+      "get": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "List account withdrawals",
+        "description": "Get a list of your Account withdrawals.  Ordered by created timestamp descending",
+        "operationId": "get-withdrawals",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "description": "Formatted like 'BTC'",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "maximum limit is 500",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "description": "skip this many records",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "get withdrawals after this timestamp (in milliseconds)",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Withdrawal listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Withdrawal"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/getorder/{orderId}": {
+      "get": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "Get order info",
+        "description": "Get an order by id.",
+        "operationId": "get-order",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "description": "NonKYC orderId or userProvidedId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/account/orders": {
+      "get": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "List account orders",
+        "description": "Get a list of your orders.  Ordered by created timestamp descending",
+        "operationId": "get-orders",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "formatted like DOGE/BTC",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "current status of orders. 'active', 'filled', 'cancelled'",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "maximum limit is 500",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "description": "skip this many records",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "get orders after this timestamp (in milliseconds)",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Order2"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/account/trades": {
+      "get": {
+        "tags": [
+          "Account (Private)"
+        ],
+        "summary": "List account trades",
+        "description": "Get a list of your market trades.  Ordered by created timestamp descending",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "formatted like BTC/USDT, default returns trades for all symbols",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "limit the number of trades, max limit = 500",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "description": "Skip this many records",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "get trades after this timestamp (in milliseconds)",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Trade2"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/gettradessince": {
+      "get": {
+        "tags": [
+          "Deprecated"
+        ],
+        "summary": "Get trades since a timestamp",
+        "description": "Get a list of your spot trades since a timestamp in millisec.",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "formatted like DOGE/BTC",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "A timestamp in milliseconds you want to retreive records after",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "maximum limit is 500",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "description": "skip this many records",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Trade"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    },
+    "/getpooltradessince": {
+      "get": {
+        "tags": [
+          "Deprecated"
+        ],
+        "summary": "Get pool trades since a timestamp",
+        "description": "Get a list of your liquidity pool trades since a timestamp in millisec.",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "description": "formatted like DOGE/BTC",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "A timestamp in milliseconds you want to retreive records after",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "maximum limit is 500",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "description": "skip this many records",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade listings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PoolTrade"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "security": [
+          {
+            "apiKey": [],
+            "nonce": [],
+            "signature": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "https://api.nonkyc.io/api/v2"
+          }
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Assets",
+      "description": "Public Asset endpoints"
+    },
+    {
+      "name": "Markets",
+      "description": "Public Market endpoints"
+    },
+    {
+      "name": "Pools",
+      "description": "Public Pool endpoints"
+    },
+    {
+      "name": "Account (Private)",
+      "description": "Private exchange endpoints"
+    },
+    {
+      "name": "Supplementary Endpoints",
+      "description": "Public exchange information"
+    },
+    {
+      "name": "Deprecated",
+      "description": "Deprecated endpoints"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "description": "An API key is a code that is generated for your account",
+        "name": "X-API-KEY",
+        "in": "header"
+      },
+      "nonce": {
+        "type": "apiKey",
+        "name": "apiKey",
+        "in": "header"
+      },
+      "signature": {
+        "type": "apiKey",
+        "description": "Sha256 signature of apiKey+request_url+request_body(post requests)+nonce",
+        "name": "X-API-SIGN",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "Asset": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Internal ID"
+          },
+          "ticker": {
+            "type": "string",
+            "description": "Ticker code"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of asset"
+          },
+          "logo": {
+            "type": "string",
+            "description": "Logo filename"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Is asset active"
+          },
+          "isToken": {
+            "type": "boolean",
+            "description": "Is asset a token"
+          },
+          "tokenOf": {
+            "type": "object",
+            "description": "If token, asset this is a token of",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Asset"
+              }
+            }
+          },
+          "tokenDetails": {
+            "type": "object",
+            "description": "Technical details about token"
+          },
+          "useParentAddress": {
+            "type": "boolean",
+            "description": "Uses same deposit address as parent token"
+          },
+          "usdValue": {
+            "type": "string",
+            "description": "Value in USD"
+          },
+          "depositActive": {
+            "type": "boolean",
+            "description": "Are deposits open"
+          },
+          "depositNotes": {
+            "type": "string",
+            "description": "Notes for deposit issues"
+          },
+          "depositPayId": {
+            "type": "boolean",
+            "description": "Deposits have payment ids"
+          },
+          "withdrawalActive": {
+            "type": "boolean",
+            "description": "Are withdrawals active"
+          },
+          "withdrawalNotes": {
+            "type": "string",
+            "description": "Withdrawal status notes"
+          },
+          "withdrawalPayid": {
+            "type": "boolean",
+            "description": "Do withdrawals have payment ids"
+          },
+          "withdrawalPayidRequired": {
+            "type": "boolean",
+            "description": "Are withdrawal payment ids required"
+          },
+          "confirmsRequired": {
+            "type": "number",
+            "description": "Network confirms required for deposit"
+          },
+          "withdrawDecimals": {
+            "type": "number",
+            "description": "Decimal places allowed during withdrawal"
+          },
+          "withdrawFee": {
+            "type": "string",
+            "description": "Withdrawal fee"
+          },
+          "explorer": {
+            "type": "string",
+            "description": "Explorer URL"
+          },
+          "explorerTxid": {
+            "type": "string",
+            "description": "Explorer url for txid"
+          },
+          "explorerAddress": {
+            "type": "string",
+            "description": "Explorer url for address"
+          },
+          "website": {
+            "type": "string",
+            "description": "Website URL"
+          },
+          "coinMarketCap": {
+            "type": "string",
+            "description": "Coinmarketcap URL"
+          },
+          "coinGecko": {
+            "type": "string",
+            "description": "Coingecko URL"
+          },
+          "addressRegEx": {
+            "type": "string",
+            "description": "RegEx for validating correct address format"
+          },
+          "payidRegEx": {
+            "type": "string",
+            "description": "RegEx for validating correct payment id"
+          },
+          "socialCommunity": {
+            "type": "object",
+            "description": "List of social media links"
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "number"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "message": {
+                "type": "string",
+                "enum": [
+                  "Internal Server Error",
+                  "Gateway Timeout",
+                  "Service Unavailable",
+                  "Symbol not found",
+                  "Authorisation required",
+                  "Authorisation failed",
+                  "Validation error",
+                  "Insufficient funds"
+                ]
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Market": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Internal ID"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Market symbol code"
+          },
+          "primaryAsset": {
+            "type": "object",
+            "description": "Market primary asset",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Asset"
+              }
+            }
+          },
+          "secondaryAsset": {
+            "type": "object",
+            "description": "Market secondary asset",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Asset"
+              }
+            }
+          },
+          "lastPrice": {
+            "type": "string",
+            "description": "Last trade price"
+          },
+          "highPrice": {
+            "type": "string",
+            "description": "24 hour high price"
+          },
+          "lowPrice": {
+            "type": "string",
+            "description": "24 hour low price"
+          },
+          "volume": {
+            "type": "string",
+            "description": "24 hour volume in primary currency"
+          },
+          "lineChart": {
+            "type": "string",
+            "description": "Hourly price data over the last 24 hours"
+          },
+          "lastTradeAt": {
+            "type": "number",
+            "description": "Timestamp of last trade"
+          },
+          "priceDecimals": {
+            "type": "number",
+            "description": "Decimal places for price"
+          },
+          "quantityDecimals": {
+            "type": "number",
+            "description": "Decimal places for quantity"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Is market active"
+          }
+        }
+      },
+      "LiquidityPool": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Internal ID"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Market symbol code"
+          },
+          "primaryAsset": {
+            "type": "object",
+            "description": "Market primary asset",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Asset"
+              }
+            }
+          },
+          "secondaryAsset": {
+            "type": "object",
+            "description": "Market secondary asset",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Asset"
+              }
+            }
+          },
+          "lastPrice": {
+            "type": "string",
+            "description": "Last trade price"
+          },
+          "highPrice": {
+            "type": "string",
+            "description": "24 hour high price"
+          },
+          "lowPrice": {
+            "type": "string",
+            "description": "24 hour low price"
+          },
+          "volume": {
+            "type": "string",
+            "description": "24 hour volume in primary currency"
+          },
+          "lineChart": {
+            "type": "string",
+            "description": "Hourly price data over the last 24 hours"
+          },
+          "lastTradeAt": {
+            "type": "number",
+            "description": "Timestamp of last trade"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Is market active"
+          }
+        }
+      },
+      "OrderBook2": {
+        "type": "object",
+        "properties": {
+          "marketid": {
+            "type": "string",
+            "description": "Market ID"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "A pair such as \"BTC_ETH\", with delimiter between different cryptoassets"
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "Unix timestamp in milliseconds for when the last updated time occurred."
+          },
+          "sequence": {
+            "type": "string",
+            "description": "Orderbook sequence."
+          },
+          "bids": {
+            "type": "array",
+            "description": "Bids (buys)",
+            "items": {
+              "$ref": "#/components/schemas/OrderBookItem"
+            }
+          },
+          "asks": {
+            "type": "array",
+            "description": "Asks (sells)",
+            "items": {
+              "$ref": "#/components/schemas/OrderBookItem"
+            }
+          }
+        }
+      },
+      "OrderBookItem": {
+        "type": "object",
+        "properties": {
+          "price": {
+            "type": "string"
+          },
+          "numberprice": {
+            "type": "number"
+          },
+          "quantity": {
+            "type": "string"
+          }
+        }
+      },
+      "Candlesticks": {
+        "type": "object",
+        "properties": {
+          "bars": {
+            "type": "array",
+            "description": "Bars info.",
+            "items": {
+              "$ref": "#/components/schemas/CandlestickItem"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Meta data."
+          }
+        }
+      },
+      "CandlestickItem": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "number",
+            "description": "Timestamp"
+          },
+          "close": {
+            "type": "number",
+            "description": "Bar closing price"
+          },
+          "open": {
+            "type": "number",
+            "description": "Bar opening price"
+          },
+          "high": {
+            "type": "number",
+            "description": "Bar high price"
+          },
+          "low": {
+            "type": "number",
+            "description": "Bar low price"
+          },
+          "volume": {
+            "type": "number",
+            "description": "Bar total volume"
+          }
+        }
+      },
+      "Info": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of Exchange"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of Exchange"
+          },
+          "location": {
+            "type": "string",
+            "description": "Location of Exchange"
+          },
+          "logo": {
+            "type": "string",
+            "description": "Exchange logo"
+          },
+          "website": {
+            "type": "string",
+            "description": "Exchange website"
+          },
+          "twitter": {
+            "type": "string",
+            "description": "Exchange twitter Account (Private)"
+          },
+          "version": {
+            "type": "string",
+            "description": "Info version"
+          },
+          "capability": {
+            "type": "object",
+            "description": "Capability settings"
+          }
+        }
+      },
+      "Markets": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of market"
+          },
+          "base": {
+            "type": "string",
+            "description": "Base trading ticker"
+          },
+          "quote": {
+            "type": "string",
+            "description": "Quote trading ticker"
+          },
+          "type": {
+            "type": "string",
+            "description": "Market type"
+          },
+          "market_url": {
+            "type": "string",
+            "description": "Market URL"
+          },
+          "active": {
+            "type": "string",
+            "description": "Active status of market"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of market"
+          }
+        }
+      },
+      "Trades": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID of trade"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "ISO String Timestamp"
+          },
+          "price": {
+            "type": "string",
+            "description": "Trade price"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Trade Quantity"
+          },
+          "side": {
+            "type": "string",
+            "description": "Trade Side"
+          }
+        }
+      },
+      "Snapshot": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "ISO String Date timestamp."
+          },
+          "bids": {
+            "type": "array",
+            "description": "An array containing 2 elements. The offer price and quantity for each bid order",
+            "items": {
+              "type": "array"
+            }
+          },
+          "asks": {
+            "type": "array",
+            "description": "An array containing 2 elements. The ask price and quantity for each ask order",
+            "items": {
+              "type": "array"
+            }
+          }
+        }
+      },
+      "Pair": {
+        "type": "object",
+        "properties": {
+          "ticker_id": {
+            "type": "string",
+            "description": "Identifier of a ticker with delimiter to separate base/target, eg. BTC_ETH"
+          },
+          "base": {
+            "type": "string",
+            "description": "Symbol/currency code of a the base cryptoasset, eg. BTC"
+          },
+          "target": {
+            "type": "string",
+            "description": "Symbol/currency code of the target cryptoasset, eg. ETH"
+          },
+          "type": {
+            "type": "string",
+            "description": "Can either be 'market' or 'liquiditypool'"
+          }
+        }
+      },
+      "Ticker": {
+        "type": "object",
+        "properties": {
+          "ticker_id": {
+            "type": "string",
+            "description": "Identifier of a ticker with delimiter to separate base/target, eg. BTC_ETH"
+          },
+          "type": {
+            "type": "string",
+            "description": "Can either be 'market' or 'liquiditypool'"
+          },
+          "base_currency": {
+            "type": "string",
+            "description": "Symbol/currency code of a the base cryptoasset, eg. BTC"
+          },
+          "target_currency": {
+            "type": "string",
+            "description": "Symbol/currency code of the target cryptoasset, eg. ETH"
+          },
+          "last_price": {
+            "type": "string",
+            "description": "Last transacted price of base currency based on given target currency"
+          },
+          "base_volume": {
+            "type": "string",
+            "description": "24 hour trading volume in base pair volume"
+          },
+          "target_volume": {
+            "type": "string",
+            "description": "24 hour trading volume in target pair volume"
+          },
+          "bid": {
+            "type": "string",
+            "description": "Current highest bid price"
+          },
+          "ask": {
+            "type": "string",
+            "description": "Current lowest ask price"
+          },
+          "high": {
+            "type": "string",
+            "description": "Rolling 24-hours highest transaction price"
+          },
+          "low": {
+            "type": "string",
+            "description": "Rolling 24-hours lowest transaction price"
+          },
+          "previous_day_price": {
+            "type": "string",
+            "description": "asset price in the previous"
+          }
+        }
+      },
+      "OrderBook": {
+        "type": "object",
+        "properties": {
+          "ticker_id": {
+            "type": "string",
+            "description": "A pair such as \"BTC_ETH\", with delimiter between different cryptoassets"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Unix timestamp in milliseconds for when the last updated time occurred."
+          },
+          "bids": {
+            "type": "array",
+            "description": "An array containing 2 elements. The offer price and quantity for each bid order",
+            "items": {
+              "type": "array"
+            }
+          },
+          "asks": {
+            "type": "array",
+            "description": "An array containing 2 elements. The ask price and quantity for each ask order",
+            "items": {
+              "type": "array"
+            }
+          }
+        }
+      },
+      "HistoricalTrade": {
+        "type": "object",
+        "properties": {
+          "trade_id": {
+            "type": "string",
+            "description": "A unique ID associated with the trade for the currency pair transaction"
+          },
+          "price": {
+            "type": "string",
+            "description": "Transaction price in base pair volume."
+          },
+          "base_volume": {
+            "type": "string",
+            "description": "Transaction amount in base pair volume."
+          },
+          "target_volume": {
+            "type": "string",
+            "description": "Transaction amount in target pair volume."
+          },
+          "trade_timestamp": {
+            "type": "string",
+            "description": "Unix timestamp in milliseconds for when the transaction occurred."
+          },
+          "type": {
+            "type": "string",
+            "description": "Used to determine the type of the transaction that was completed. buy or sell"
+          }
+        }
+      },
+      "Balance": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "string",
+            "description": "Ticker of asset"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of asset"
+          },
+          "available": {
+            "type": "string",
+            "description": "Available Balance"
+          },
+          "pending": {
+            "type": "string",
+            "description": "Balance of Pending Deposits"
+          },
+          "held": {
+            "type": "string",
+            "description": "Balance held in orders"
+          },
+          "assetid": {
+            "type": "string",
+            "description": "Asset ID Code"
+          }
+        }
+      },
+      "DepositAddress": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "paymentid": {
+            "type": "string"
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "internal id for order"
+          },
+          "userProvidedId": {
+            "type": "string",
+            "description": "User provided string identifier at time of order submission"
+          },
+          "market": {
+            "type": "object",
+            "description": "Which Market order is for",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Market3"
+              }
+            }
+          },
+          "side": {
+            "type": "string",
+            "description": "buy or sell"
+          },
+          "type": {
+            "type": "string",
+            "description": "limit or market"
+          },
+          "price": {
+            "type": "string",
+            "description": "order price"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "original quantity"
+          },
+          "executedQuantity": {
+            "type": "string",
+            "description": "executed quantity"
+          },
+          "remainQuantity": {
+            "type": "string",
+            "description": "remaining quantity"
+          },
+          "remainTotal": {
+            "type": "string",
+            "description": "remaining total"
+          },
+          "remainTotalWithFee": {
+            "type": "string",
+            "description": "remaining total including fee"
+          },
+          "lastTradeAt": {
+            "type": "number",
+            "description": "timestamp of last trade for this order"
+          },
+          "status": {
+            "type": "string",
+            "description": "status of the order, 'Active', 'Cancelled', 'Filled', 'Partly Filled'"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "is the order active"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "timestamp of order creation"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "timestamp of last update"
+          }
+        }
+      },
+      "Market3": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Internal ID"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Market symbol code"
+          }
+        }
+      },
+      "cancelallorders": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "ex 'BTC/USDC'"
+          },
+          "side": {
+            "type": "string",
+            "description": "all, buy or sell"
+          }
+        }
+      },
+      "Withdrawal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "paymentid": {
+            "type": "string"
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "childticker": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "fee": {
+            "type": "string"
+          },
+          "feecurrency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "transactionid": {
+            "type": "string"
+          },
+          "issent": {
+            "type": "boolean"
+          },
+          "sentat": {
+            "type": "string"
+          },
+          "isconfirmed": {
+            "type": "boolean"
+          },
+          "requestedat": {
+            "type": "string"
+          }
+        }
+      },
+      "Deposit": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "paymentid": {
+            "type": "string"
+          },
+          "ticker": {
+            "type": "string"
+          },
+          "childticker": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "transactionid": {
+            "type": "string"
+          },
+          "isposted": {
+            "type": "boolean"
+          },
+          "isreversed": {
+            "type": "boolean"
+          },
+          "confirmations": {
+            "type": "number"
+          },
+          "firstseenat": {
+            "type": "string"
+          }
+        }
+      },
+      "Order2": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "internal id for order"
+          },
+          "userProvidedId": {
+            "type": "string",
+            "description": "User provided string identifier at time of order submission"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Market symbol"
+          },
+          "side": {
+            "type": "string",
+            "description": "buy or sell"
+          },
+          "type": {
+            "type": "string",
+            "description": "limit or market"
+          },
+          "price": {
+            "type": "string",
+            "description": "order price"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "original quantity"
+          },
+          "executedQuantity": {
+            "type": "string",
+            "description": "executed quantity"
+          },
+          "status": {
+            "type": "string",
+            "description": "status of the order, 'Active', 'Cancelled', 'Filled', 'Partly Filled'"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "is the order active"
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "timestamp of order creation"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "timestamp of last update"
+          }
+        }
+      },
+      "Trade2": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "internal id for trade"
+          },
+          "market": {
+            "type": "object",
+            "description": "Trade Market",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Market3"
+              }
+            }
+          },
+          "orderid": {
+            "type": "string",
+            "description": "order id for trade"
+          },
+          "side": {
+            "type": "string",
+            "description": "buy or sell"
+          },
+          "triggeredBy": {
+            "type": "string",
+            "description": "buy or sell"
+          },
+          "price": {
+            "type": "string",
+            "description": "trade price"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "trade quantity"
+          },
+          "fee": {
+            "type": "string",
+            "description": "fee for trade in secondary currency"
+          },
+          "totalWithFee": {
+            "type": "string",
+            "description": "total trade value with fee"
+          },
+          "alternateFeeAsset": {
+            "type": "string",
+            "description": "if fee paid in alternate asset such as XPE"
+          },
+          "alternateFee": {
+            "type": "string",
+            "description": "alternate fee paid"
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "timestamp of trade creation"
+          }
+        }
+      },
+      "Trade": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "internal id for trade"
+          },
+          "market": {
+            "type": "object",
+            "description": "Which Market trade is for",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/Market3"
+              }
+            }
+          },
+          "orderid": {
+            "type": "string",
+            "description": "order id for trade"
+          },
+          "side": {
+            "type": "string",
+            "description": "buy or sell"
+          },
+          "triggeredBy": {
+            "type": "string",
+            "description": "buy or sell"
+          },
+          "price": {
+            "type": "string",
+            "description": "trade price"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "trade quantity"
+          },
+          "fee": {
+            "type": "string",
+            "description": "fee for trade in secondary currency"
+          },
+          "totalWithFee": {
+            "type": "string",
+            "description": "total trade value with fee"
+          },
+          "alternateFeeAsset": {
+            "type": "string",
+            "description": "if fee paid in alternate asset such as XPE"
+          },
+          "alternateFee": {
+            "type": "string",
+            "description": "alternate fee paid"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "timestamp of trade creation"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "timestamp of last update"
+          }
+        }
+      },
+      "PoolTrade": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "internal id for trade"
+          },
+          "pool": {
+            "type": "object",
+            "description": "Which Pool trade is for",
+            "properties": {
+              "schema": {
+                "$ref": "#/components/schemas/LiquidityPool3"
+              }
+            }
+          },
+          "side": {
+            "type": "string",
+            "description": "buy or sell"
+          },
+          "price": {
+            "type": "string",
+            "description": "trade price"
+          },
+          "quantity": {
+            "type": "string",
+            "description": "trade quantity"
+          },
+          "fee": {
+            "type": "string",
+            "description": "fee for trade in secondary currency"
+          },
+          "totalWithFee": {
+            "type": "string",
+            "description": "total trade value with fee"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "timestamp of trade creation"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "timestamp of last update"
+          }
+        }
+      },
+      "LiquidityPool3": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Internal ID"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Market symbol code"
+          }
+        }
+      }
+    }
+  }
+}

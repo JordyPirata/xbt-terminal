@@ -1,0 +1,30 @@
+[
+ {
+  "id": "6a0000000000000000000001",
+  "userProvidedId": "t-abc123",
+  "symbol": "BTCB2/BTC",
+  "side": "BUY",
+  "type": "limit",
+  "price": "0.0071",
+  "quantity": "0.2000",
+  "executedQuantity": "0.0000",
+  "status": "Active",
+  "isActive": true,
+  "timestamp": 1792530334660,
+  "updatedAt": 1792530334660
+ },
+ {
+  "id": "6a0000000000000000000002",
+  "userProvidedId": null,
+  "symbol": "BTCB2/BTC",
+  "side": "SELL",
+  "type": "limit",
+  "price": "0.0075",
+  "quantity": "0.1000",
+  "executedQuantity": "0.0250",
+  "status": "Partly Filled",
+  "isActive": true,
+  "timestamp": 1792530360000,
+  "updatedAt": 1792530420000
+ }
+]

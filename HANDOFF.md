@@ -1,0 +1,202 @@
+# HANDOFF — dónde quedó el trabajo
+
+Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
+días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
+después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
+
+## Estado (2026-10-26, 22:00 UTC)
+
+- Spec en **v0.26** (changelog en `specs/archive/changelog.md`). Hechas T-61 a
+  T-65 y T-67 a T-73. 1363 tests, ruff limpio, `spec_trace` 67/72 (sin test:
+  RNF-01, RNF-21/T-32, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43, D-57).
+  Árbol limpio en `main`.
+- **Arquitectura:** `btcb2t daemon [--live]` es el único proceso que habla con
+  los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
+  comisiones, muestreo del valor). `btcb2t` (alias `attach`) es la pantalla:
+  opera todo por el socket, sin config ni keys. Protocolo en design.md §6.13.
+- **Corriendo en local:** daemon `--live` desde 2026-10-26 21:54 UTC (pid
+  304722) y pantalla (pid 304778), con todo hasta T-73. **Bot armado** desde
+  las 21:54:48 UTC con `max_move_pct = "1.0"` y `move_window_ms = 2000`. En `ps`
+  cada comando sale dos veces (el padre `uv run`); no son dos daemons.
+- **Lo último (detalle en decisions.md y `specs/archive/tasks-done.md`):**
+  - T-69/T-70/T-71 (D-69): evento `value` cada 5 min en el journal; en
+    resultados (`r`), `Tab` → pestaña "Valor de la cuenta"; se refresca sola
+    cada 60 s; `z` → último tramo en sats (desde el último salto > 5 %, que son
+    transferencias en tránsito). Serie desde 2026-10-25 22:25 UTC, sin huecos.
+  - T-72 (D-70): `decide` del bot ~100× más barata con el mismo resultado
+    (50 → 0.5 ms con walk). Oráculo congelado en `tests/unit/bot_reference.py`:
+    un cambio de comportamiento del bot a propósito lo actualiza con su D-NN.
+    Latencia en `tests/perf/` (`uv run pytest tests/perf -s`).
+  - T-73 (D-71): con `max_move_pct`, el bot no dispara si el mid de un venue se
+    movió más de ese % en la ventana (no espera: mira hacia atrás; tras un salto
+    tarda hasta `move_window_ms` en volver a disparar). `bot_fire.move` apunta el
+    movimiento de cada venue, con filtro o sin él. Al frenar, `diag.log` dice
+    "sin disparar por movimiento brusco".
+- **Piernas colgadas:** 12 de 472 dobles del bot dejaron una pierna sin llenar,
+  11 en Neoxa (las dos de hoy: d-f65e93 13:47 y d-e988bd 20:54 UTC, compra en
+  Neoxa sin llenar). Causa vista en d-e988bd con los trades públicos de Neoxa:
+  un barrido de −2.8 % y otro bot que se llevó el ask barato antes. **No es el
+  WiFi** (−40 dBm, 3.6 ms al router, 0 % de pérdida; los ~300 ms de
+  confirmación son del exchange) y la neta no las distingue (0.96 % frente a
+  1.01 %). De ahí T-73.
+- **Descuadres** (journal en live, 2026-10-26): neto +0.0601 XBT sobrante
+  (+0.0817 comprado de más, −0.0216 vendido de más), coste neto 0.00026685 BTC
+  (media 0.00444).
+
+### Tareas abiertas
+
+- **T-66** `todo`: CA-16 en real. Lo hecho en local (doble del bot en live por
+  el daemon) cubre parte; falta una orden manual colocada y cancelada desde la
+  pantalla, y en el server por SSH, con permiso del usuario.
+- **T-55** `doing`: falta la parte manual de CA-15 en live en el server.
+- **T-20** `doing`: CA-03 y CA-06 aplazados por el usuario (2026-10-23).
+- **T-33** `todo` (comprobación en real de M6) y **T-32** `todo` (CI; aplazada:
+  el repo no tiene remoto).
+
+### Siguiente
+
+1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Mirar el `move` de los
+   `bot_fire` desde las 21:54 UTC del 26, las dobles colgadas nuevas y cuántas
+   veces frenó (`grep "movimiento brusco" ~/.local/state/btcb2t/diag.log`). Si
+   frena mucho sin colgadas, subirlo; si sigue habiendo colgadas con `move`
+   alto, bajarlo. Consulta rápida:
+   `grep -h '"bot_fire"' ~/.local/state/btcb2t/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
+   y cruzarla con `hanging_leg` del mismo journal.
+2. Corregir d-550cd7 a mano (queda fuera de los 50 trades de NonKYC): leer sus
+   4 trades de `/account/trades` con un límite mayor y añadir los `fill_fee`,
+   con el daemon parado. Pendiente de que el usuario lo pida.
+3. Apuntar en `decisions.md` la prueba en live de d-fb32e2 (el usuario aún no
+   ha dicho si quiere).
+4. Orden manual mínima desde la pantalla (colocar y cancelar) en local: cierra
+   la parte local de T-66.
+5. En el server: parar el daemon viejo (no habla el protocolo nuevo), arrancar
+   la versión nueva y hacer T-66 y T-55 por SSH (`ssh -t server btcb2t`).
+6. Decidir `fee_discount_pct` de Neoxa: los fills reales cobran el 0.2 %
+   completo; el 50 % solo infla el neto del panel cruzado (no el del bot).
+
+### Cómo retomar en una sesión nueva
+
+- Estado del daemon y del bot: `ps -eo pid,lstart,args | grep bin/btcb2t`,
+  `tail ~/.local/state/btcb2t/diag.log` y los `bot_state` del journal de hoy.
+- Si se reinicia el daemon, el bot arranca `off`: rearmar con `bot on` desde la
+  pantalla. La config solo se lee al arrancar.
+- Resultados y descuadres sin pantalla: `ResultsService(Path.home() /
+  ".local/state/btcb2t").load("todo")` (`services/results.py`).
+- Trades públicos de Neoxa para ver qué pasó en una colgada (solo los 100
+  últimos): `curl -s "https://neoxa.exchange/api/exchange/trades/BTCB2_BTC?limit=100"`.
+
+## Avisos operativos
+
+- **Socket:** la ruta no puede pasar de 107 bytes (AF_UNIX). Con un `--data-dir`
+  largo, usar `--socket`. El default XDG cabe.
+- **Pantalla:** tras escribir un comando, el foco queda en la línea. Pulsar
+  `Esc` antes de `q` para salir. `q` solo desconecta: el daemon sigue.
+- **NonKYC y NKYC:** no se ha comprobado si `/cancelallorders` respeta `symbol`.
+  No usar `x` con órdenes de NKYC abiertas.
+- **Fees:** NonKYC cobra ~0.149 % en NKYC (102 fills desde el 2026-10-25 05:24
+  UTC más d-fb32e2). Neoxa cobra el 0.2 % completo en BTC (109 fills y
+  d-fb32e2): el `fee_discount_pct = "50"` de la config no se cumple. Los fills
+  contra el AMM de Neoxa salen con fee 0.
+- **Fee de NKYC al reiniciar:** desde T-68, una corrección que llegue con el
+  daemon parado se apunta al arrancar, si el trade sigue entre los 50 más
+  recientes de NonKYC. d-550cd7 (16:08 UTC, 4 fills con 0.2 % en BTC) quedó
+  fuera: sin corregir.
+- **Ver el journal:** `~/.local/state/btcb2t/journal-YYYYMMDD.jsonl`; el daemon
+  escribe `diag.log` y la pantalla `client.log`.
+- **Tests inestables:** `test_el_dialogo_no_espera_a_la_red` (límite de 0.3 s
+  de reloj real) y, una vez, `test_las_dos_llenas_enfria` (timeout) fallan a
+  veces con la suite entera; por separado pasan.
+
+## Config real del usuario
+
+`~/.config/btcb2t/config.toml` y `.env` (`0600`), que solo lee el daemon;
+journal, lock y socket en `~/.local/state/btcb2t`.
+- `[venues.nk]`: `fee_discount_pct = "25"`, `fee_token = "NKYC"`,
+  `fee_token_min = "1"`. Neoxa: `fee_discount_pct = "50"`.
+- `[inventory]`: `target_base_pct = "25"`, `band_pct = "10"`.
+- Bot: `max_move_pct = "1.0"`, `move_window_ms = 2000` (D-71).
+- Bot: `min_net_pct` 0.4, `max_qty` 0.05, `cooldown_s` 15, `max_daily_btc` 0.01 y
+  `max_walk_pct = { nk = "0.8" }` (en la config y disparando en live).
+- Comisiones de retiro: NonKYC BTC (`BTC-MAIN`) 0.00005, Neoxa BTC 0.0001 (aparte).
+- Inventario (2026-10-23): NonKYC 23.0 %, Neoxa 27.7 %, total 25.5 % de XBT.
+- Daemon: sin systemd en el repo; el usuario configura el servicio a mano. El
+  bot arranca `off` también en el daemon.
+
+## Preguntas abiertas que siguen vivas
+
+| ID | Qué | Bloquea |
+| --- | --- | --- |
+| PA-09 | ¿Neoxa acepta y devuelve un client_id? Supuesto: no; se reconcilia por lado, precio y cantidad (D-26) | — |
+| PA-10 | ¿NonKYC descuenta la comisión de retiro de lo enviado? Supuesto: sí (RF-29, D-53) | — |
+
+Resueltas: PA-01 → D-08, PA-02 → D-10, PA-03 → D-19, PA-04 → D-42, PA-05 → D-31, PA-06 → D-07, PA-07 → D-06, PA-08 → D-15 (cerrada en D-54).
+
+## Forma de trabajar acordada con el usuario
+
+- Una rama por tarea (`t-NN-nombre`), tests primero con `@pytest.mark.spec(...)`,
+  cerrar con pytest + ruff + `tools/spec_trace.py`, marcar `done` en tasks.md,
+  anotar decisiones nuevas como `D-NN` en decisions.md.
+- Commit al cerrar cada tarea, `merge --ff-only` a `main` y borrar la rama.
+  El usuario ha ido aprobando "commit, fusiona y sigue" tarea a tarea; si una
+  tarea necesita una decisión suya (una PA), parar y preguntar antes.
+- Un cambio de alcance (como el paso a BTC) va primero a la spec: nueva versión
+  de requirements.md, `D-NN` y tarea propia, y solo después código.
+- Commits en español con `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Todo en español (docs, mensajes, docstrings); identificadores en inglés.
+- Al cerrar la sesión, actualizar este fichero.
+
+## Trampas encontradas
+
+- **Mutation testing a mano y `.pyc`**: al estropear un fichero y restaurarlo
+  con `cp`, si el tamaño y el mtime (al segundo) coinciden, Python usa el
+  bytecode viejo y un test falla sin motivo. Borrar `__pycache__` tras cada cambio.
+- **Timestamps de test**: comprobar que los `T0` estén alineados al timeframe
+  (`T0 % 3_600_000 == 0`); hay un test que lo vigila en test_candles.py.
+- **ruff y caracteres raros**: `×` está permitido en `allowed-confusables`; el
+  signo menos `−` no: usar `-`. Los tests que prueban `%` y `.format` a
+  propósito llevan `# noqa: UP031, UP032`.
+- **`core/` no importa de fuera de `core/`**: por eso `RiskLimits` está en
+  `core/risk.py` y `config.py` la importa, no al revés.
+- Los tests de riesgo y modelos usan mercados ficticios en USDT (anteriores a la
+  v0.2): prueban lógica genérica y valen, pero los tests nuevos deben usar BTC.
+- **Consumir `market_stream` con `aclosing()` o cancelando la tarea.** Un `break`
+  solo se evalúa al llegar un evento, y con el mercado quieto pueden pasar minutos.
+- **Trades duplicados con las velas** (para MarketHub, T-12/T-13): `recent_trades()`
+  y el WS deduplican entre sí, pero un trade que ya cuenta en la última vela del
+  histórico REST sumaría volumen dos veces si se pasa a `CandleBuilder.on_trade`.
+  Al cargar el histórico, no pasar a las velas los trades con `ts` anterior a la carga.
+- **`git stash --keep-index` + `stash pop` choca** con lo que hay en staging
+  (conflictos en cada fichero tocado por las dos partes). Si pasa, el stash se
+  conserva: `git checkout stash@{0} -- .` y `git read-tree stash@{0}^2` dejan
+  árbol e índice como estaban.
+- **Markup de Rich/Textual en textos con corchetes**: `Static(texto)` y
+  `notify(texto)` interpretan `[y]`, `[red]`… y un `[/bold]` suelto lanza
+  `MarkupError`. Texto que venga del venue o con teclas entre corchetes:
+  `markup=False` (o `rich.text.Text`).
+- **`Input` de Textual con `select_on_focus=True` por defecto**: al recibir el
+  foco selecciona todo y la primera tecla lo sustituye. La línea de comandos lo
+  lleva a False; un test lo vigila.
+- Las velas de 1m de Neoxa vienen dispersas (sin vela en los minutos sin trades):
+  50 velas pedidas se convierten en ~235 tras `CandleBuilder.load`.
+- **Cola de recepción de websockets (16 frames):** si el consumidor deja de leer
+  y cierra con frames encolados, el cierre limpio espera `close_timeout`.
+  Por eso `WS_CLOSE_TIMEOUT_S = 1.0`; sin eso, salir tardaría 10 s. Hay un test.
+- **NonKYC corta la conexión WS ante una petición errónea** (símbolo o método
+  inexistente). No mandar peticiones de prueba por la conexión buena.
+- `/market/trades` de NonKYC no coincide con su OpenAPI (`id`, `type`,
+  `baseVolume`, `timestamp` en ms): manda lo grabado, no la OpenAPI.
+- **Textual: `on_resize` llega antes de que `app.size` se actualice**: usar
+  `event.size`. Y una fila `auto` del grid no respeta `styles.height` del hijo:
+  las alturas se fijan en `grid_rows`.
+- **Capturas de la UI**: `app.export_screenshot()` da un SVG. Para verlo:
+  `uv run --no-project --with cairosvg python -c "import cairosvg; ..."` (sin
+  tocar las dependencias del proyecto); los marcos salen como cuadraditos por la fuente.
+- `ruff format` no se aplica al repo entero (test_candles y test_config no están
+  formateados); formatear solo los ficheros nuevos.
+- **respx: gana la primera ruta que encaja.** Una ruta más concreta añadida en
+  el test después de una regex del fixture no se usa nunca: cambiar el
+  `side_effect` de la ruta del fixture (con `name=`).
+- **NonKYC firma la url exacta:** construir la query con `urlencode` y pasar la
+  url ya hecha a httpx (no `params=`), o la firma no coincide.
+- El trazador cuenta un ID como cubierto con un solo test: RF-05 y RNF-03 solo
+  tienen tests de topes en la config, no del comportamiento real.

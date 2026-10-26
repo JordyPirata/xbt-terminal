@@ -1,0 +1,59 @@
+{
+ "success": true,
+ "trades": [
+  {
+   "trade_id": "TRD-TEST0001-00000001",
+   "pair": "BTCB2_BTC",
+   "side": "buy",
+   "price": 0.00725,
+   "quantity": 0.02683261,
+   "total": 0.00019454,
+   "executed_at": "2026-10-20T21:25:43.116Z",
+   "role": "taker",
+   "fee": 3.9e-07,
+   "fee_token": "BTC",
+   "is_amm": false
+  },
+  {
+   "trade_id": "AMM-TEST0002-00000002",
+   "pair": "BTCB2_BTC",
+   "side": "buy",
+   "price": 0.0072611,
+   "quantity": 0.00024765,
+   "total": 1.8e-06,
+   "executed_at": "2026-10-20T21:25:43.068Z",
+   "role": "taker",
+   "fee": 0,
+   "fee_token": null,
+   "is_amm": true
+  },
+  {
+   "trade_id": "TRD-TEST0003-00000003",
+   "pair": "BTCB2_BTC",
+   "side": "sell",
+   "price": 0.0073,
+   "quantity": 6.255e-05,
+   "total": 4.6e-07,
+   "executed_at": "2026-10-20T16:33:08.090Z",
+   "role": "maker",
+   "fee": 0,
+   "fee_token": "BTC",
+   "is_amm": false
+  },
+  {
+   "trade_id": "TRD-TEST0004-00000004",
+   "pair": "BTCB2_USDC",
+   "side": "buy",
+   "price": 1.1,
+   "quantity": 1,
+   "total": 1.1,
+   "executed_at": "2026-10-20T16:00:00.000Z",
+   "role": "taker",
+   "fee": 0.002,
+   "fee_token": "USDC",
+   "is_amm": false
+  }
+ ],
+ "has_more": true,
+ "next_before": "TRD-TEST0004-00000004"
+}
