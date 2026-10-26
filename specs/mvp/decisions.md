@@ -1595,6 +1595,14 @@ irían más lentos y frágiles sin probar más de la pantalla; el camino del
 socket lo prueban los tests de `services/remote`, de la TUI conectada y de
 CA-16. Los tipos que la pantalla necesita sin I/O pasan a `core/`
 (`proposals.py`, `notices.py`, `DepositRow`).
+**Añadido en T-66, parte local (2026-10-26):** con `btcb2t daemon --live` en
+local y la pantalla conectada por el socket, una orden manual mínima colocada
+y cancelada desde la pantalla: `buy nk 0.01 0.00365` (4.5 % bajo el mid),
+t-2c6b97, `order_ack` 23:32:34 UTC (id 6adfe312113f972253a9db5b, `open`) y
+`cancel <id>` con `cancel_ack` 23:32:44, `remaining: 0`, sin fills. Antes,
+tres intentos más lejos del mid (0.0020, 0.0030, 0.0036) los rechazó el daemon
+en local por `mid_deviation` (máx. 5 %) sin llegar al venue. Queda la parte del
+server por SSH.
 
 ## D-67 · 2026-10-25 · Eje Y de las velas ajustado a los cuerpos, no a las mechas
 **Contexto:** con poca liquidez una sola mecha (p. ej. un pico en Neoxa) estiraba

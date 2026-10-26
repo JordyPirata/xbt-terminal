@@ -4,7 +4,7 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-26, 22:00 UTC)
+## Estado (2026-10-26, 23:35 UTC)
 
 - Spec en **v0.26** (changelog en `specs/archive/changelog.md`). Hechas T-61 a
   T-65 y T-67 a T-73. 1363 tests, ruff limpio, `spec_trace` 67/72 (sin test:
@@ -14,12 +14,13 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
   comisiones, muestreo del valor). `btcb2t` (alias `attach`) es la pantalla:
   opera todo por el socket, sin config ni keys. Protocolo en design.md §6.13.
-- **En local:** daemon parado el 2026-10-26 para renombrar el proyecto a
-  `xbt-terminal` (carpeta `~/Code/xbt-terminal`, paquete `xbt_terminal`; el
-  comando `btcb2t` y sus carpetas XDG no cambian). Relanzar con
-  `uv run btcb2t daemon --live` y rearmar con `bot on` (config del bot:
-  `max_move_pct = "1.0"`, `move_window_ms = 2000`). En `ps` cada comando sale
-  dos veces (el padre `uv run`); no son dos daemons.
+- **En local:** proyecto renombrado a `xbt-terminal` (carpeta
+  `~/Code/xbt-terminal`, paquete `xbt_terminal`; el comando `btcb2t` y sus
+  carpetas XDG no cambian). Daemon en live con el nombre nuevo desde el
+  2026-10-26 22:59 UTC y bot `armed` (config: `max_move_pct = "1.0"`,
+  `move_window_ms = 2000`). Tras el renombrado: 1363 tests, ruff limpio,
+  `spec_trace` 67/72. En `ps` cada comando sale dos veces (el padre `uv run`);
+  no son dos daemons.
 - **Lo último (detalle en decisions.md y `specs/archive/tasks-done.md`):**
   - T-69/T-70/T-71 (D-69): evento `value` cada 5 min en el journal; en
     resultados (`r`), `Tab` → pestaña "Valor de la cuenta"; se refresca sola
@@ -47,9 +48,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Tareas abiertas
 
-- **T-66** `todo`: CA-16 en real. Lo hecho en local (doble del bot en live por
-  el daemon) cubre parte; falta una orden manual colocada y cancelada desde la
-  pantalla, y en el server por SSH, con permiso del usuario.
+- **T-66** `todo`: CA-16 en real. Parte local hecha (2026-10-26 23:32 UTC,
+  t-2c6b97 colocada y cancelada desde la pantalla, en D-66). Falta la del
+  server por SSH, con permiso del usuario.
 - **T-55** `doing`: falta la parte manual de CA-15 en live en el server.
 - **T-20** `doing`: CA-03 y CA-06 aplazados por el usuario (2026-10-23).
 - **T-33** `todo` (comprobación en real de M6) y **T-32** `todo` (CI; aplazada:
@@ -57,7 +58,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Mirar el `move` de los
+1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Hasta las 22:59 UTC del 26:
+   18 disparos (22:32 a 22:41), 0 colgadas, 0 frenadas, `move` máximo 0.27 %;
+   poca muestra, se deja en 1.0. Mirar el `move` de los
    `bot_fire` desde las 21:54 UTC del 26, las dobles colgadas nuevas y cuántas
    veces frenó (`grep "movimiento brusco" ~/.local/state/btcb2t/diag.log`). Si
    frena mucho sin colgadas, subirlo; si sigue habiendo colgadas con `move`
@@ -69,11 +72,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
    con el daemon parado. Pendiente de que el usuario lo pida.
 3. Apuntar en `decisions.md` la prueba en live de d-fb32e2 (el usuario aún no
    ha dicho si quiere).
-4. Orden manual mínima desde la pantalla (colocar y cancelar) en local: cierra
-   la parte local de T-66.
-5. En el server: parar el daemon viejo (no habla el protocolo nuevo), arrancar
+4. En el server: parar el daemon viejo (no habla el protocolo nuevo), arrancar
    la versión nueva y hacer T-66 y T-55 por SSH (`ssh -t server btcb2t`).
-6. Decidir `fee_discount_pct` de Neoxa: los fills reales cobran el 0.2 %
+5. Decidir `fee_discount_pct` de Neoxa: los fills reales cobran el 0.2 %
    completo; el 50 % solo infla el neto del panel cruzado (no el del bot).
 
 ### Cómo retomar en una sesión nueva
