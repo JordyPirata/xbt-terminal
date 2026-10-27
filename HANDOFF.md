@@ -18,8 +18,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   rutas a `~/.config/xbt` y `~/.local/state/xbt` (socket `xbt.sock`, lock
   `xbt.lock`); licencia AGPL-3.0; README reescrito, `docs/despliegue.md` y
   `docs/uso.md`. Hechas en el worktree `~/Code/xbt-terminal-t75` (rama
-  `t-75-xbt`) para no tocar el daemon en live. **Mientras no se migre, el daemon
-  que corre sigue siendo `btcb2t` con las rutas viejas** (ver Siguiente 0).
+  `t-75-xbt`), fusionadas en `main`. Migración local hecha el 2026-10-27
+  00:37 UTC: carpetas movidas a las rutas `xbt` y daemon `xbt daemon --live`
+  arrancado (bot `off` hasta `bot on`).
 - **En local:** proyecto renombrado a `xbt-terminal` (carpeta
   `~/Code/xbt-terminal`, paquete `xbt_terminal`). Daemon en live con el nombre nuevo desde el
   2026-10-26 22:59 UTC y bot `armed` (config: `max_move_pct = "1.0"`,
@@ -70,12 +71,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-0. **Migrar a `xbt`** (con permiso del usuario, cuando quiera reiniciar):
-   parar el daemon `btcb2t`, fusionar `t-75-xbt` en `main`, `uv sync`,
-   `mv ~/.config/btcb2t ~/.config/xbt`, `mv ~/.local/state/btcb2t
-   ~/.local/state/xbt`, borrar `btcb2t.lock`/`btcb2t.sock`, arrancar `uv run xbt
-   daemon --live` y `bot on`. Lo mismo en el server (`docs/despliegue.md`
-   §Migrar). Después, `git worktree remove ../xbt-terminal-t75`.
+0. **Migrar el server a `xbt`** (en local ya está hecho): parar el daemon
+   `btcb2t`, actualizar y mover las carpetas como dice `docs/despliegue.md`
+   §Migrar.
 1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Solo con los `bot_fire`
    posteriores al reinicio con T-74: los de antes llevan `move` 0 casi siempre
    (D-72) y no sirven. Mirar el `move`, las dobles colgadas nuevas y cuántas
