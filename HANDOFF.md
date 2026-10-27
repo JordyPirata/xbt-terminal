@@ -21,12 +21,11 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   `t-75-xbt`), fusionadas en `main`. Migración local hecha el 2026-10-27
   00:37 UTC: carpetas movidas a las rutas `xbt` y daemon `xbt daemon --live`
   arrancado (bot `off` hasta `bot on`).
-- **En local:** proyecto renombrado a `xbt-terminal` (carpeta
-  `~/Code/xbt-terminal`, paquete `xbt_terminal`). Daemon en live con el nombre nuevo desde el
-  2026-10-26 22:59 UTC y bot `armed` (config: `max_move_pct = "1.0"`,
-  `move_window_ms = 2000`). Tras el renombrado: 1363 tests, ruff limpio,
-  `spec_trace` 67/72. En `ps` cada comando sale dos veces (el padre `uv run`);
-  no son dos daemons.
+- **En local:** carpeta `~/Code/xbt-terminal`, paquete `xbt_terminal`.
+  Daemon `xbt daemon --live` desde el 2026-10-27 00:37 UTC (lanzado con
+  `nohup`, sin servicio), bot `off`. Config: `max_move_pct = "1.0"`,
+  `move_window_ms = 2000`. En `ps` cada comando sale dos veces (el padre
+  `uv run`); no son dos daemons.
 - **Lo último (detalle en decisions.md y `specs/archive/tasks-done.md`):**
   - T-69/T-70/T-71 (D-69): evento `value` cada 5 min en el journal; en
     resultados (`r`), `Tab` → pestaña "Valor de la cuenta"; se refresca sola
