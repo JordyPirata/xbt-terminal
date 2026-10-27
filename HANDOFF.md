@@ -4,12 +4,13 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-27, 04:00 UTC)
+## Estado (2026-10-27, 22:30 UTC)
 
-- Spec en **v0.27** (changelog en `specs/archive/changelog.md`). Hechas T-61 a
-  T-65 y T-67 a T-76. 1364 tests, ruff limpio, `spec_trace` 67/72 (sin test:
-  RNF-01, RNF-21/T-32, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43, D-57).
-  Árbol limpio en `main`.
+- Spec en **v0.28** (changelog en `specs/archive/changelog.md`), propuesta en
+  la rama `t-77-lead-venue` sin fusionar: D-75 y T-77 (primera pierna del bot,
+  abajo). En `main`, v0.27: hechas T-61 a T-65 y T-67 a T-76. 1364 tests, ruff
+  limpio, `spec_trace` 67/72 (sin test: RNF-01, RNF-21/T-32, CA-01, CA-02 y
+  CA-10, pasados en real: D-20, D-43, D-57).
 - **Arquitectura:** `xbt daemon [--live]` es el único proceso que habla con
   los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
   comisiones, muestreo del valor). `xbt` (alias `attach`) es la pantalla:
@@ -32,9 +33,11 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   dry-run previo del servidor quedaron en `~/xbt-dryrun-logs/` del servidor.
   El journal sigue sin huecos salvo 03:38 a 03:56 UTC.
 - **En local** (`~/Code/xbt-terminal`, paquete `xbt_terminal`) ya no corre
-  daemon. `~/.local/state/xbt` y `~/.config/xbt` locales son una copia vieja:
-  **no arrancar un daemon `--live` en local** mientras corra el del servidor.
-  El lock es por máquina y no lo impide; serían dos bots con las mismas keys.
+  daemon. El 2026-10-27 se borraron en local `~/.local/state/xbt`,
+  `~/.config/xbt` (con el `.env`) y el `xbt` de `uv tool`: los únicos datos,
+  config y keys son los del servidor. **No arrancar un daemon `--live` en
+  local**: el lock es por máquina y no lo impide; serían dos bots con las mismas
+  keys. Para probar en local, `uv run` desde el repo con otro `--data-dir`.
 - **Lo último (detalle en decisions.md y `specs/archive/tasks-done.md`):**
   - T-69/T-70/T-71 (D-69): evento `value` cada 5 min en el journal; en
     resultados (`r`), `Tab` → pestaña "Valor de la cuenta"; se refresca sola
@@ -56,19 +59,25 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
     UTC, bot `armed` desde las 00:03:52. Primeras dobles con el arreglo:
     d-052717 (23:57:40, +1.41 %) y d-0fbda9 (00:05:05), las dos llenas y
     disparadas ~2 s después de que el filtro frenara un barrido en Neoxa.
-- **Piernas colgadas:** 12 de 472 dobles del bot dejaron una pierna sin llenar,
-  11 en Neoxa (las dos de hoy: d-f65e93 13:47 y d-e988bd 20:54 UTC, compra en
-  Neoxa sin llenar). Causa vista en d-e988bd con los trades públicos de Neoxa:
-  un barrido de −2.8 % y otro bot que se llevó el ask barato antes. **No es el
-  WiFi** (−40 dBm, 3.6 ms al router, 0 % de pérdida; los ~300 ms de
-  confirmación son del exchange) y la neta no las distingue (0.96 % frente a
-  1.01 %). De ahí T-73.
+- **Piernas colgadas:** 20 de 634 dobles del bot en live (2026-10-21 a 27): 14
+  en Neoxa y 6 en NonKYC. Las dos últimas, d-8c32f8 (20:55 UTC) y d-97dc8e
+  (21:15 UTC) del 2026-10-27: compra en Neoxa que volvió `open` y se canceló a
+  los 3 s, 0.0097 XBT vendidos de más en NonKYC. Neoxa casa al recibir la
+  orden: de las 615 piernas del bot en Neoxa, 600 volvieron `filled` en el ack
+  y 15 `open`, de las que 14 colgaron. `max_move_pct` no las separa (`move`
+  0.14 y 0.43 %). De ahí D-75/T-77. No es el WiFi ni la latencia (ack de Neoxa
+  p50 305 ms).
 - **Descuadres** (journal en live, 2026-10-26): neto +0.0601 XBT sobrante
   (+0.0817 comprado de más, −0.0216 vendido de más), coste neto 0.00026685 BTC
   (media 0.00444).
 
 ### Tareas abiertas
 
+- **T-77** `todo` (D-75, rama `t-77-lead-venue`): `bot.lead_venue`, el bot
+  envía primero la pierna de Neoxa y la otra solo por lo que llenó. Decidido
+  por el usuario: precio de la otra pierna, el del disparo; `bot_miss` no cuenta
+  para `max_consecutive_failures`. Spec escrita, falta que el usuario la apruebe
+  antes del código.
 - **T-66** `todo`: CA-16 en real. Parte local hecha (2026-10-26 23:32 UTC,
   t-2c6b97 colocada y cancelada desde la pantalla, en D-66). Falta la del
   server por SSH, con permiso del usuario.
@@ -79,13 +88,10 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-1. **Hacia el 2026-10-27: ajustar `max_move_pct`** (journal y `diag.log` en
-   el servidor; lo de abajo, ejecutado allí). Solo con los `bot_fire`
-   posteriores al reinicio con T-74: los de antes llevan `move` 0 casi siempre
-   (D-72) y no sirven. Mirar el `move`, las dobles colgadas nuevas y cuántas
-   veces frenó (`grep "movimiento brusco" ~/.local/state/xbt/diag.log`). Si
-   frena mucho sin colgadas, subirlo; si sigue habiendo colgadas con `move`
-   alto, bajarlo. Consulta rápida:
+1. **T-77**, cuando el usuario apruebe la spec de la rama. Después, con su
+   permiso, `lead_venue = "nx"` en el servidor y reinicio. `max_move_pct` se
+   queda en 1.0: no distingue las colgadas de Neoxa; revisarlo con los datos
+   de después de T-77. Consulta rápida:
    `grep -h '"bot_fire"' ~/.local/state/xbt/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
    y cruzarla con `hanging_leg` del mismo journal.
 2. Corregir d-550cd7 a mano (queda fuera de los 50 trades de NonKYC): leer sus

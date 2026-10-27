@@ -84,6 +84,7 @@ dicen en su propia nota.
 | D-72 | 2026-10-26 | La ventana del movimiento conserva el mid que regía al empezar (T-74) |
 | D-73 | 2026-10-26 | El comando y las rutas pasan a `xbt` (requirements v0.27, T-75) |
 | D-74 | 2026-10-26 | Licencia AGPL-3.0 y guía de despliegue (T-76) |
+| D-75 | 2026-10-27 | El bot envía primero la pierna de Neoxa y la otra solo si llena (requirements v0.28, T-77) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1798,3 +1799,30 @@ actualizar, datos y problemas comunes. Y sin licencia nadie más puede usarlo.
 - El ejemplo de unidad `systemd --user` va en la documentación, no como fichero
   del repo: el binario sigue sin hablar con ningún gestor de servicios (D-61).
 **Toca:** RNF-08, RNF-16, RNF-20, T-76.
+
+## D-75 · 2026-10-27 · El bot envía primero la pierna de Neoxa y la otra solo si llena (requirements v0.28, T-77)
+**Contexto:** d-8c32f8 (20:55 UTC) y d-97dc8e (21:15 UTC) dejaron 0.0097 XBT
+vendidos de más en NonKYC: la compra en Neoxa volvió `open` y se canceló a los
+3 s sin llenar. En el journal live (2026-10-21 a 27), de 615 piernas del bot en
+Neoxa, 600 volvieron `filled` en el propio ack y 15 `open`; 14 de esas 15
+acabaron colgadas (la otra, d-609e15, la llenó alguien a tiempo). Son las 14
+colgadas de Neoxa de las 20 del bot; las 6 restantes son de NonKYC con Neoxa
+llena. Neoxa casa al recibir la orden: si vuelve `open`, el ask o el bid que
+vio el bot ya no estaba. `max_move_pct` no las separa (`move` de Neoxa 0.14 y
+0.43 % en las colgadas de hoy, hasta 0.80 % en dobles buenas del mismo minuto).
+**Decisión:**
+- `bot.lead_venue` opcional (en el servidor, `"nx"`): se envía primero esa
+  pierna y la otra solo por lo que llenó, al precio calculado al disparar (sin
+  recalcular, elegido por el usuario). Llena en parte: se cancela el resto y la
+  otra va por lo lleno, al lote hacia abajo.
+- Si no llena nada, se cancela al momento y la otra no sale: `bot_miss`,
+  `cooldown`, y no cuenta para `max_consecutive_failures` (elegido por el
+  usuario: no deja posición). Sí cuenta para los topes por hora y por día, como
+  todo disparo.
+- Sin la clave, el bot sigue enviando en paralelo; la doble manual no cambia.
+- Con estos datos: las 14 colgadas de Neoxa habrían sido 14 `bot_miss` y se
+  habría perdido d-609e15. Coste: la pierna de NonKYC sale ~0.3 s después (ack
+  de Neoxa: p50 305 ms, máximo 757 ms el 2026-10-27), lo que puede subir las
+  colgadas de NonKYC (6 en 634 disparos). Se revisa con `bot_fire` y
+  `hanging_leg` tras unos días.
+**Toca:** RF-07, RF-20, RF-21, RF-23, CA-08, design.md §6.9, T-77.

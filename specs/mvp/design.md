@@ -455,10 +455,38 @@ añade `uncertain_open` y `double_open` antes de llamar a `decide`.
   `cooldown`; si no, o hubo `Uncertain`/rechazo/error → `halted` (RF-21).
   Pierna colgada = `core/double.py` (`hanging`), pero sin esperar a
   `hanging_leg_after_s`: al cancelar el resto ya se sabe.
+- Con `lead_venue` (D-75), el envío va en dos tiempos (abajo).
 - Corre bajo `supervised` (§6.7): un bug pasa el bot a `halted`, nunca reintenta
   disparos.
 - Contadores (disparos por hora, BTC comprado en el día UTC, fallos seguidos)
   en memoria; al arrancar se reconstruyen del journal del día (`bot_fire`).
+
+**Primera pierna** (`lead_venue`, D-75): Neoxa casa la orden al recibirla y su
+respuesta ya dice si llenó (`status` y `quantity_filled` de `POST
+/exchange/order`). Con `lead_venue`:
+
+1. `prepare_double` valida las dos piernas como siempre; `bot_fire` lleva
+   `lead`. Los contadores de RF-22 cuentan el disparo como hoy.
+2. `OrderService` envía solo la pierna de `lead_venue`; la otra queda en la
+   doble como `held` (preparada, sin enviar).
+3. Según el ack de la primera:
+   - `filled` → la otra se envía con `qty = filled`, al precio de `Fire`.
+   - llena en parte → `cancel_double` de la primera al momento; la otra con
+     `filled` al lote del otro venue hacia abajo. Por debajo de su lote o
+     nocional mínimo, la otra pasa a `skipped` y es pierna colgada (`halted`).
+   - `open` sin nada lleno → `cancel_double` al momento. Si se cancela, la otra
+     pasa a `skipped`, `bot_miss` en el journal (`double`, `venue`, `price`,
+     `qty`) y `cooldown`, sin sumar a `max_consecutive_failures`. Si la
+     cancelación falla porque ya llenó, se lee la orden (`fetch_final`) y se
+     sigue como `filled` o llena en parte.
+   - rechazo, error o incierta → la otra pasa a `skipped`, `halted` (RF-21).
+4. Con la otra pierna enviada, sigue el flujo de siempre: `fill_timeout_ms`,
+   cancelar el resto, `settle_s` y veredicto.
+
+En `core/double.py`, una pierna `skipped` cuenta como cerrada con 0 lleno:
+la doble está terminada cuando la primera lo está y la otra es `skipped`, y
+`hanging` compara lo lleno de las dos (0 contra 0 no cuelga). La pierna `held`
+no se cancela ni se reconcilia (nunca salió). La doble manual (`dbl`) no cambia.
 
 **Config** `[bot]` (validación estricta como el resto, D-05):
 
@@ -470,6 +498,7 @@ añade `uncertain_open` y `double_open` antes de llamar a `decide`.
 | `max_walk_pct` | `{ nk = "0.8" }` | opcional, por venue: cuánto se aleja del mejor precio el nivel de referencia (RF-20, D-60) |
 | `max_qty` | `"100"` | BTCB2 por disparo (RF-20) |
 | `fill_timeout_ms` | `3000` | cancelar el resto (RF-20) |
+| `lead_venue` | `"nx"` | opcional: venue de la primera pierna; la otra sale solo si esta llena (RF-20, D-75) |
 | `cooldown_s` | `10` | entre disparos (RF-22) |
 | `max_trades_per_hour` | `20` | RF-22 |
 | `max_daily_btc` | `"0.01"` | nocional comprado por día UTC (RF-22) |

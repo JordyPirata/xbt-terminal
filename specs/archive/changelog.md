@@ -141,3 +141,9 @@ Es historia: la spec vigente es la de `requirements.md`.
 > (RF-30, RF-31, RNF-20).** Pedido por el usuario: el proyecto ya se llama
 > `xbt-terminal`. `xbt daemon`, `xbt`, `~/.config/xbt`, `~/.local/state/xbt`.
 > Los símbolos y tickers de los venues no cambian.
+
+> **Cambio v0.27 → v0.28 (D-75): el bot envía primero la pierna de un venue
+> (RF-07, RF-20, RF-21, RF-23, CA-08).** Pedido por el usuario tras dos piernas
+> colgadas en Neoxa el 2026-10-27: 14 de las 15 piernas del bot que Neoxa no
+> llenó al recibirlas quedaron colgadas. Con `bot.lead_venue`, la otra pierna
+> sale solo por lo que llenó la primera; si no llena, no hay doble (`bot_miss`).
