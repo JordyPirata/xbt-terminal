@@ -38,8 +38,10 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   - T-74 (D-72): la ventana de T-73 olvidaba también el mid vigente al
     empezarla; tras un book quieto, un salto en un solo cambio daba `move` 0.
     Así disparó d-60003f (23:42:42 UTC, venta en Neoxa colgada, 0.0038 XBT
-    comprados de más en NonKYC). **El daemon en marcha aún lleva el código
-    viejo y el bot está `halted`**: reiniciarlo para aplicar T-74.
+    comprados de más en NonKYC). Daemon con T-74 desde el 2026-10-27 00:01:59
+    UTC, bot `armed` desde las 00:03:52. Primeras dobles con el arreglo:
+    d-052717 (23:57:40, +1.41 %) y d-0fbda9 (00:05:05), las dos llenas y
+    disparadas ~2 s después de que el filtro frenara un barrido en Neoxa.
 - **Piernas colgadas:** 12 de 472 dobles del bot dejaron una pierna sin llenar,
   11 en Neoxa (las dos de hoy: d-f65e93 13:47 y d-e988bd 20:54 UTC, compra en
   Neoxa sin llenar). Causa vista en d-e988bd con los trades públicos de Neoxa:
