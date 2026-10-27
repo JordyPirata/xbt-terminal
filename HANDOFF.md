@@ -6,17 +6,22 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-10-27, 00:00 UTC)
 
-- Spec en **v0.26** (changelog en `specs/archive/changelog.md`). Hechas T-61 a
-  T-65 y T-67 a T-74. 1364 tests, ruff limpio, `spec_trace` 67/72 (sin test:
+- Spec en **v0.27** (changelog en `specs/archive/changelog.md`). Hechas T-61 a
+  T-65 y T-67 a T-76. 1364 tests, ruff limpio, `spec_trace` 67/72 (sin test:
   RNF-01, RNF-21/T-32, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43, D-57).
   Árbol limpio en `main`.
-- **Arquitectura:** `btcb2t daemon [--live]` es el único proceso que habla con
+- **Arquitectura:** `xbt daemon [--live]` es el único proceso que habla con
   los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
-  comisiones, muestreo del valor). `btcb2t` (alias `attach`) es la pantalla:
+  comisiones, muestreo del valor). `xbt` (alias `attach`) es la pantalla:
   opera todo por el socket, sin config ni keys. Protocolo en design.md §6.13.
+- **T-75 y T-76 (D-73, D-74, spec v0.27):** el comando pasa a `xbt` y las
+  rutas a `~/.config/xbt` y `~/.local/state/xbt` (socket `xbt.sock`, lock
+  `xbt.lock`); licencia AGPL-3.0; README reescrito, `docs/despliegue.md` y
+  `docs/uso.md`. Hechas en el worktree `~/Code/xbt-terminal-t75` (rama
+  `t-75-xbt`) para no tocar el daemon en live. **Mientras no se migre, el daemon
+  que corre sigue siendo `btcb2t` con las rutas viejas** (ver Siguiente 0).
 - **En local:** proyecto renombrado a `xbt-terminal` (carpeta
-  `~/Code/xbt-terminal`, paquete `xbt_terminal`; el comando `btcb2t` y sus
-  carpetas XDG no cambian). Daemon en live con el nombre nuevo desde el
+  `~/Code/xbt-terminal`, paquete `xbt_terminal`). Daemon en live con el nombre nuevo desde el
   2026-10-26 22:59 UTC y bot `armed` (config: `max_move_pct = "1.0"`,
   `move_window_ms = 2000`). Tras el renombrado: 1363 tests, ruff limpio,
   `spec_trace` 67/72. En `ps` cada comando sale dos veces (el padre `uv run`);
@@ -60,18 +65,24 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   server por SSH, con permiso del usuario.
 - **T-55** `doing`: falta la parte manual de CA-15 en live en el server.
 - **T-20** `doing`: CA-03 y CA-06 aplazados por el usuario (2026-10-23).
-- **T-33** `todo` (comprobación en real de M6) y **T-32** `todo` (CI; aplazada:
-  el repo no tiene remoto).
+- **T-33** `todo` (comprobación en real de M6) y **T-32** `todo` (CI; ya hay
+  remoto en GitHub, falta que el usuario la pida).
 
 ### Siguiente
 
+0. **Migrar a `xbt`** (con permiso del usuario, cuando quiera reiniciar):
+   parar el daemon `btcb2t`, fusionar `t-75-xbt` en `main`, `uv sync`,
+   `mv ~/.config/btcb2t ~/.config/xbt`, `mv ~/.local/state/btcb2t
+   ~/.local/state/xbt`, borrar `btcb2t.lock`/`btcb2t.sock`, arrancar `uv run xbt
+   daemon --live` y `bot on`. Lo mismo en el server (`docs/despliegue.md`
+   §Migrar). Después, `git worktree remove ../xbt-terminal-t75`.
 1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Solo con los `bot_fire`
    posteriores al reinicio con T-74: los de antes llevan `move` 0 casi siempre
    (D-72) y no sirven. Mirar el `move`, las dobles colgadas nuevas y cuántas
-   veces frenó (`grep "movimiento brusco" ~/.local/state/btcb2t/diag.log`). Si
+   veces frenó (`grep "movimiento brusco" ~/.local/state/xbt/diag.log`). Si
    frena mucho sin colgadas, subirlo; si sigue habiendo colgadas con `move`
    alto, bajarlo. Consulta rápida:
-   `grep -h '"bot_fire"' ~/.local/state/btcb2t/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
+   `grep -h '"bot_fire"' ~/.local/state/xbt/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
    y cruzarla con `hanging_leg` del mismo journal.
 2. Corregir d-550cd7 a mano (queda fuera de los 50 trades de NonKYC): leer sus
    4 trades de `/account/trades` con un límite mayor y añadir los `fill_fee`,
@@ -79,18 +90,18 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 3. Apuntar en `decisions.md` la prueba en live de d-fb32e2 (el usuario aún no
    ha dicho si quiere).
 4. En el server: parar el daemon viejo (no habla el protocolo nuevo), arrancar
-   la versión nueva y hacer T-66 y T-55 por SSH (`ssh -t server btcb2t`).
+   la versión nueva y hacer T-66 y T-55 por SSH (`ssh -t server xbt`).
 5. Decidir `fee_discount_pct` de Neoxa: los fills reales cobran el 0.2 %
    completo; el 50 % solo infla el neto del panel cruzado (no el del bot).
 
 ### Cómo retomar en una sesión nueva
 
-- Estado del daemon y del bot: `ps -eo pid,lstart,args | grep bin/btcb2t`,
-  `tail ~/.local/state/btcb2t/diag.log` y los `bot_state` del journal de hoy.
+- Estado del daemon y del bot: `ps -eo pid,lstart,args | grep bin/xbt`,
+  `tail ~/.local/state/xbt/diag.log` y los `bot_state` del journal de hoy.
 - Si se reinicia el daemon, el bot arranca `off`: rearmar con `bot on` desde la
   pantalla. La config solo se lee al arrancar.
 - Resultados y descuadres sin pantalla: `ResultsService(Path.home() /
-  ".local/state/btcb2t").load("todo")` (`services/results.py`).
+  ".local/state/xbt").load("todo")` (`services/results.py`).
 - Trades públicos de Neoxa para ver qué pasó en una colgada (solo los 100
   últimos): `curl -s "https://neoxa.exchange/api/exchange/trades/BTCB2_BTC?limit=100"`.
 
@@ -110,7 +121,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   daemon parado se apunta al arrancar, si el trade sigue entre los 50 más
   recientes de NonKYC. d-550cd7 (16:08 UTC, 4 fills con 0.2 % en BTC) quedó
   fuera: sin corregir.
-- **Ver el journal:** `~/.local/state/btcb2t/journal-YYYYMMDD.jsonl`; el daemon
+- **Ver el journal:** `~/.local/state/xbt/journal-YYYYMMDD.jsonl`; el daemon
   escribe `diag.log` y la pantalla `client.log`.
 - **Tests inestables:** `test_el_dialogo_no_espera_a_la_red` (límite de 0.3 s
   de reloj real) y, una vez, `test_las_dos_llenas_enfria` (timeout) fallan a
@@ -118,8 +129,8 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Config real del usuario
 
-`~/.config/btcb2t/config.toml` y `.env` (`0600`), que solo lee el daemon;
-journal, lock y socket en `~/.local/state/btcb2t`.
+`~/.config/xbt/config.toml` y `.env` (`0600`), que solo lee el daemon;
+journal, lock y socket en `~/.local/state/xbt`.
 - `[venues.nk]`: `fee_discount_pct = "25"`, `fee_token = "NKYC"`,
   `fee_token_min = "1"`. Neoxa: `fee_discount_pct = "50"`.
 - `[inventory]`: `target_base_pct = "25"`, `band_pct = "10"`.
@@ -128,7 +139,8 @@ journal, lock y socket en `~/.local/state/btcb2t`.
   `max_walk_pct = { nk = "0.8" }` (en la config y disparando en live).
 - Comisiones de retiro: NonKYC BTC (`BTC-MAIN`) 0.00005, Neoxa BTC 0.0001 (aparte).
 - Inventario (2026-10-23): NonKYC 23.0 %, Neoxa 27.7 %, total 25.5 % de XBT.
-- Daemon: sin systemd en el repo; el usuario configura el servicio a mano. El
+- Daemon: sin systemd en el repo (ejemplo en `docs/despliegue.md`); el usuario
+  configura el servicio a mano. El
   bot arranca `off` también en el daemon.
 
 ## Preguntas abiertas que siguen vivas
@@ -150,7 +162,7 @@ Resueltas: PA-01 → D-08, PA-02 → D-10, PA-03 → D-19, PA-04 → D-42, PA-05
   tarea necesita una decisión suya (una PA), parar y preguntar antes.
 - Un cambio de alcance (como el paso a BTC) va primero a la spec: nueva versión
   de requirements.md, `D-NN` y tarea propia, y solo después código.
-- Commits en español con `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Commits en inglés, sin `Co-Authored-By` (desde el squash al remoto privado).
 - Todo en español (docs, mensajes, docstrings); identificadores en inglés.
 - Al cerrar la sesión, actualizar este fichero.
 

@@ -888,3 +888,19 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
 - Hecho: script `xbt`, `APP_DIR = "xbt"`, `xbt.lock` y `xbt.sock`, `prog="xbt"`
   y mensajes; `XbtApp`; títulos de la spec y de `config.example.toml`. Los
   símbolos y tickers de los venues siguen como `BTCB2`. 1364 tests.
+
+### T-76 Guía de despliegue y licencia · `done` · RNF-08, RNF-16, RNF-20 · dep T-75 · D-74
+- `LICENSE` (AGPL-3.0) y `license` en `pyproject.toml`.
+- `README.md`: requisitos, clonar, `uv tool install .`, keys de cada venue (sin
+  retiro), primera puesta en marcha (solo lectura → dry-run → live mínimo),
+  seguridad y aviso de riesgo.
+- `docs/despliegue.md`: servidor, NTP, unidad `systemd --user` de ejemplo con
+  `loginctl enable-linger`, acceso por SSH, actualizar (daemon y cliente a la
+  vez), migrar desde `btcb2t`, datos y backup, logs, problemas comunes.
+- `docs/uso.md`: atajos y ventanas (lo que hoy está en el README).
+- Corregir el docstring de `core/journal.py` (`logs/` → directorio de datos).
+- Sin tests: solo documentación.
+- Hecho: `LICENSE` (texto oficial de gnu.org), `license = "AGPL-3.0-only"` y
+  `license-files` en `pyproject.toml` (la wheel lo lleva). README reescrito;
+  `docs/despliegue.md` y `docs/uso.md` nuevos; `.env.example` dice dónde va.
+  `uv tool install .` comprobado en un directorio aislado.

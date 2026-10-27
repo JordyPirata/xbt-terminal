@@ -1,8 +1,8 @@
 """Journal append-only en JSONL.
 
-Una línea por evento en `logs/journal-YYYYMMDD.jsonl` (fecha UTC), con flush
-tras cada línea: si la terminal muere justo después de enviar una orden, la
-línea `order_sent` ya está en disco.
+Una línea por evento en `<datos>/journal-YYYYMMDD.jsonl` (fecha UTC; por
+defecto, `~/.local/state/xbt`), con flush tras cada línea: si la terminal muere
+justo después de enviar una orden, la línea `order_sent` ya está en disco.
 
 Los secretos se enmascaran sobre los valores *antes* de codificar a JSON, no
 sobre la línea final: así un secreto con caracteres que JSON escapa (`"`, `\\`)

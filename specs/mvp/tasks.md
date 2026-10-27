@@ -170,17 +170,7 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 
 ### T-75 El comando y las rutas pasan a `xbt` · `done` · RF-30, RF-31, RNF-20 · D-73
 
-### T-76 Guía de despliegue y licencia · `todo` · RNF-08, RNF-16, RNF-20 · dep T-75 · D-74
-- `LICENSE` (AGPL-3.0) y `license` en `pyproject.toml`.
-- `README.md`: requisitos, clonar, `uv tool install .`, keys de cada venue (sin
-  retiro), primera puesta en marcha (solo lectura → dry-run → live mínimo),
-  seguridad y aviso de riesgo.
-- `docs/despliegue.md`: servidor, NTP, unidad `systemd --user` de ejemplo con
-  `loginctl enable-linger`, acceso por SSH, actualizar (daemon y cliente a la
-  vez), migrar desde `btcb2t`, datos y backup, logs, problemas comunes.
-- `docs/uso.md`: atajos y ventanas (lo que hoy está en el README).
-- Corregir el docstring de `core/journal.py` (`logs/` → directorio de datos).
-- Sin tests: solo documentación.
+### T-76 Guía de despliegue y licencia · `done` · RNF-08, RNF-16, RNF-20 · dep T-75 · D-74
 
 ## Correcciones
 
