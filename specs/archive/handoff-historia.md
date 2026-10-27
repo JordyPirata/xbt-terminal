@@ -4,6 +4,17 @@ Bloques de estado viejos de `HANDOFF.md`, del más nuevo al más viejo, tal como
 estaban el 2026-10-25. Es historia: el estado vigente está en `HANDOFF.md`, y
 las decisiones, en `specs/mvp/decisions.md`.
 
+> **Daemon en local, hasta la migración al servidor (2026-10-27 03:38 UTC).**
+>
+> - Migración local a `xbt` hecha el 2026-10-27 00:37 UTC: carpetas movidas a
+>   las rutas `xbt` y daemon `xbt daemon --live` arrancado.
+> - En local: carpeta `~/Code/xbt-terminal`, daemon `xbt daemon --live` lanzado
+>   con `nohup`, sin servicio. En `ps` cada comando salía dos veces (el padre
+>   `uv run`); no eran dos daemons.
+> - Pendiente entonces: migrar el server a `xbt` (parar el daemon `btcb2t`,
+>   actualizar y mover carpetas según `docs/despliegue.md` §Migrar). Hecho al
+>   pasar el daemon al servidor.
+
 > **Estado de la tarde del 2026-10-26 (T-67 a T-73), antes de liberar la sesión.**
 >
 > - Spec en **v0.26**: v0.21 (D-66) hizo del daemon el servidor y de la TUI su

@@ -4,7 +4,7 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-27, 00:00 UTC)
+## Estado (2026-10-27, 04:00 UTC)
 
 - Spec en **v0.27** (changelog en `specs/archive/changelog.md`). Hechas T-61 a
   T-65 y T-67 a T-76. 1364 tests, ruff limpio, `spec_trace` 67/72 (sin test:
@@ -18,14 +18,23 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   rutas a `~/.config/xbt` y `~/.local/state/xbt` (socket `xbt.sock`, lock
   `xbt.lock`); licencia AGPL-3.0; README reescrito, `docs/despliegue.md` y
   `docs/uso.md`. Hechas en el worktree `~/Code/xbt-terminal-t75` (rama
-  `t-75-xbt`), fusionadas en `main`. Migración local hecha el 2026-10-27
-  00:37 UTC: carpetas movidas a las rutas `xbt` y daemon `xbt daemon --live`
-  arrancado (bot `off` hasta `bot on`).
-- **En local:** carpeta `~/Code/xbt-terminal`, paquete `xbt_terminal`.
-  Daemon `xbt daemon --live` desde el 2026-10-27 00:37 UTC (lanzado con
-  `nohup`, sin servicio), bot `off`. Config: `max_move_pct = "1.0"`,
-  `move_window_ms = 2000`. En `ps` cada comando sale dos veces (el padre
-  `uv run`); no son dos daemons.
+  `t-75-xbt`), fusionadas en `main`.
+- **El daemon corre en el servidor** (por Tailscale; la IP no va al repo:
+  usar un alias `servidor` en `~/.ssh/config`; hora local CST) desde el 2026-10-27 03:56:02 UTC: servicio systemd de
+  sistema `xbt` (no `--user`; pararlo o arrancarlo pide sudo), `ExecStart=
+  /home/jordypirata/.local/bin/xbt daemon --live`, `Restart=on-failure`.
+  `xbt` instalado con `uv tool` (sin el repo allí). Bot `armed` desde las
+  03:56:42 UTC. Pantalla: `ssh -t servidor env COLORTERM=truecolor
+  xbt`.
+- **Migración desde local (2026-10-27):** daemon local parado a las 03:38 UTC
+  (bot `off` desde las 03:32, nada en vuelo). `config.toml`, `.env` y todo el
+  journal copiados con rsync al servidor, idénticos (sha256). Los logs del
+  dry-run previo del servidor quedaron en `~/xbt-dryrun-logs/` del servidor.
+  El journal sigue sin huecos salvo 03:38 a 03:56 UTC.
+- **En local** (`~/Code/xbt-terminal`, paquete `xbt_terminal`) ya no corre
+  daemon. `~/.local/state/xbt` y `~/.config/xbt` locales son una copia vieja:
+  **no arrancar un daemon `--live` en local** mientras corra el del servidor.
+  El lock es por máquina y no lo impide; serían dos bots con las mismas keys.
 - **Lo último (detalle en decisions.md y `specs/archive/tasks-done.md`):**
   - T-69/T-70/T-71 (D-69): evento `value` cada 5 min en el journal; en
     resultados (`r`), `Tab` → pestaña "Valor de la cuenta"; se refresca sola
@@ -70,10 +79,8 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-0. **Migrar el server a `xbt`** (en local ya está hecho): parar el daemon
-   `btcb2t`, actualizar y mover las carpetas como dice `docs/despliegue.md`
-   §Migrar.
-1. **Hacia el 2026-10-27: ajustar `max_move_pct`.** Solo con los `bot_fire`
+1. **Hacia el 2026-10-27: ajustar `max_move_pct`** (journal y `diag.log` en
+   el servidor; lo de abajo, ejecutado allí). Solo con los `bot_fire`
    posteriores al reinicio con T-74: los de antes llevan `move` 0 casi siempre
    (D-72) y no sirven. Mirar el `move`, las dobles colgadas nuevas y cuántas
    veces frenó (`grep "movimiento brusco" ~/.local/state/xbt/diag.log`). Si
@@ -86,17 +93,20 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
    con el daemon parado. Pendiente de que el usuario lo pida.
 3. Apuntar en `decisions.md` la prueba en live de d-fb32e2 (el usuario aún no
    ha dicho si quiere).
-4. En el server: parar el daemon viejo (no habla el protocolo nuevo), arrancar
-   la versión nueva y hacer T-66 y T-55 por SSH (`ssh -t server xbt`).
+4. T-66 y T-55 por SSH contra el daemon del servidor (ya con la versión
+   nueva), con permiso del usuario.
 5. Decidir `fee_discount_pct` de Neoxa: los fills reales cobran el 0.2 %
    completo; el 50 % solo infla el neto del panel cruzado (no el del bot).
 
 ### Cómo retomar en una sesión nueva
 
-- Estado del daemon y del bot: `ps -eo pid,lstart,args | grep bin/xbt`,
-  `tail ~/.local/state/xbt/diag.log` y los `bot_state` del journal de hoy.
+- Estado del daemon y del bot, en el servidor: `ssh -o BatchMode=yes
+  servidor 'systemctl is-active xbt; tail
+  ~/.local/state/xbt/diag.log'` y los `bot_state` del journal de hoy (el
+  servidor saca un aviso legal por stderr en cada conexión).
 - Si se reinicia el daemon, el bot arranca `off`: rearmar con `bot on` desde la
-  pantalla. La config solo se lee al arrancar.
+  pantalla. La config solo se lee al arrancar. Cambiar la config: editarla en
+  el servidor y que el usuario haga `sudo systemctl restart xbt`.
 - Resultados y descuadres sin pantalla: `ResultsService(Path.home() /
   ".local/state/xbt").load("todo")` (`services/results.py`).
 - Trades públicos de Neoxa para ver qué pasó en una colgada (solo los 100
@@ -106,6 +116,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 - **Socket:** la ruta no puede pasar de 107 bytes (AF_UNIX). Con un `--data-dir`
   largo, usar `--socket`. El default XDG cabe.
+- **Colores por SSH:** `sshd` no pasa `COLORTERM`; sin él, Textual baja a 256
+  colores y el fondo de las ventanas sale azul marino. Lanzar la pantalla con
+  `env COLORTERM=truecolor xbt` (o `SendEnv`/`AcceptEnv COLORTERM`).
 - **Pantalla:** tras escribir un comando, el foco queda en la línea. Pulsar
   `Esc` antes de `q` para salir. `q` solo desconecta: el daemon sigue.
 - **NonKYC y NKYC:** no se ha comprobado si `/cancelallorders` respeta `symbol`.
@@ -126,8 +139,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Config real del usuario
 
-`~/.config/xbt/config.toml` y `.env` (`0600`), que solo lee el daemon;
-journal, lock y socket en `~/.local/state/xbt`.
+En el **servidor**: `~/.config/xbt/config.toml` y `.env` (`0600`), que solo
+lee el daemon; journal, lock y socket en `~/.local/state/xbt`. La copia local
+es la de antes de la migración.
 - `[venues.nk]`: `fee_discount_pct = "25"`, `fee_token = "NKYC"`,
   `fee_token_min = "1"`. Neoxa: `fee_discount_pct = "50"`.
 - `[inventory]`: `target_base_pct = "25"`, `band_pct = "10"`.
@@ -136,9 +150,9 @@ journal, lock y socket en `~/.local/state/xbt`.
   `max_walk_pct = { nk = "0.8" }` (en la config y disparando en live).
 - Comisiones de retiro: NonKYC BTC (`BTC-MAIN`) 0.00005, Neoxa BTC 0.0001 (aparte).
 - Inventario (2026-10-23): NonKYC 23.0 %, Neoxa 27.7 %, total 25.5 % de XBT.
-- Daemon: sin systemd en el repo (ejemplo en `docs/despliegue.md`); el usuario
-  configura el servicio a mano. El
-  bot arranca `off` también en el daemon.
+- Daemon: servicio systemd de sistema `xbt` en el servidor, configurado por el
+  usuario (el ejemplo de `docs/despliegue.md` es `--user`). El bot arranca
+  `off` también en el daemon.
 
 ## Preguntas abiertas que siguen vivas
 

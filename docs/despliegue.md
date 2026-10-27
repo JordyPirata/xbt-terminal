@@ -128,4 +128,5 @@ llevan keys.
 | Error de ruta de socket demasiado larga | El límite de los sockets Unix es 107 bytes: con un `--data-dir` largo, pasa un `--socket` corto a los dos comandos. |
 | La pantalla se ve cortada | La terminal mide menos de 160×45. |
 | Copiar una dirección no hace nada | La terminal ignora OSC 52: instala `xclip` (X11) o `wl-copy` (Wayland). Por SSH solo sirve OSC 52. |
+| Por SSH, el fondo de las ventanas sale azul marino | `sshd` no pasa `COLORTERM` y Textual baja a 256 colores: `ssh -t servidor env COLORTERM=truecolor xbt`. |
 | Tras actualizar, la pantalla no conecta o da errores raros | Daemon y pantalla de versiones distintas: actualiza los dos y reinicia el daemon. |
