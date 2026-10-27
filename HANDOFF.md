@@ -6,10 +6,10 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-10-27, 22:30 UTC)
 
-- Spec en **v0.28** (changelog en `specs/archive/changelog.md`), propuesta en
-  la rama `t-77-lead-venue` sin fusionar: D-75 y T-77 (primera pierna del bot,
-  abajo). En `main`, v0.27: hechas T-61 a T-65 y T-67 a T-76. 1364 tests, ruff
-  limpio, `spec_trace` 67/72 (sin test: RNF-01, RNF-21/T-32, CA-01, CA-02 y
+- Spec en **v0.28** (changelog en `specs/archive/changelog.md`). T-77 hecha
+  en la rama `t-77-lead-venue`, **sin fusionar en `main` ni desplegar** (la
+  versión del servidor no la tiene). Hechas T-61 a T-65 y T-67 a T-77. 1378
+  tests, ruff limpio, `spec_trace` 67/72 (sin test: RNF-01, RNF-21/T-32, CA-01, CA-02 y
   CA-10, pasados en real: D-20, D-43, D-57).
 - **Arquitectura:** `xbt daemon [--live]` es el único proceso que habla con
   los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
@@ -73,11 +73,6 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Tareas abiertas
 
-- **T-77** `todo` (D-75, rama `t-77-lead-venue`): `bot.lead_venue`, el bot
-  envía primero la pierna de Neoxa y la otra solo por lo que llenó. Decidido
-  por el usuario: precio de la otra pierna, el del disparo; `bot_miss` no cuenta
-  para `max_consecutive_failures`. Spec escrita, falta que el usuario la apruebe
-  antes del código.
 - **T-66** `todo`: CA-16 en real. Parte local hecha (2026-10-26 23:32 UTC,
   t-2c6b97 colocada y cancelada desde la pantalla, en D-66). Falta la del
   server por SSH, con permiso del usuario.
@@ -88,10 +83,16 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-1. **T-77**, cuando el usuario apruebe la spec de la rama. Después, con su
-   permiso, `lead_venue = "nx"` en el servidor y reinicio. `max_move_pct` se
-   queda en 1.0: no distingue las colgadas de Neoxa; revisarlo con los datos
-   de después de T-77. Consulta rápida:
+1. **Desplegar T-77** (D-75), con permiso del usuario: fusionar
+   `t-77-lead-venue` en `main`, actualizar el `xbt` del servidor (`uv tool`),
+   añadir `lead_venue = "nx"` en `[bot]` de su config, que el usuario haga
+   `sudo systemctl restart xbt` y rearmar con `bot on` (la confirmación dice
+   "envía primero la pierna de Neoxa"). Después mirar `bot_miss` (cuántos y
+   cuándo), `hanging_leg` (deberían quedar solo las de NonKYC) y que no frene
+   nada más. Ojo: `bot_miss` no para el bot (elegido por el usuario); si
+   salen muchos seguidos, es que el book de Neoxa que ve no es el real.
+   `max_move_pct` se queda en 1.0: no distingue las colgadas de Neoxa;
+   revisarlo con los datos de después de T-77. Consulta rápida:
    `grep -h '"bot_fire"' ~/.local/state/xbt/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
    y cruzarla con `hanging_leg` del mismo journal.
 2. Corregir d-550cd7 a mano (queda fuera de los 50 trades de NonKYC): leer sus

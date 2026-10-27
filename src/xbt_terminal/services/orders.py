@@ -27,6 +27,11 @@ pierna se sigue con las órdenes que llegan de la cuenta (`on_private_event`).
 `check_doubles` (cada segundo) escribe `hanging_leg` una vez por orden doble.
 Todo lo que escribe al journal una orden doble lleva `double` en `data`.
 
+Doble del bot con `lead_venue` (D-75): `confirm_double(pending, lead=...)` valida
+las dos piernas pero envía solo la de ese venue; la otra queda `held`. El bot la
+envía después con `send_held` por lo que llenó la primera, o la deja `skipped`
+con `skip_held`. La `held` no tiene `order_id`: no se cancela ni se reconcilia.
+
 Envío incierto (RNF-12, D-26): si el venue lanza `UncertainError`, el resultado
 es `Uncertain`, el journal dice `order_unknown` y la orden queda en `uncertain`
 (en una orden doble, la pierna `unknown`). `reconcile` (la UI lo llama cada pocos
@@ -66,6 +71,7 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field, replace
+from decimal import Decimal
 from typing import Any, TypeVar
 
 import httpx
@@ -327,26 +333,63 @@ class OrderService:
         assert isinstance(b, Pending) and isinstance(s, Pending)
         return PendingDouble(double_id, b, s)
 
-    async def confirm_double(self, pending: PendingDouble) -> DoubleSent | DoubleRejected:
+    async def confirm_double(
+        self, pending: PendingDouble, *, lead: VenueId | None = None
+    ) -> DoubleSent | DoubleRejected:
+        """Con `lead` (el bot, D-75), solo sale la pierna de ese venue; la otra
+        queda `held` hasta `send_held` o `skip_held`."""
         buy, sell = pending.buy.req, pending.sell.req
         async with self._sending(buy.venue, sell.venue):
             checked = await self._validate_double(pending.id, buy, sell)
             if isinstance(checked, DoubleRejected):
                 return checked
             extra = {"double": pending.id}
-            self.doubles[pending.id] = start(pending.id, buy, sell, self._clock())
-            results = await asyncio.gather(self._send(buy, extra), self._send(sell, extra))
-        for result in results:
-            state = self.doubles[pending.id]
-            if isinstance(result, Sent):
-                state = on_order(state, result.order, self._clock())
-            elif isinstance(result, Uncertain):
-                state = state.uncertain(result.req.side, result.error)
+            if lead is None:
+                self.doubles[pending.id] = start(pending.id, buy, sell, self._clock())
+                results = await asyncio.gather(self._send(buy, extra), self._send(sell, extra))
             else:
-                state = state.fail(result.req.side, result.error)
-            self.doubles[pending.id] = state
+                first, held = (buy, sell) if buy.venue == lead else (sell, buy)
+                self.doubles[pending.id] = start(
+                    pending.id, buy, sell, self._clock(), held=held.side
+                )
+                results = [await self._send(first, extra)]
+        for result in results:
+            self._apply(pending.id, result)
         self._changed(pending.id)
         return DoubleSent(self.doubles[pending.id])
+
+    async def send_held(self, double_id: str, qty: Decimal) -> Sent | Failed | Uncertain:
+        """Envía la pierna `held` de la doble por `qty` (D-75). Ya se validó con la
+        primera al confirmar; `qty` no pasa de lo validado."""
+        state = self.doubles[double_id]
+        (side,) = (leg.req.side for leg in state.legs if leg.status == "held")
+        state = state.resize(side, qty)
+        self.doubles[double_id] = state
+        req = state.leg(side).req
+        async with self._sending(req.venue):
+            result = await self._send(req, {"double": double_id})
+        self._apply(double_id, result)
+        self._changed(double_id)
+        return result
+
+    def skip_held(self, double_id: str) -> None:
+        """La pierna `held` no se envía (D-75): cuenta como cerrada con 0 lleno."""
+        state = self.doubles[double_id]
+        for leg in state.legs:
+            if leg.status == "held":
+                state = state.skip(leg.req.side)
+        self.doubles[double_id] = state
+        self._changed(double_id)
+
+    def _apply(self, double_id: str, result: Sent | Failed | Uncertain) -> None:
+        state = self.doubles[double_id]
+        if isinstance(result, Sent):
+            state = on_order(state, result.order, self._clock())
+        elif isinstance(result, Uncertain):
+            state = state.uncertain(result.req.side, result.error)
+        else:
+            state = state.fail(result.req.side, result.error)
+        self.doubles[double_id] = state
 
     def on_private_event(self, venue: VenueId, event: PrivateEvent) -> None:
         """Órdenes de la cuenta (AccountService): actualizan las piernas, y una

@@ -13,7 +13,11 @@ No se hace nada automático: solo se avisa.
 Una pierna cuyo envío quedó incierto (RNF-12) está `unknown` hasta que se
 reconcilia: si aparece, sigue como cualquier otra; si no existe, `rejected`.
 
-Spec: RF-07, CA-03, RNF-12 · design.md §6.4 · Tareas: T-18, T-25
+En la doble del bot con `lead_venue` (D-75), la otra pierna está `held`
+(preparada, sin enviar) hasta que la primera responde: se envía por lo que
+llenó (`resize`) o pasa a `skipped`, que cuenta como cerrada con 0 lleno.
+
+Spec: RF-07, RF-20, CA-03, RNF-12 · design.md §6.4, §6.9 · Tareas: T-18, T-25, T-77
 """
 
 from __future__ import annotations
@@ -24,11 +28,12 @@ from typing import Literal
 
 from .models import BASE_LABEL, ZERO, Order, OrderRequest, OrderStatus, Side
 
-LegStatus = OrderStatus | Literal["unknown"]  # unknown: envío incierto (RNF-12)
+# unknown: envío incierto (RNF-12); held y skipped: la otra pierna del bot (D-75)
+LegStatus = OrderStatus | Literal["unknown", "held", "skipped"]
 
 NAMES = {"nk": "NonKYC", "nx": "Neoxa"}
 SIDES = {"buy": "compra", "sell": "venta"}
-ENDED = {"rejected": "rechazada", "cancelled": "cancelada"}
+ENDED = {"rejected": "rechazada", "cancelled": "cancelada", "skipped": "sin enviar"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +46,7 @@ class Leg:
 
     @property
     def done(self) -> bool:
-        return self.status in ("filled", "cancelled", "rejected")
+        return self.status in ("filled", "cancelled", "rejected", "skipped")
 
     @property
     def label(self) -> str:
@@ -82,12 +87,27 @@ class DoubleState:
         """No se sabe si la pierna llegó al venue: se reconcilia (RNF-12)."""
         return self._with(side, replace(self.leg(side), status="unknown", error=error))
 
+    def skip(self, side: Side) -> DoubleState:
+        """La pierna que esperaba no se envía (D-75): cerrada con 0 lleno."""
+        return self._with(side, replace(self.leg(side), status="skipped"))
+
+    def resize(self, side: Side, qty: Decimal) -> DoubleState:
+        """La pierna que esperaba sale por `qty`, lo que llenó la primera (D-75)."""
+        leg = self.leg(side)
+        return self._with(side, replace(leg, req=replace(leg.req, qty=qty), status="pending"))
+
     def _with(self, side: Side, leg: Leg) -> DoubleState:
         return replace(self, buy=leg) if side == "buy" else replace(self, sell=leg)
 
 
-def start(double_id: str, buy: OrderRequest, sell: OrderRequest, now: int) -> DoubleState:
-    return DoubleState(double_id, Leg(buy), Leg(sell), now)
+def start(
+    double_id: str, buy: OrderRequest, sell: OrderRequest, now: int, *, held: Side | None = None
+) -> DoubleState:
+    """`held`: el lado que espera a la primera pierna (D-75)."""
+    state = DoubleState(double_id, Leg(buy), Leg(sell), now)
+    if held is not None:
+        state = state._with(held, replace(state.leg(held), status="held"))
+    return state
 
 
 def on_order(state: DoubleState, order: Order, now: int) -> DoubleState:

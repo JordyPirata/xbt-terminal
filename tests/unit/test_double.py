@@ -138,3 +138,38 @@ def test_leg_es_inmutable():
     leg = Leg(OrderRequest("nk", "buy", D("1"), D("1"), "t"))
     with pytest.raises(AttributeError):
         leg.status = "open"  # type: ignore[misc]
+
+
+@pytest.mark.spec("RF-07", "RF-20", "RF-21")
+class TestPrimeraPierna:
+    """Doble del bot con `lead_venue` (D-75): la otra pierna espera sin enviar."""
+
+    def test_la_otra_espera_sin_enviar(self):
+        buy = OrderRequest("nk", "buy", D("0.01"), D("0.0072"), "t-b")
+        sell = OrderRequest("nx", "sell", D("0.01"), D("0.0073"), "t-s")
+        s = start("d-1", buy, sell, T0, held="buy")
+        assert (s.buy.status, s.sell.status) == ("held", "pending")
+        assert not s.buy.done and not s.done
+
+    def test_sin_enviar_cuenta_como_cerrada_con_cero(self):
+        s = double().skip("buy")
+        s = on_order(s, order("nx", "o-s", "sell", status="cancelled", cid="t-s"), T0)
+        assert s.buy.status == "skipped" and s.buy.done and s.done
+        assert hanging(s, T0, AFTER_MS) is None
+
+    def test_sin_enviar_con_la_otra_llena_es_colgada(self):
+        s = double().skip("buy")
+        s = on_order(s, order("nx", "o-s", "sell", "0.004", "cancelled", cid="t-s"), T0)
+        assert hanging(s, T0, AFTER_MS) == "compra en NonKYC sin enviar con 0.004 XBT sin cubrir"
+
+    def test_se_envia_por_otra_cantidad(self):
+        s = start(
+            "d-1",
+            OrderRequest("nk", "buy", D("0.01"), D("0.0072"), "t-b"),
+            OrderRequest("nx", "sell", D("0.01"), D("0.0073"), "t-s"),
+            T0,
+            held="buy",
+        )
+        s = s.resize("buy", D("0.004"))
+        assert s.buy.req.qty == D("0.004") and s.buy.status == "pending"
+        assert s.buy.req.client_id == "t-b"

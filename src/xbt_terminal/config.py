@@ -357,6 +357,7 @@ def _bot(b: _Section) -> BotConfig:
             max_consecutive_failures=b.int("max_consecutive_failures"),
             max_walk_pct=_walk(b.section("max_walk_pct")) if "max_walk_pct" in b.data else {},
             **_move(b),
+            **_lead(b),
         ),
     )
     b.done()
@@ -372,6 +373,13 @@ def _move(b: _Section) -> dict[str, Any]:
     if "move_window_ms" in b.data:
         out["move_window_ms"] = b.int("move_window_ms", min=100, max=60_000)
     return out
+
+
+def _lead(b: _Section) -> dict[str, Any]:
+    """`lead_venue` (RF-20, D-75): opcional; uno de los venues."""
+    if "lead_venue" not in b.data:
+        return {}
+    return {"lead_venue": b.choice("lead_venue", VENUE_IDS)}
 
 
 def _fee_token(v: _Section) -> dict[str, Any]:

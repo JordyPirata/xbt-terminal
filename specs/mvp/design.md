@@ -477,8 +477,9 @@ respuesta ya dice si llenó (`status` y `quantity_filled` de `POST
    - `open` sin nada lleno → `cancel_double` al momento. Si se cancela, la otra
      pasa a `skipped`, `bot_miss` en el journal (`double`, `venue`, `price`,
      `qty`) y `cooldown`, sin sumar a `max_consecutive_failures`. Si la
-     cancelación falla porque ya llenó, se lee la orden (`fetch_final`) y se
-     sigue como `filled` o llena en parte.
+     cancelación falla porque ya llenó, se espera (hasta `settle_s`) a que la
+     cuenta la traiga cerrada (en Neoxa, por polling) y se sigue como `filled` o
+     llena en parte.
    - rechazo, error o incierta → la otra pasa a `skipped`, `halted` (RF-21).
 4. Con la otra pierna enviada, sigue el flujo de siempre: `fill_timeout_ms`,
    cancelar el resto, `settle_s` y veredicto.
@@ -729,7 +730,7 @@ línea por evento, abierto en modo append y `flush` tras cada línea. Directorio
 
 `event ∈ order_sent | order_ack | order_error | order_unknown | reject_local |
 cancel_sent | cancel_ack | fill | hanging_leg | conn | error | bot_state | bot_fire |
-notice | fill_fee` (`bot_state` y `bot_fire`, fase 2: §6.9; `notice`, avisos de error del
+bot_miss | notice | fill_fee` (`bot_state`, `bot_fire` y `bot_miss`, fase 2: §6.9; `notice`, avisos de error del
 daemon: §6.13; `fill_fee`, la fee corregida de un fill ya apuntado: D-64). Decimales serializados como
 string. Un evento fuera de la lista es `ValueError`; un tipo no serializable,
 `TypeError`, y la línea se codifica entera antes de escribir, así que un error

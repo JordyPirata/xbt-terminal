@@ -84,6 +84,26 @@ def test_max_walk_pct_invalido(tmp_path, value, match):
         load_config(p)
 
 
+@pytest.mark.spec("RF-20")
+def test_lead_venue_es_opcional():
+    assert load_config(EXAMPLE).bot.limits.lead_venue is None
+
+
+@pytest.mark.spec("RF-20")
+def test_lead_venue(tmp_path):
+    line = 'fill_timeout_ms = 3000\nlead_venue = "nx"'
+    p = example_with(tmp_path, "fill_timeout_ms = 3000", line)
+    assert load_config(p).bot.limits.lead_venue == "nx"
+
+
+@pytest.mark.spec("RF-20")
+def test_lead_venue_invalido(tmp_path):
+    line = 'fill_timeout_ms = 3000\nlead_venue = "xx"'
+    p = example_with(tmp_path, "fill_timeout_ms = 3000", line)
+    with pytest.raises(ConfigError, match=r"bot\.lead_venue"):
+        load_config(p)
+
+
 @pytest.mark.spec("RF-18")
 def test_clave_desconocida(tmp_path):
     p = example_with(tmp_path, "enabled = false", 'enabled = false\nmax_qyt = "1"')

@@ -55,6 +55,8 @@ max_slippage_pct = "0.2"     # % sobre el mejor ask/bid de las límites agresiva
 # move_window_ms = 2000      # ventana del movimiento (100 a 60000 ms)
 max_qty = "100"              # BTCB2 por disparo
 fill_timeout_ms = 3000       # lo que no llene en este tiempo se cancela
+# lead_venue = "nx"          # opcional (D-75): envía primero esta pierna y la otra solo por
+                             # lo que llene; sin la clave, las dos a la vez
 cooldown_s = 10              # entre disparos (mínimo 2)
 max_trades_per_hour = 20
 max_daily_btc = "0.01"       # BTC de compra enviados por día UTC; al llegar, se para

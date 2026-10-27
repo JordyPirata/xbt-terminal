@@ -904,3 +904,31 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   `license-files` en `pyproject.toml` (la wheel lo lleva). README reescrito;
   `docs/despliegue.md` y `docs/uso.md` nuevos; `.env.example` dice dónde va.
   `uv tool install .` comprobado en un directorio aislado.
+
+### T-77 El bot envía primero la pierna de `lead_venue` · `done` · RF-07, RF-20, RF-21, RF-22, RF-23, CA-08 · dep T-74 · D-75
+- `bot.lead_venue` en la config (opcional; un venue configurado).
+- `core/double.py`: piernas `held` y `skipped`; `done` y `hanging` con una
+  pierna `skipped` (0 lleno).
+- `OrderService`: enviar solo la primera pierna y, después, la otra por una
+  cantidad dada; la `held` no se cancela ni se reconcilia.
+- `BotService`: los cuatro casos del ack de la primera (llena, en parte, `open`,
+  rechazo/error/incierta) y la cancelación que falla porque ya llenó;
+  `bot_miss` → `cooldown` sin sumar fallo; `lead` en `bot_fire`; línea en la
+  confirmación de `bot on`.
+- Tests: cada caso en dry-run con venues falsos, que sin `lead_venue` el envío
+  sigue en paralelo (oráculo de D-70 igual) y que `bot_miss` no cuenta para
+  `max_consecutive_failures`.
+- Después, con permiso del usuario: `lead_venue = "nx"` en la config del
+  servidor y reinicio.
+- Hecho: `core/double.py` con piernas `held` y `skipped` (`start(..., held=)`,
+  `skip`, `resize`; `skipped` cuenta como cerrada y en `hanging` dice "sin
+  enviar"); `OrderService.confirm_double(pending, lead=)`, `send_held` y
+  `skip_held`; `BotService._lead` (cancela al momento lo que no llenó, espera
+  hasta `settle_s` a que la primera cierre, `bot_miss` con `finished` sin error,
+  lo lleno al lote del otro venue; bajo `min_qty` o `min_notional`, colgada);
+  `lead` en `bot_fire`; evento `bot_miss` en el journal; línea en la
+  confirmación de `bot on`; etiquetas "esperando" y "sin enviar" en el panel de
+  piernas; `lead_venue` comentado en `config.example.toml`. La cancelación que
+  falla porque ya llenó no lee la orden aparte: la trae la cuenta (design.md
+  §6.9 ajustado). 14 tests nuevos (`TestPrimeraPierna` en test_double y
+  test_bot_service, y `lead_venue` en test_config_bot).

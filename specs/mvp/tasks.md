@@ -174,21 +174,7 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 
 ## M15 — Primera pierna del bot (v0.28, D-75)
 
-### T-77 El bot envía primero la pierna de `lead_venue` · `todo` · RF-07, RF-20, RF-21, RF-22, RF-23, CA-08 · dep T-74 · D-75
-- `bot.lead_venue` en la config (opcional; un venue configurado).
-- `core/double.py`: piernas `held` y `skipped`; `done` y `hanging` con una
-  pierna `skipped` (0 lleno).
-- `OrderService`: enviar solo la primera pierna y, después, la otra por una
-  cantidad dada; la `held` no se cancela ni se reconcilia.
-- `BotService`: los cuatro casos del ack de la primera (llena, en parte, `open`,
-  rechazo/error/incierta) y la cancelación que falla porque ya llenó;
-  `bot_miss` → `cooldown` sin sumar fallo; `lead` en `bot_fire`; línea en la
-  confirmación de `bot on`.
-- Tests: cada caso en dry-run con venues falsos, que sin `lead_venue` el envío
-  sigue en paralelo (oráculo de D-70 igual) y que `bot_miss` no cuenta para
-  `max_consecutive_failures`.
-- Después, con permiso del usuario: `lead_venue = "nx"` en la config del
-  servidor y reinicio.
+### T-77 El bot envía primero la pierna de `lead_venue` · `done` · RF-07, RF-20, RF-21, RF-22, RF-23, CA-08 · dep T-74 · D-75
 
 ## Correcciones
 

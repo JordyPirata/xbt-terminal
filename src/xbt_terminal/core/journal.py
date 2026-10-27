@@ -40,6 +40,7 @@ EVENTS = frozenset(
         "error",
         "bot_state",  # fase 2 (RF-23)
         "bot_fire",
+        "bot_miss",  # la primera pierna no llenó (D-75)
         "notice",  # avisos del daemon (RF-30, D-61)
         "value",  # valor de la cuenta (RF-32, D-69)
     }

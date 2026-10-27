@@ -28,6 +28,13 @@ los locks por venue, las inciertas y el journal como cualquier otra. Después:
 4. Llenados iguales → `cooldown`. Si no, o hubo rechazo, incierta o una pierna
    que no cerró → `halted` con el motivo (RF-21). Nada se cubre ni se reintenta.
 
+Con `lead_venue` (D-75) sale primero solo la pierna de ese venue (Neoxa casa al
+recibir la orden, así que el ack ya dice si llenó). Lo que no llenó se cancela
+al momento y, cuando la primera cierra, la otra sale por lo llenado, al lote
+hacia abajo, y sigue los pasos de arriba. Si no llenó nada, la otra no sale:
+`bot_miss` y `cooldown`, sin contar como fallo. Si la cancelación falla porque
+ya llenó, la cuenta lo trae al cerrar la orden (Neoxa, por polling).
+
 Sin tope diario para un lote más (`Skip("day_cap")`) el bot pasa a `halted`,
 igual que cuando lo agota un disparo (RF-22).
 
@@ -42,7 +49,8 @@ disparo, con `at` (ms) y `notional` para rehacer los contadores al arrancar
 Los plazos (`fill_timeout_ms`, `settle_s`) se miden con el reloj del bucle de
 asyncio; los estados del bot, con `clock` (ms epoch), como el resto.
 
-Spec: RF-18 a RF-23, CA-08, CA-09 · design.md §6.9 · D-71 · Tareas: T-36, T-73
+Spec: RF-18 a RF-23, CA-08, CA-09 · design.md §6.9 · D-71, D-75 · Tareas: T-36, T-73,
+T-77
 """
 
 from __future__ import annotations
@@ -78,7 +86,7 @@ from ..core.bot import (
     token_fee,
 )
 from ..core.commands import DoubleOrder
-from ..core.double import NAMES, DoubleState
+from ..core.double import NAMES, DoubleState, Leg
 from ..core.inventory import InventoryTarget
 from ..core.journal import Journal
 from ..core.models import BASE_LABEL, ZERO, Level, VenueId
@@ -166,6 +174,7 @@ class BotService:
             f"{lim.max_slippage_pct} % y fee taker en las dos piernas\n"
             f"{_walk_text(lim)}"
             f"{_move_text(lim)}"
+            f"{_lead_text(lim)}"
             f"{self._token_text()}"
             f"hasta {lim.max_qty} {BASE_LABEL} por disparo · "
             f"{lim.max_daily_btc} BTC de compra al día · "
@@ -261,6 +270,7 @@ class BotService:
         if self._firing is not None:  # lo que quedara abierto de la doble (RF-21)
             task = asyncio.ensure_future(self._orders.cancel_double(self._firing))
             task.add_done_callback(lambda t: t.exception())
+            self._orders.skip_held(self._firing)  # la otra pierna ya no sale (D-75)
             self._firing = None
 
     async def _evaluate(self) -> None:
@@ -386,12 +396,13 @@ class BotService:
             self._end(rejected(self.state, self._limits, ", ".join(pending.codes)))
             return
         self._firing = double_id
-        sent = await self._orders.confirm_double(pending)
+        lead = self._limits.lead_venue
+        sent = await self._orders.confirm_double(pending, lead=lead)
         if isinstance(sent, DoubleRejected):
             self._firing = None
             self._end(rejected(self.state, self._limits, ", ".join(sent.codes)))
             return
-        error = await self._follow(double_id)
+        error = await (self._follow(double_id) if lead is None else self._lead(double_id, lead))
         self._firing = None
         self._end(finished(self.state, self._limits, self._clock(), error=error))
 
@@ -402,6 +413,44 @@ class BotService:
         if self.state.status == "off" and state.status != "halted":
             state = replace(state, status="off", reason=None)
         self._set(state)
+
+    async def _lead(self, double_id: str, lead: VenueId) -> str | None:
+        """Primera pierna (D-75): lo que no llenó se cancela ya; la otra sale por
+        lo llenado o no sale. Devuelve qué falló, como `_follow`."""
+        loop = asyncio.get_running_loop()
+        first = self._first(double_id, lead)
+        cancel_errors: dict[VenueId, str] = {}
+        if first.status not in ("filled", "rejected", "unknown"):
+            cancel_errors = (await self._orders.cancel_double(double_id)).errors
+            settle = loop.time() + self._settle_s
+            while not first.done and first.status != "unknown" and loop.time() < settle:
+                await asyncio.sleep(POLL_S)
+                first = self._first(double_id, lead)
+        if first.status != "filled" and (not first.done or first.status == "rejected"):
+            self._orders.skip_held(double_id)  # incierta, rechazada o sin cerrar
+            return _verdict(self._orders.doubles[double_id], cancel_errors)
+        legs = self._orders.doubles[double_id].legs
+        held = next(leg for leg in legs if leg.req.venue != lead)
+        if first.filled == 0:
+            self._orders.skip_held(double_id)
+            self._record(
+                "bot_miss",
+                {"double": double_id, "venue": lead, "price": first.req.price,
+                 "qty": first.req.qty},
+            )  # fmt: skip
+            log.info("bot: %s sin llenar en la doble %s; no sale la otra", first.label, double_id)
+            return None
+        spec = self._hub.state[held.req.venue].spec
+        assert spec is not None  # disparó con su book
+        qty = spec.quantize_qty(first.filled)
+        if qty < spec.min_qty or qty * held.req.price < spec.min_notional:
+            self._orders.skip_held(double_id)  # no llega al mínimo: queda colgada
+            return _verdict(self._orders.doubles[double_id], cancel_errors)
+        await self._orders.send_held(double_id, qty)
+        return await self._follow(double_id)
+
+    def _first(self, double_id: str, lead: VenueId) -> Leg:
+        return next(leg for leg in self._orders.doubles[double_id].legs if leg.req.venue == lead)
 
     async def _follow(self, double_id: str) -> str | None:
         """Espera, cancela el resto y dice qué falló (None si quedó equilibrada)."""
@@ -451,6 +500,7 @@ class BotService:
                 "at": now,
                 # para ajustar `max_move_pct` con datos, con filtro o sin él (D-71)
                 "move": dict(move),
+                **({"lead": lead} if (lead := self._limits.lead_venue) else {}),
             },
         )
 
@@ -507,6 +557,16 @@ def _move_text(lim: BotLimits) -> str:
     return (
         f"no dispara si el mid de un venue se movió más de {lim.max_move_pct} % "
         f"en {lim.move_window_ms / 1000:g} s\n"
+    )
+
+
+def _lead_text(lim: BotLimits) -> str:
+    """Línea de la confirmación con la primera pierna (D-75), o nada."""
+    if lim.lead_venue is None:
+        return ""
+    return (
+        f"envía primero la pierna de {NAMES[lim.lead_venue]}; la otra solo por lo que "
+        "llene (si no llena nada, no sale)\n"
     )
 
 

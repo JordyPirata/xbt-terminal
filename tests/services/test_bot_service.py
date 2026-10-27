@@ -571,3 +571,142 @@ class TestMovimientoBrusco:
         await rig.until(lambda: rig.orders.doubles)
         (fire,) = rig.events("bot_fire")
         assert D(fire["data"]["move"]["nx"]) > D("3.9")
+
+
+LEAD = replace(BOT, lead_venue="nx", fill_timeout_ms=2_000)
+
+
+def fills_on_place(venue, qty):
+    """El venue casa al recibir la orden, como Neoxa: llena `qty` antes del ack."""
+    place = venue.place_limit
+
+    async def placed(req):
+        order = await place(req)
+        if qty > 0:
+            order = await venue.simulate_fill(order.order_id, qty)
+        return order
+
+    venue.place_limit = placed
+
+
+@pytest.mark.spec("RF-07", "RF-20", "RF-21", "RF-23", "CA-08")
+class TestPrimeraPierna:
+    """Con `lead_venue` (D-75), la pierna de ese venue sale primero y la otra
+    solo por lo que llenó. Ruta del rig: compra en NonKYC, venta en Neoxa."""
+
+    async def fire(self, tmp_path, nx_fill, limits=LEAD, setup=None):
+        rig = BotRig(tmp_path, limits=limits)
+        fills_on_place(rig.venues["nx"], nx_fill)
+        if setup is not None:
+            setup(rig)
+        await rig.__aenter__()
+        rig.bot.arm()
+        rig.books()
+        await rig.until(lambda: rig.orders.doubles)
+        (double,) = rig.orders.doubles.values()
+        return rig, double
+
+    async def test_llena_y_sale_la_otra(self, tmp_path):
+        rig, double = await self.fire(tmp_path, D("10"))
+        try:
+            await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
+            sent = [(e["venue"], D(e["data"]["qty"])) for e in rig.events("order_sent")]
+            assert sent == [("nx", D("10")), ("nk", D("10"))]
+            (fire,) = rig.events("bot_fire")
+            assert fire["data"]["lead"] == "nx"
+            nk = rig.orders.doubles[double.id].buy
+            await rig.venues["nk"].simulate_fill(nk.order_id, D("10"))
+            await rig.until(lambda: rig.bot.state.status == "cooldown")
+            assert rig.events("bot_miss") == [] and rig.events("hanging_leg") == []
+        finally:
+            await rig.__aexit__(None, None, None)
+
+    async def test_en_parte_cancela_el_resto_y_la_otra_va_por_lo_lleno(self, tmp_path):
+        rig, double = await self.fire(tmp_path, D("4"))
+        try:
+            await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
+            d = rig.orders.doubles[double.id]
+            assert d.buy.req.qty == D("4")
+            assert d.sell.status == "cancelled" and d.sell.filled == D("4")
+            assert [e["venue"] for e in rig.events("order_sent")] == ["nx", "nk"]
+            # la cancelación de Neoxa sale antes que la pierna de NonKYC
+            assert rig.events("cancel_sent")[0]["venue"] == "nx"
+            await rig.venues["nk"].simulate_fill(d.buy.order_id, D("4"))
+            await rig.until(lambda: rig.bot.state.status == "cooldown")
+        finally:
+            await rig.__aexit__(None, None, None)
+
+    async def test_sin_llenar_no_sale_la_otra(self, tmp_path):
+        rig, double = await self.fire(tmp_path, D("0"))
+        try:
+            await rig.until(lambda: rig.bot.state.status == "cooldown")
+            d = rig.orders.doubles[double.id]
+            assert d.sell.status == "cancelled" and d.buy.status == "skipped" and d.done
+            assert [e["venue"] for e in rig.events("order_sent")] == ["nx"]
+            (miss,) = rig.events("bot_miss")
+            assert miss["data"]["double"] == double.id and miss["data"]["venue"] == "nx"
+            assert rig.events("hanging_leg") == []
+            rig.orders.check_doubles()
+            assert rig.orders.hanging == {}
+            assert await rig.open_orders() == {"nk": [], "nx": []}
+        finally:
+            await rig.__aexit__(None, None, None)
+
+    async def test_sin_llenar_no_cuenta_como_fallo(self, tmp_path):
+        limits = replace(LEAD, max_consecutive_failures=1, cooldown_s=2)
+        rig, _ = await self.fire(tmp_path, D("0"), limits)
+        try:
+            await rig.until(lambda: rig.bot.state.status == "cooldown")
+            rig.clock.now += 2_000
+            rig.books()
+            await rig.until(lambda: len(rig.events("bot_miss")) == 2)
+            await rig.until(lambda: rig.bot.state.status == "cooldown")
+            assert rig.bot.state.failures == 0
+        finally:
+            await rig.__aexit__(None, None, None)
+
+    async def test_rechazada_no_sale_la_otra(self, tmp_path):
+        async def refuse(req):
+            raise VenueError("Neoxa: [400] rechazada")
+
+        rig = BotRig(tmp_path, limits=LEAD)
+        rig.venues["nx"].place_limit = refuse
+        async with rig:
+            rig.bot.arm()
+            rig.books()
+            await rig.until(lambda: rig.bot.state.status == "halted")
+            (double,) = rig.orders.doubles.values()
+            assert double.buy.status == "skipped" and double.buy.order_id is None
+            assert [e["venue"] for e in rig.events("order_sent")] == ["nx"]
+            assert rig.bot.state.reason.startswith("rejected")
+
+    async def test_la_cancelacion_falla_porque_ya_lleno(self, tmp_path):
+        """Como el 2026-10-27 17:23: "Cannot cancel order with status: filled"."""
+        def setup(rig):
+            nx = rig.venues["nx"]
+
+            async def too_late(order_id):
+                await nx.simulate_fill(order_id, D("10"))
+                raise VenueError("Neoxa: HTTP 400: Cannot cancel order with status: filled")
+
+            nx.cancel = too_late
+
+        rig, double = await self.fire(tmp_path, D("0"), setup=setup)
+        try:
+            await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
+            d = rig.orders.doubles[double.id]
+            assert d.sell.status == "filled" and d.buy.req.qty == D("10")
+            assert rig.events("bot_miss") == []
+        finally:
+            await rig.__aexit__(None, None, None)
+
+    async def test_lo_lleno_bajo_el_lote_es_colgada(self, tmp_path):
+        rig, double = await self.fire(tmp_path, D("0.00005"))  # lote de NonKYC: 0.0001
+        try:
+            await rig.until(lambda: rig.bot.state.status == "halted")
+            d = rig.orders.doubles[double.id]
+            assert d.buy.status == "skipped" and d.sell.filled == D("0.00005")
+            assert rig.bot.state.reason.startswith("hanging_leg")
+            assert [e["venue"] for e in rig.events("order_sent")] == ["nx"]
+        finally:
+            await rig.__aexit__(None, None, None)

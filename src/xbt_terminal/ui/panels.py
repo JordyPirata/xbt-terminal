@@ -501,6 +501,8 @@ LEG_STATUS = {
     "cancelled": ("cancelada", "dim"),
     "rejected": ("rechazada", "bold red"),
     "unknown": ("INCIERTA", "bold magenta"),  # RNF-12: se está comprobando
+    "held": ("esperando", "yellow"),  # D-75: a que llene la primera pierna
+    "skipped": ("sin enviar", "dim"),
 }
 LEG_SIDE = {"buy": "COMPRA", "sell": "VENTA"}
 VENUE_NAME: dict[VenueId, str] = {"nk": "NonKYC", "nx": "Neoxa"}

@@ -79,6 +79,9 @@ class BotLimits:
     # movimiento máximo del mid de un venue en la ventana; None = sin filtro (RF-19, D-71)
     max_move_pct: Decimal | None = None
     move_window_ms: int = 2000
+    # venue de la primera pierna: la otra sale solo por lo que llene; None = en
+    # paralelo (RF-20, D-75)
+    lead_venue: VenueId | None = None
 
 
 @dataclass(frozen=True, slots=True)
