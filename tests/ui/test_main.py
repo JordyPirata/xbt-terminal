@@ -15,7 +15,7 @@ from xbt_terminal.config import load_settings
 from xbt_terminal.core.bot import FeeToken
 from xbt_terminal.paths import AlreadyRunning, InstanceLock
 from xbt_terminal.services.wire import ClientView
-from xbt_terminal.ui.app import BTCB2App
+from xbt_terminal.ui.app import XbtApp
 from xbt_terminal.ui.clipboard import system_copy
 
 EXAMPLE = Path(__file__).parents[2] / "config.example.toml"
@@ -223,7 +223,7 @@ async def test_reequilibrio_con_los_venues_con_keys(tmp_path, live):
     await engine.hub.aclose()
 
 
-# -- btcb2t daemon -------------------------------------------------------------------------
+# -- xbt daemon -------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -231,15 +231,15 @@ def xdg(tmp_path, monkeypatch):
     """Config y .env en el directorio XDG; se arranca desde otro cwd sin flags."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
-    conf = tmp_path / "cfg" / "btcb2t"
+    conf = tmp_path / "cfg" / "xbt"
     conf.mkdir(parents=True)
     (conf / "config.toml").write_text(EXAMPLE.read_text())
     env(conf)
     elsewhere = tmp_path / "otro"
     elsewhere.mkdir()
     monkeypatch.chdir(elsewhere)
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "daemon"])
-    return conf, tmp_path / "state" / "btcb2t"
+    monkeypatch.setattr(sys, "argv", ["xbt", "daemon"])
+    return conf, tmp_path / "state" / "xbt"
 
 
 @pytest.fixture
@@ -260,15 +260,15 @@ def served(monkeypatch):
 @pytest.mark.spec("RF-30", "RNF-17", "RNF-19", "RNF-20")
 def test_daemon_corre_el_motor_sin_pantalla(xdg, served, monkeypatch, capsys):
     _, data = xdg
-    monkeypatch.setattr(BTCB2App, "run", lambda app: pytest.fail("el daemon no abre Textual"))
+    monkeypatch.setattr(XbtApp, "run", lambda app: pytest.fail("el daemon no abre Textual"))
     main()
     engine = served["engine"]
     assert engine.mode == "dry-run" and engine.orders is not None  # el .env del XDG
     assert engine.journal.directory == data
-    assert served["socket"] == data / "btcb2t.sock"
+    assert served["socket"] == data / "xbt.sock"
     assert served["book_depth"] == 15
     assert isinstance(served["view"], ClientView) and served["view"].timeframe == "1m"
-    assert "btcb2t daemon en dry-run" in capsys.readouterr().err
+    assert "xbt daemon en dry-run" in capsys.readouterr().err
     assert "arranque en dry-run" in (data / "diag.log").read_text()  # RNF-19
     assert not (Path.cwd() / "logs").exists()
     with InstanceLock(data):  # al salir se suelta
@@ -277,7 +277,7 @@ def test_daemon_corre_el_motor_sin_pantalla(xdg, served, monkeypatch, capsys):
 
 @pytest.mark.spec("RNF-20")
 def test_daemon_con_directorio_de_datos(xdg, served, tmp_path, monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "daemon", "--data-dir", "datos"])
+    monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--data-dir", "datos"])
     main()
     assert served["engine"].journal.directory == tmp_path / "otro" / "datos"
 
@@ -312,7 +312,7 @@ def test_daemon_con_otra_instancia_no_arranca(xdg, served):
 def test_daemon_live_con_env_abierto_no_arranca(xdg, served, monkeypatch):
     conf, _ = xdg
     (conf / ".env").chmod(0o644)
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "daemon", "--live"])
+    monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--live"])
     with pytest.raises(SystemExit, match="chmod 600"):
         main()
     assert "engine" not in served
@@ -338,8 +338,8 @@ def test_daemon_sin_keys_arranca_en_solo_lectura(xdg, served):
 
 @pytest.mark.spec("RF-30", "RF-31")
 def test_daemon_con_ruta_de_socket_larga_no_arranca(xdg, served, monkeypatch, tmp_path):
-    long = tmp_path / ("x" * 120) / "btcb2t.sock"
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "daemon", "--socket", str(long)])
+    long = tmp_path / ("x" * 120) / "xbt.sock"
+    monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--socket", str(long)])
     with pytest.raises(SystemExit, match=r"demasiado larga.*--socket"):
         main()
     assert "engine" not in served
@@ -347,7 +347,7 @@ def test_daemon_con_ruta_de_socket_larga_no_arranca(xdg, served, monkeypatch, tm
 
 @pytest.mark.spec("RF-30", "RF-31")
 def test_daemon_con_otro_socket(xdg, served, monkeypatch, tmp_path):
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "daemon", "--socket", str(tmp_path / "s")])
+    monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--socket", str(tmp_path / "s")])
     main()
     assert served["socket"] == tmp_path / "s"
 
@@ -359,17 +359,17 @@ def test_daemon_con_los_flags_de_siempre(xdg, served, monkeypatch, tmp_path):
     other.write_text((conf / "config.toml").read_text())
     monkeypatch.setattr(
         sys, "argv",
-        ["btcb2t", "daemon", "--live", "--config", str(other), "--env", str(conf / ".env"),
+        ["xbt", "daemon", "--live", "--config", str(other), "--env", str(conf / ".env"),
          "--data-dir", "datos"],
     )  # fmt: skip
     main()
     engine = served["engine"]
     assert engine.mode == "live" and engine.orders._live
     data = tmp_path / "otro" / "datos"
-    assert engine.journal.directory == data and served["socket"] == data / "btcb2t.sock"
+    assert engine.journal.directory == data and served["socket"] == data / "xbt.sock"
 
 
-# -- btcb2t (el cliente) -----------------------------------------------------------------
+# -- xbt (el cliente) -----------------------------------------------------------------
 
 VIEW = ClientView(20, "5m", {"nk": Decimal("0"), "nx": Decimal("50")}, None, None)
 
@@ -397,22 +397,22 @@ def connected(monkeypatch, tmp_path):
     monkeypatch.setattr("xbt_terminal.__main__.probe", fake_probe)
     monkeypatch.setattr("xbt_terminal.__main__.build_venues", no_venues)
     monkeypatch.setattr("xbt_terminal.__main__.load_settings", no_venues)
-    monkeypatch.setattr(BTCB2App, "run", fake_run)
+    monkeypatch.setattr(XbtApp, "run", fake_run)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "sin-config"))  # no hay config.toml
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
-    seen["data"] = tmp_path / "state" / "btcb2t"
+    seen["data"] = tmp_path / "state" / "xbt"
     seen["data"].mkdir(parents=True)
     return seen
 
 
 @pytest.mark.spec("RF-31", "RNF-17", "CA-16")
-@pytest.mark.parametrize("argv", [["btcb2t"], ["btcb2t", "attach"]])
+@pytest.mark.parametrize("argv", [["xbt"], ["xbt", "attach"]])
 def test_el_cliente_abre_la_tui_del_daemon(connected, monkeypatch, capsys, argv):
     monkeypatch.setattr(sys, "argv", argv)
     main()
     app, data = connected["app"], connected["data"]
-    assert connected["probed"] == data / "btcb2t.sock"
-    assert app.remote is not None and app.remote.path == data / "btcb2t.sock"
+    assert connected["probed"] == data / "xbt.sock"
+    assert app.remote is not None and app.remote.path == data / "xbt.sock"
     assert app.mode == "live" and app.bot is app.remote.bot  # el modo del daemon
     assert app.account is app.remote.account and app.orders is app.remote.orders
     assert app.results is app.remote.results and app.deposits is app.remote.deposits
@@ -427,13 +427,13 @@ def test_el_cliente_abre_la_tui_del_daemon(connected, monkeypatch, capsys, argv)
 
 @pytest.mark.spec("RF-31")
 def test_el_cliente_sin_daemon_no_arranca(monkeypatch, tmp_path):
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "--socket", str(tmp_path / "no")])
+    monkeypatch.setattr(sys, "argv", ["xbt", "--socket", str(tmp_path / "no")])
     with pytest.raises(SystemExit, match="no hay daemon escuchando"):
         main()
 
 
 @pytest.mark.spec("RF-31")
-@pytest.mark.parametrize("argv", [["btcb2t", "--live"], ["btcb2t", "attach", "--live"]])
+@pytest.mark.parametrize("argv", [["xbt", "--live"], ["xbt", "attach", "--live"]])
 def test_el_cliente_no_lleva_live(monkeypatch, argv):
     monkeypatch.setattr(sys, "argv", argv)
     with pytest.raises(SystemExit, match="el modo es el del daemon"):
@@ -446,14 +446,14 @@ def test_el_cliente_busca_el_socket_en_su_data_dir(connected, monkeypatch, tmp_p
     data.mkdir()
     connected["data"] = data
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "--data-dir", "datos"])
+    monkeypatch.setattr(sys, "argv", ["xbt", "--data-dir", "datos"])
     main()
-    assert connected["probed"] == data / "btcb2t.sock"
+    assert connected["probed"] == data / "xbt.sock"
 
 
 @pytest.mark.spec("RF-30", "RF-31")
 def test_la_ayuda_explica_los_subcomandos(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "--help"])
+    monkeypatch.setattr(sys, "argv", ["xbt", "--help"])
     with pytest.raises(SystemExit):
         main()
     out = capsys.readouterr().out
@@ -463,7 +463,7 @@ def test_la_ayuda_explica_los_subcomandos(monkeypatch, capsys):
 
 @pytest.mark.spec("RF-30", "RF-31")
 def test_un_subcomando_desconocido_no_arranca(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["btcb2t", "servidor"])
+    monkeypatch.setattr(sys, "argv", ["xbt", "servidor"])
     with pytest.raises(SystemExit):
         main()
     assert "invalid choice" in capsys.readouterr().err

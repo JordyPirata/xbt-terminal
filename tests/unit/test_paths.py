@@ -30,23 +30,23 @@ def mode_of(path) -> int:
 def test_rutas_xdg_por_defecto(tmp_path):
     environ = {"XDG_CONFIG_HOME": str(tmp_path / "cfg"), "XDG_STATE_HOME": str(tmp_path / "st")}
     paths = resolve_paths(environ=environ)
-    assert paths.config == tmp_path / "cfg" / "btcb2t" / "config.toml"
-    assert paths.env == tmp_path / "cfg" / "btcb2t" / ".env"
-    assert paths.data == tmp_path / "st" / "btcb2t"
+    assert paths.config == tmp_path / "cfg" / "xbt" / "config.toml"
+    assert paths.env == tmp_path / "cfg" / "xbt" / ".env"
+    assert paths.data == tmp_path / "st" / "xbt"
 
 
 @pytest.mark.spec("RNF-20")
 def test_sin_xdg_cuelga_de_home(tmp_path):
     paths = resolve_paths(environ={"HOME": str(tmp_path)})
-    assert paths.config == tmp_path / ".config" / "btcb2t" / "config.toml"
-    assert paths.data == tmp_path / ".local" / "state" / "btcb2t"
+    assert paths.config == tmp_path / ".config" / "xbt" / "config.toml"
+    assert paths.data == tmp_path / ".local" / "state" / "xbt"
 
 
 @pytest.mark.spec("RNF-20")
 def test_xdg_relativo_se_ignora(tmp_path):
     """La especificación XDG pide ignorar rutas relativas: dependerían del cwd."""
     paths = resolve_paths(environ={"HOME": str(tmp_path), "XDG_STATE_HOME": "rel/state"})
-    assert paths.data == tmp_path / ".local" / "state" / "btcb2t"
+    assert paths.data == tmp_path / ".local" / "state" / "xbt"
 
 
 @pytest.mark.spec("RNF-20")
@@ -89,7 +89,7 @@ def test_el_lock_crea_el_directorio_privado(tmp_path):
     data = tmp_path / "nuevo"
     with InstanceLock(data):
         assert mode_of(data) == 0o700
-        assert mode_of(data / "btcb2t.lock") == 0o600
+        assert mode_of(data / "xbt.lock") == 0o600
 
 
 @pytest.mark.spec("RNF-18")

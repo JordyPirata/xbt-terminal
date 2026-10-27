@@ -61,7 +61,7 @@ class TestProbar:
             assert not (await probe(d.path)).has_bot
 
     async def test_sin_daemon(self, tmp_path):
-        with pytest.raises(DaemonGone, match="btcb2t daemon"):
+        with pytest.raises(DaemonGone, match="xbt daemon"):
             await probe(tmp_path / "no.sock")
 
     async def test_una_ruta_que_no_cabe_se_explica(self, tmp_path):

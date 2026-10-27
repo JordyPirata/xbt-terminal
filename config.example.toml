@@ -1,4 +1,4 @@
-# Terminal BTCB2 — configuración. Copiar a config.toml.
+# xbt-terminal — configuración. Copiar a config.toml.
 # Los secretos NO van aquí: van en .env
 # Solo pares BTCB2 contra BTC (RNF-10): nada de USDT/USDC. Importes en BTC.
 

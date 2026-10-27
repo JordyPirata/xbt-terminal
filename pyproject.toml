@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-btcb2t = "xbt_terminal.__main__:main"
+xbt = "xbt_terminal.__main__:main"
 
 [dependency-groups]
 dev = [

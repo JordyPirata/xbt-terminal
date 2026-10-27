@@ -33,7 +33,7 @@ async def run_daemon(
     book_depth: int = BOOK_DEPTH,
     view: ClientView | None = None,
 ) -> None:
-    """Con `socket`, abre el de control para el cliente `btcb2t` (RF-31); el book
+    """Con `socket`, abre el de control para el cliente `xbt` (RF-31); el book
     viaja con `book_depth` niveles por lado (D-66)."""
 
     def heard(notice: Notice) -> None:

@@ -1,13 +1,13 @@
-"""Punto de entrada: `btcb2t daemon [--live] [--config RUTA] [--env RUTA]
-[--data-dir RUTA] [--socket RUTA]` y `btcb2t [attach] [--data-dir RUTA]
+"""Punto de entrada: `xbt daemon [--live] [--config RUTA] [--env RUTA]
+[--data-dir RUTA] [--socket RUTA]` y `xbt [attach] [--data-dir RUTA]
 [--socket RUTA]`.
 
 `daemon` es el servidor: el único proceso que habla con los venues, tiene las
 keys, el lock y el journal, sin pantalla y en primer plano (RF-30). Sin
 subcomando (o con `attach`), la TUI: el cliente de ese daemon por su socket,
 que lo enseña y opera todo a través de él sin leer config ni keys (RF-31,
-D-66). Sin flags, config y `.env` en `~/.config/btcb2t` y journal y socket en
-`~/.local/state/btcb2t` (XDG, RNF-20). Un solo daemon por directorio de datos
+D-66). Sin flags, config y `.env` en `~/.config/xbt` y journal y socket en
+`~/.local/state/xbt` (XDG, RNF-20). Un solo daemon por directorio de datos
 (RNF-17)."""
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ from .services.rebalance import RebalanceService
 from .services.remote import DaemonGone, Hello, RemoteEngine, probe
 from .services.results import ResultsService
 from .services.wire import ClientView
-from .ui.app import BTCB2App
+from .ui.app import XbtApp
 from .ui.clipboard import system_copy
 
 
@@ -208,13 +208,13 @@ def client_view(settings: Settings) -> ClientView:
     )
 
 
-def build_client_app(socket: Path, hello: Hello) -> BTCB2App:
+def build_client_app(socket: Path, hello: Hello) -> XbtApp:
     """El cliente: todo lo del daemon por el socket (RF-31, D-66). Ni config,
     ni keys, ni venues, ni journal, ni lock."""
     view = hello.view or DEFAULT_VIEW
     remote = RemoteEngine(socket, has_bot=hello.has_bot)
     hub = remote.market
-    return BTCB2App(
+    return XbtApp(
         hub,
         run_hub=False,
         book_levels=view.book_levels,
@@ -267,7 +267,7 @@ async def serve(settings: Settings, data: Path, socket: Path) -> None:
         print(f"aviso: {warning}", file=sys.stderr)
 
     def ready() -> None:
-        print(f"btcb2t daemon en {settings.mode}, datos en {data}", file=sys.stderr)
+        print(f"xbt daemon en {settings.mode}, datos en {data}", file=sys.stderr)
 
     await run_daemon(
         engine, stop, on_ready=ready, socket=socket,
@@ -276,16 +276,16 @@ async def serve(settings: Settings, data: Path, socket: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="btcb2t", description=__doc__)
+    parser = argparse.ArgumentParser(prog="xbt", description=__doc__)
     parser.add_argument(
         "command", nargs="?", choices=("daemon", "attach"),
         help="daemon: el servidor, sin pantalla y en primer plano (para con SIGTERM); "
         "sin subcomando o attach: la TUI, cliente del daemon",
     )  # fmt: skip
-    parser.add_argument("--config", help="config.toml del daemon (por defecto ~/.config/btcb2t/)")
-    parser.add_argument("--env", help=".env del daemon (por defecto ~/.config/btcb2t/)")
+    parser.add_argument("--config", help="config.toml del daemon (por defecto ~/.config/xbt/)")
+    parser.add_argument("--env", help=".env del daemon (por defecto ~/.config/xbt/)")
     parser.add_argument(
-        "--data-dir", help="journal, lock y socket (por defecto ~/.local/state/btcb2t)"
+        "--data-dir", help="journal, lock y socket (por defecto ~/.local/state/xbt)"
     )
     parser.add_argument("--live", action="store_true", help="daemon: enviar órdenes reales")
     parser.add_argument("--socket", help="socket de control (por defecto, en el de datos)")
@@ -295,7 +295,7 @@ def main() -> None:
     if args.command != "daemon":
         if args.live:
             raise SystemExit(
-                "El cliente no lleva --live: el modo es el del daemon (btcb2t daemon --live)."
+                "El cliente no lleva --live: el modo es el del daemon (xbt daemon --live)."
             )
         client(paths.data, socket)
         return

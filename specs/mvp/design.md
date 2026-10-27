@@ -1,4 +1,4 @@
-# Terminal BTCB2 — Diseño MVP
+# xbt-terminal — Diseño MVP
 
 Versión 0.17 · 2026-10-24 · Implementa `requirements.md` v0.17 (empezado el
 2026-10-19 sobre la v0.1; cada sección dice de qué versión y decisión viene)
@@ -636,8 +636,8 @@ Dos formas de arrancar el mismo binario:
 
 | Comando | Qué corre | Lock (RNF-17) | Journal | Venues |
 | --- | --- | --- | --- | --- |
-| `btcb2t daemon [--live]` | `Engine` + servidor de socket, sin Textual | sí | escribe | sí |
-| `btcb2t` (alias `attach`) | TUI cliente | no | no | no |
+| `xbt daemon [--live]` | `Engine` + servidor de socket, sin Textual | sí | escribe | sí |
+| `xbt` (alias `attach`) | TUI cliente | no | no | no |
 
 - `services/engine.py`: `Engine` agrupa hub, cuenta, órdenes, bot, faults,
   resultados, depósitos y reequilibrio, y corre `check_doubles` cada 1 s,
@@ -649,7 +649,7 @@ Dos formas de arrancar el mismo binario:
   SIGINT → `bot.disarm()`, `orders.drain()`, cierre. Avisos al diaglog, a los
   clientes y los de error al journal (`notice`).
 - `services/control.py`: servidor `asyncio.start_unix_server` en
-  `<datos>/btcb2t.sock` (o `--socket`), umask `0177`; un socket viejo se borra
+  `<datos>/xbt.sock` (o `--socket`), umask `0177`; un socket viejo se borra
   (el daemon ya tiene el lock). La ruta no puede pasar de 107 bytes. Cola
   acotada por cliente: el que no lee se desconecta, nunca frena al `Engine`.
   Todo lo que sale pasa por el `Redactor`. Cada petición corre en su tarea.
@@ -682,14 +682,14 @@ Dos formas de arrancar el mismo binario:
 - `ui/app.py` recibe las caras remotas y un `Runner` (avisos, fallos y bucles):
   en el cliente, un `Engine` sin órdenes sobre `RemoteMarket`; en los tests de
   pantalla, el de verdad (`tests/ui/local.py`).
-- `btcb2t`: `probe` pide `hello` antes de abrir la pantalla (sin daemon, sale
+- `xbt`: `probe` pide `hello` antes de abrir la pantalla (sin daemon, sale
   con el motivo). Log propio `client.log`. Ni lock, ni journal, ni config de
   venues, ni keys. `q` desconecta sin confirmación y avisa de que el daemon
   sigue.
 
 ## 7. Journal (RF-11)
 
-`<datos>/journal-YYYYMMDD.jsonl` (§8, por defecto `~/.local/state/btcb2t`), una
+`<datos>/journal-YYYYMMDD.jsonl` (§8, por defecto `~/.local/state/xbt`), una
 línea por evento, abierto en modo append y `flush` tras cada línea. Directorio
 `0700` y fichero `0600`, también si ya existían con más permisos (RNF-18).
 
@@ -721,14 +721,14 @@ y no coincidiría.
   v0.1 es error (D-16).
 - `.env`: `NONKYC_API_KEY`, `NONKYC_API_SECRET`, `NEOXA_API_KEY`, `NEOXA_API_SECRET`.
 - Rutas (`paths.py`, RNF-20, D-32): sin flags, `config.toml` y `.env` en
-  `$XDG_CONFIG_HOME/btcb2t` (`~/.config/btcb2t`) y los datos (journal y lock) en
-  `$XDG_STATE_HOME/btcb2t` (`~/.local/state/btcb2t`). `--config`, `--env` y
+  `$XDG_CONFIG_HOME/xbt` (`~/.config/xbt`) y los datos (journal y lock) en
+  `$XDG_STATE_HOME/xbt` (`~/.local/state/xbt`). `--config`, `--env` y
   `--data-dir` las cambian; una relativa se resuelve contra el cwd al arrancar.
 - Permisos del `.env` (RNF-18): con cualquier permiso para grupo u otros, en live
   no se arranca (`ConfigError`) y en los demás modos se avisa en rojo al montar
   la app (`Settings.warnings`).
 - Instancia única (RNF-17): `InstanceLock` hace `flock` exclusivo sobre
-  `<datos>/btcb2t.lock` antes de montar la app, en todos los modos, y lo suelta
+  `<datos>/xbt.lock` antes de montar la app, en todos los modos, y lo suelta
   al salir. La segunda instancia sale con el pid de la primera.
 - Log de diagnóstico (`diaglog.py`, RNF-19, D-33): `<datos>/diag.log`, 1 MB × 5
   ficheros, `0600`, UTC. Logger `xbt_terminal` (cada módulo con

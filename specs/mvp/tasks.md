@@ -1,4 +1,4 @@
-# Terminal BTCB2 — Tareas MVP
+# xbt-terminal — Tareas MVP
 
 Estados: `todo` · `doing` · `done` · `blocked (PA-NN)`.
 Una tarea se cierra cuando sus tests pasan, `tools/spec_trace.py` lo refleja y no
@@ -165,6 +165,22 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 ### T-72 Bot: menos complejidad, mismo comportamiento, latencia medida · `done` · RF-19, RF-20, RNF-22, RNF-23 · D-70
 
 ### T-73 El bot no dispara tras un movimiento brusco · `done` · RF-19, CA-08 · dep T-72 · D-71
+
+## M14 — Despliegue (v0.27, D-73, D-74)
+
+### T-75 El comando y las rutas pasan a `xbt` · `done` · RF-30, RF-31, RNF-20 · D-73
+
+### T-76 Guía de despliegue y licencia · `todo` · RNF-08, RNF-16, RNF-20 · dep T-75 · D-74
+- `LICENSE` (AGPL-3.0) y `license` en `pyproject.toml`.
+- `README.md`: requisitos, clonar, `uv tool install .`, keys de cada venue (sin
+  retiro), primera puesta en marcha (solo lectura → dry-run → live mínimo),
+  seguridad y aviso de riesgo.
+- `docs/despliegue.md`: servidor, NTP, unidad `systemd --user` de ejemplo con
+  `loginctl enable-linger`, acceso por SSH, actualizar (daemon y cliente a la
+  vez), migrar desde `btcb2t`, datos y backup, logs, problemas comunes.
+- `docs/uso.md`: atajos y ventanas (lo que hoy está en el README).
+- Corregir el docstring de `core/journal.py` (`logs/` → directorio de datos).
+- Sin tests: solo documentación.
 
 ## Correcciones
 

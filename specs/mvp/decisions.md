@@ -82,6 +82,8 @@ dicen en su propia nota.
 | D-70 | 2026-10-26 | Decisión del bot en O(L² log L) en el peor caso, con oráculo y presupuesto de latencia (requirements v0.25, T-72) |
 | D-71 | 2026-10-26 | El bot no dispara tras un movimiento brusco del mid (requirements v0.26, T-73) |
 | D-72 | 2026-10-26 | La ventana del movimiento conserva el mid que regía al empezar (T-74) |
+| D-73 | 2026-10-26 | El comando y las rutas pasan a `xbt` (requirements v0.27, T-75) |
+| D-74 | 2026-10-26 | Licencia AGPL-3.0 y guía de despliegue (T-76) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1758,3 +1760,41 @@ que es el que regía al empezarla. RF-19 no cambia: "se ha movido en los último
 `move_window_ms`" ya incluía ese mid. Los `move` de `bot_fire` de antes de este
 cambio no sirven para ajustar `max_move_pct`.
 **Toca:** RF-19, CA-08, design.md §6.9, T-74.
+
+## D-73 · 2026-10-26 · El comando y las rutas pasan a `xbt` (requirements v0.27, T-75)
+**Contexto:** el proyecto se llama `xbt-terminal` desde el renombrado de la
+carpeta y el paquete, pero el comando, las carpetas XDG, el socket y el lock
+seguían como `btcb2t`. Para quien lo instala de cero, dos nombres despistan.
+Pedido por el usuario, junto con la guía de despliegue (D-74).
+**Decisión:**
+- El comando es `xbt` (`xbt daemon [--live]`, `xbt`, alias `xbt attach`). Las
+  rutas por defecto pasan a `~/.config/xbt` y `~/.local/state/xbt`, y el socket
+  y el lock a `xbt.sock` y `xbt.lock`. La app es `XbtApp`; los títulos de la
+  spec, `xbt-terminal`.
+- No cambia nada de lo que habla con los venues: símbolos (`BTCB2/BTC`,
+  `BTCB2_BTC`), tickers de saldos, depósitos y comisiones, ni el `BTCB2` interno
+  del par. En pantalla ya se llamaba XBT (D-48).
+- Sin migración en el código: los datos viejos se mueven a mano con el daemon
+  parado (`mv ~/.config/btcb2t ~/.config/xbt`, `mv ~/.local/state/btcb2t
+  ~/.local/state/xbt`, y `btcb2t.lock` → `xbt.lock`; el socket se crea solo).
+  Un daemon viejo y un cliente nuevo no se encuentran: hay que actualizar los dos.
+- Las decisiones anteriores y los títulos de tareas cerradas conservan
+  `btcb2t`: son historia.
+**Toca:** RF-30, RF-31, RNF-20, design.md §6.13 y §8, T-75.
+
+## D-74 · 2026-10-26 · Licencia AGPL-3.0 y guía de despliegue (T-76)
+**Contexto:** el README explicaba qué hace la terminal, pero no lo que necesita
+alguien sin contexto para ponerla en su máquina o su servidor: requisitos
+(`uv`, Linux/macOS por el socket Unix, reloj con NTP por RNF-16, terminal de
+160×45), keys de cada venue, instalar el comando en el PATH, servicio,
+actualizar, datos y problemas comunes. Y sin licencia nadie más puede usarlo.
+**Decisión:**
+- Licencia AGPL-3.0 (elegida por el usuario): quien lo modifique y lo
+  distribuya o lo sirva publica sus cambios.
+- `README.md` queda en qué es, instalar, primera puesta en marcha, seguridad y
+  aviso de riesgo; `docs/despliegue.md` (servidor, servicio, actualizar, datos,
+  problemas comunes) y `docs/uso.md` (atajos y ventanas). El estado de
+  desarrollo sigue en `HANDOFF.md` y la spec.
+- El ejemplo de unidad `systemd --user` va en la documentación, no como fichero
+  del repo: el binario sigue sin hablar con ningún gestor de servicios (D-61).
+**Toca:** RNF-08, RNF-16, RNF-20, T-76.

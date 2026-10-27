@@ -971,7 +971,7 @@ class RebalanceScreen(ModalScreen[None]):
         self.dismiss(None)
 
 
-class BTCB2App(App[None]):
+class XbtApp(App[None]):
     TITLE = f"Terminal {BASE_LABEL}"
     # sin foco inicial en la línea de comandos: si no, 1-5/q se escribirían en ella
     AUTO_FOCUS = None

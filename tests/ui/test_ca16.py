@@ -10,7 +10,7 @@ from xbt_terminal.core.models import D
 from xbt_terminal.services.control import ControlServer
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.remote import RemoteEngine
-from xbt_terminal.ui.app import BTCB2App, ConfirmScreen
+from xbt_terminal.ui.app import ConfirmScreen, XbtApp
 
 from ..services.test_double_orders import Setup
 from .test_orders_ui import type_command, until
@@ -38,9 +38,9 @@ class DaemonRig:
         return {vid: await v.open_orders() for vid, v in self.s.venues.items()}
 
 
-def client_app(rig) -> BTCB2App:
+def client_app(rig) -> XbtApp:
     remote = RemoteEngine(rig.path, has_bot=False, retry_s=0.02)
-    return BTCB2App(
+    return XbtApp(
         remote.market, run_hub=False, book_levels=15, timeframe="1m", mode="dry-run",
         account=remote.account, orders=remote.orders, results=remote.results,
         deposits=remote.deposits, rebalance=remote.rebalance, remote=remote,

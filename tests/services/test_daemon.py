@@ -123,7 +123,7 @@ class TestParar:
 @pytest.mark.spec("RF-30", "RF-31")
 async def test_abre_el_socket_y_lo_cierra_al_parar(tmp_path):
     s = Rig(tmp_path)
-    path = tmp_path / "btcb2t.sock"
+    path = tmp_path / "xbt.sock"
     stop = asyncio.Event()
     daemon = asyncio.create_task(run_daemon(engine_for(s), stop, socket=path))
     await until(path.exists)

@@ -6,7 +6,7 @@ import pytest
 from xbt_terminal.core.bot import BotState
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.remote import RemoteEngine
-from xbt_terminal.ui.app import BTCB2App, ConfirmScreen, OrdersScreen
+from xbt_terminal.ui.app import ConfirmScreen, OrdersScreen, XbtApp
 from xbt_terminal.ui.status import StatusBar
 
 from ..services.test_remote import Daemon
@@ -18,7 +18,7 @@ class AttachRig:
         self.daemon = Daemon(tmp_path)
         self.remote = RemoteEngine(self.daemon.path, has_bot=True, retry_s=0.02)
         self.hub = self.remote.market  # el mercado llega del daemon (D-66)
-        self.app = BTCB2App(
+        self.app = XbtApp(
             self.hub,
             run_hub=False,
             book_levels=15,

@@ -86,7 +86,7 @@ async def rig(tmp_path):
     s = Rig(tmp_path)
     s.bot = FakeBot()
     s.engine = Engine(s.hub, mode="dry-run", orders=s.orders, bot=s.bot, journal=s.journal)
-    s.path = tmp_path / "btcb2t.sock"
+    s.path = tmp_path / "xbt.sock"
     s.server = ControlServer(s.engine, s.path, every_s=0.05)
     await s.server.start()
     yield s

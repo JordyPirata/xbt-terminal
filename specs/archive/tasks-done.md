@@ -879,3 +879,12 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   `move_window_ms` de book quieto daba `move` 0 (d-60003f).
 - Hecho: `BotService._forget` borra el primero solo si el segundo también ha
   salido de la ventana. Test `test_salto_tras_un_book_quieto_cuenta`.
+
+### T-75 El comando y las rutas pasan a `xbt` · `done` · RF-30, RF-31, RNF-20 · D-73
+- Script `xbt` en `pyproject.toml`; `APP_DIR`, lock y socket `xbt`; `prog` y
+  mensajes del CLI; `BTCB2App` → `XbtApp`; docstrings y títulos.
+- Sin tocar símbolos ni tickers de los venues, ni decisiones viejas.
+- Tests: los de rutas, CLI, socket y cliente esperan `xbt` (primero en rojo).
+- Hecho: script `xbt`, `APP_DIR = "xbt"`, `xbt.lock` y `xbt.sock`, `prog="xbt"`
+  y mensajes; `XbtApp`; títulos de la spec y de `config.example.toml`. Los
+  símbolos y tickers de los venues siguen como `BTCB2`. 1364 tests.

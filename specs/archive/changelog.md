@@ -136,3 +136,8 @@ Es historia: la spec vigente es la de `requirements.md`.
 > muy repentinos. d-e988bd quedó colgada porque otro comprador se llevó en 15 ms
 > el ask barato que dejó un barrido de −2.8 % en Neoxa. `max_move_pct` y
 > `move_window_ms` en `[bot]`, opcionales; el movimiento se apunta en `bot_fire`.
+
+> **Cambio v0.26 → v0.27 (D-73): el comando y las rutas pasan a `xbt`
+> (RF-30, RF-31, RNF-20).** Pedido por el usuario: el proyecto ya se llama
+> `xbt-terminal`. `xbt daemon`, `xbt`, `~/.config/xbt`, `~/.local/state/xbt`.
+> Los símbolos y tickers de los venues no cambian.

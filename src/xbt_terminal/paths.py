@@ -2,9 +2,9 @@
 
 Por defecto siguen XDG y no dependen del directorio de arranque (RNF-20):
 
-    config  $XDG_CONFIG_HOME/btcb2t/config.toml   (~/.config/btcb2t)
-    .env    $XDG_CONFIG_HOME/btcb2t/.env
-    datos   $XDG_STATE_HOME/btcb2t                (~/.local/state/btcb2t)
+    config  $XDG_CONFIG_HOME/xbt/config.toml   (~/.config/xbt)
+    .env    $XDG_CONFIG_HOME/xbt/.env
+    datos   $XDG_STATE_HOME/xbt                (~/.local/state/xbt)
 
 Los flags las cambian; una ruta relativa se resuelve contra el cwd al arrancar
 y queda absoluta. El directorio de datos se crea `0700` y guarda el journal y el
@@ -22,8 +22,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_DIR = "btcb2t"
-LOCK_FILE = "btcb2t.lock"
+APP_DIR = "xbt"
+LOCK_FILE = "xbt.lock"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +86,7 @@ class AlreadyRunning(Exception):
 
 
 class InstanceLock:
-    """`flock` exclusivo sobre `<datos>/btcb2t.lock`, mientras corre la terminal.
+    """`flock` exclusivo sobre `<datos>/xbt.lock`, mientras corre la terminal.
 
     El kernel lo suelta si el proceso muere, así que un lock huérfano no bloquea.
     El fichero guarda el pid, solo para el mensaje de error; no se borra al salir

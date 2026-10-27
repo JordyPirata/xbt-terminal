@@ -1,4 +1,4 @@
-"""Cliente del socket del daemon, para la pantalla `btcb2t` (D-66).
+"""Cliente del socket del daemon, para la pantalla `xbt` (D-66).
 
 `RemoteEngine` mantiene la conexión (y la rehace si el daemon se va) y guarda
 la última foto. `RemoteAccount` y `RemoteBot` dan de ella la misma cara que la
@@ -87,7 +87,7 @@ async def _open(path: Path) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]
         return await asyncio.open_unix_connection(str(path), limit=LIMIT)
     except (FileNotFoundError, ConnectionRefusedError) as exc:
         raise DaemonGone(
-            f"no hay daemon escuchando en {path}: arráncalo con `btcb2t daemon` "
+            f"no hay daemon escuchando en {path}: arráncalo con `xbt daemon` "
             "(o indica su socket con --socket)"
         ) from exc
     except OSError as exc:  # p. ej. una ruta de más de 107 bytes, o sin permiso

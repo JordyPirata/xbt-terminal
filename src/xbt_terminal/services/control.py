@@ -1,4 +1,4 @@
-"""Socket de control del daemon: lo que ve y hace el cliente (`btcb2t`, D-66).
+"""Socket de control del daemon: lo que ve y hace el cliente (`xbt`, D-66).
 
 Un socket Unix `0600` en el directorio de datos (que es `0700`): solo el mismo
 usuario llega, y se entra por SSH (D-61). JSON por líneas (`wire`). Al
@@ -44,7 +44,7 @@ from .wire import ClientView, FeeRow, Fees, Rows, decode, dumps, loads, market_v
 
 log = logging.getLogger(__name__)
 
-SOCKET_NAME = "btcb2t.sock"
+SOCKET_NAME = "xbt.sock"
 MarketEvent = BookSnapshot | BookDelta | Trade | ConnState
 MAX_SOCKET_PATH = 107  # bytes: sun_path de Linux (108) menos el NUL final
 

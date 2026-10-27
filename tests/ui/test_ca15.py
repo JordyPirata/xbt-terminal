@@ -13,7 +13,7 @@ from xbt_terminal.services.daemon import run_daemon
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.remote import RemoteEngine, probe
-from xbt_terminal.ui.app import BTCB2App, ConfirmScreen
+from xbt_terminal.ui.app import ConfirmScreen, XbtApp
 from xbt_terminal.ui.status import StatusBar
 
 from ..fakes import FakeFeed
@@ -50,7 +50,7 @@ def attached_app(rig, has_bot=True):
     feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
     hub = MarketHub(feeds, history=50, retry_s=0.01, clock=rig.clock)
     remote = RemoteEngine(rig.socket, has_bot=has_bot, retry_s=0.02)
-    return BTCB2App(
+    return XbtApp(
         hub,
         book_levels=15,
         timeframe="1m",

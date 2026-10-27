@@ -1,4 +1,4 @@
-"""Terminal BTCB2: operación manual en NonKYC y Neoxa. Ver specs/mvp/."""
+"""xbt-terminal: operación manual de BTCB2 contra BTC en NonKYC y Neoxa. Ver specs/mvp/."""
 
 import logging
 
