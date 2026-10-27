@@ -37,6 +37,6 @@ falta leerlo.
 
 ## Referencia
 
-`../btcb2-arb` tiene clientes síncronos de NonKYC y Neoxa ya probados en real:
-consultar para auth, endpoints y rarezas de las APIs (resumen en design.md §4).
-No copiar su código tal cual: es síncrono y con otro modelo.
+Las APIs de NonKYC y Neoxa: lo comprobado en real está en design.md §4,
+`docs/api/README.md` y los fixtures de `tests/fixtures/`. `btcb2-arb` ya no es
+referencia: no era fiable y se eliminó (2026-10-27).
