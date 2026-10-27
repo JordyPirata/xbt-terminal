@@ -6,9 +6,10 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-10-27, 22:30 UTC)
 
-- Spec en **v0.28** (changelog en `specs/archive/changelog.md`). T-77 hecha
-  en la rama `t-77-lead-venue`, **sin fusionar en `main` ni desplegar** (la
-  versión del servidor no la tiene). Hechas T-61 a T-65 y T-67 a T-77. 1378
+- Spec en **v0.28** (changelog en `specs/archive/changelog.md`). T-77
+  fusionada en `main` e instalada en el servidor (`960f727`, con
+  `lead_venue = "nx"` en su config), **pero el daemon sigue con la versión
+  anterior hasta que el usuario lo reinicie**. Hechas T-61 a T-65 y T-67 a T-77. 1378
   tests, ruff limpio, `spec_trace` 67/72 (sin test: RNF-01, RNF-21/T-32, CA-01, CA-02 y
   CA-10, pasados en real: D-20, D-43, D-57).
 - **Arquitectura:** `xbt daemon [--live]` es el único proceso que habla con
@@ -24,7 +25,10 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   usar un alias `servidor` en `~/.ssh/config`; hora local CST) desde el 2026-10-27 03:56:02 UTC: servicio systemd de
   sistema `xbt` (no `--user`; pararlo o arrancarlo pide sudo), `ExecStart=
   /home/jordypirata/.local/bin/xbt daemon --live`, `Restart=on-failure`.
-  `xbt` instalado con `uv tool` (sin el repo allí). Bot `armed` desde las
+  `xbt` instalado con `uv tool install --reinstall ~/xbt-terminal`, un clon
+  que no llega a GitHub: el código se le sube desde local con
+  `git push servidor:xbt-terminal main:refs/heads/incoming` y allí
+  `git merge --ff-only incoming && git branch -d incoming`. Bot `armed` desde las
   03:56:42 UTC. Pantalla: `ssh -t servidor env COLORTERM=truecolor
   xbt`.
 - **Migración desde local (2026-10-27):** daemon local parado a las 03:38 UTC
@@ -83,9 +87,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-1. **Desplegar T-77** (D-75), con permiso del usuario: fusionar
-   `t-77-lead-venue` en `main`, actualizar el `xbt` del servidor (`uv tool`),
-   añadir `lead_venue = "nx"` en `[bot]` de su config, que el usuario haga
+1. **Terminar de desplegar T-77** (D-75): ya fusionada, instalada y con
+   `lead_venue = "nx"` en la config del servidor (copia previa en
+   `~/.config/xbt/config.toml.bak-pre-t77`). Falta que el usuario haga
    `sudo systemctl restart xbt` y rearmar con `bot on` (la confirmación dice
    "envía primero la pierna de Neoxa"). Después mirar `bot_miss` (cuántos y
    cuándo), `hanging_leg` (deberían quedar solo las de NonKYC) y que no frene
