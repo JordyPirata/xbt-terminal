@@ -965,3 +965,29 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   §6.1 y §6.9 ajustados. 21 tests nuevos (test_book_check, `TestFrescura`
   reescrita, dos de CA-18 en test_bot_service, `resync` en los dos streams,
   config y arranque).
+
+### T-79 `risk.check` y `commands.parse` más cortas, mismo comportamiento · `done` · RF-06, RF-07, RF-08, RF-10, CA-04 · D-77
+- Tests primero: casos que fijen el orden de las violaciones de `check` cuando
+  salen varias a la vez y los mensajes de error de `parse` de cada comando, si
+  `tests/unit/test_risk.py` y `tests/unit/test_commands.py` no los cubren ya.
+  Los tests existentes no cambian.
+- `core/risk.py`: `check` llama a una función privada por sección (`_stale`,
+  `_size`, `_grid`, `_mid_deviation`, `_self_cross`, `_balance`, `_exposure`),
+  cada una devuelve `list[Violation]`; sin nombres de una letra (`m`).
+- `core/commands.py`: `parse` busca el comando en un diccionario nombre →
+  función (`_parse_order`, `_parse_double`, ...); un helper para validar un
+  `Literal` quita los `# type: ignore` de `parse`.
+- Hecho cuando: `uv run ruff check core/risk.py core/commands.py --select
+  C901,PLR0911,PLR0912,PLR0915` sin avisos (desde `src/xbt_terminal`), y
+  pytest, ruff y `spec_trace` como siempre.
+- Hecho: tests de caracterización primero, en verde con el código de antes
+  (`TestOrdenYTextoDeLasViolaciones` en `test_risk.py`: orden y texto exactos
+  de las violaciones de una compra y una venta con casi todo mal y de un book
+  sin mid; `test_texto_exacto_de_cada_error` y
+  `test_valores_elegidos_en_minusculas` en `test_commands.py`). `check` queda
+  en una lista de siete funciones (`_stale`, `_size`, `_grid`,
+  `_mid_deviation`, `_self_cross`, `_balance`, `_exposure`); `parse`, en
+  `_PARSERS` (nombre → función, `_no_args` para los sin argumentos). `cast` en
+  vez de `# type: ignore` (también en `_venue`); alias `BotAction` y
+  `BOT_ACTIONS`. C901/PLR0911/PLR0912/PLR0915 sin avisos en los dos ficheros;
+  pyright sin errores en ellos.

@@ -216,3 +216,48 @@ class TestRebalance:
     def test_con_argumentos_es_error(self):
         with pytest.raises(CommandError):
             parse("rebalance nk")
+
+
+@pytest.mark.spec("RF-06", "RF-07", "RF-08")
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("", "comando vacío"),
+        (
+            "foo",
+            "comando desconocido 'foo': buy, sell, dbl, orders, cancel, tf, bot, results,"
+            " deposit, rebalance, help",
+        ),
+        ("buy", "uso: buy <venue> <cantidad|N%> <precio>"),
+        ("buy xx 1 1", "venue desconocido 'xx': usar nk o nx"),
+        ("buy nk 1,5 1", "cantidad '1,5': usar punto decimal, no coma"),
+        ("sell nk abc 1", "cantidad 'abc' no es un número"),
+        ("buy nk 0 1", "cantidad debe ser mayor que 0"),
+        ("buy nk % 1", "porcentaje vacío: escribir p. ej. 25%"),
+        ("buy nk 101% 1", "porcentaje '101%': como mucho 100%"),
+        ("dbl 1 nk 1 nk 2", "la orden doble necesita venues distintos en cada pierna"),
+        ("orders a b", "uso: orders [venue]"),
+        ("cancel", "uso: cancel <order_id> | cancel <venue> | cancel all"),
+        ("tf 2m", "timeframe '2m': usar 1m, 5m, 1h, 4h, 1d"),
+        ("bot", "uso: bot on|off|status"),
+        ("bot x", "uso: bot on|off|status"),
+        ("results x", "uso: results [dia|7d|todo]"),
+        ("deposit nk", "uso: deposit"),
+        ("rebalance nk", "uso: rebalance"),
+        ("help me", "uso: help"),
+        ("? x", "uso: help"),
+    ],
+)
+def test_texto_exacto_de_cada_error(text, message):
+    """Fija los mensajes de error (D-77: partir `parse` no los cambia)."""
+    with pytest.raises(CommandError) as exc:
+        parse(text)
+    assert str(exc.value) == message
+
+
+@pytest.mark.spec("RF-06", "RF-07")
+def test_valores_elegidos_en_minusculas():
+    assert parse("TF 1H") == SetTimeframe("1h")
+    assert parse("Bot STATUS") == BotCommand("status")
+    assert parse("results 7D") == ShowResults("7d")
+    assert parse("SELL NX 25% 0.004") == PlaceOrder("nx", "sell", Percent(D("25")), D("0.004"))

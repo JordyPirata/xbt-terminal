@@ -23,9 +23,10 @@ Tareas: T-05, T-21, T-23, T-40, T-42, T-45
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Literal, get_args
+from typing import Literal, cast, get_args
 
 from .models import Side, Timeframe, VenueId
 from .results import RANGES, Range
@@ -110,11 +111,15 @@ class ShowHelp:
     pass
 
 
+BotAction = Literal["on", "off", "status"]
+BOT_ACTIONS: tuple[str, ...] = get_args(BotAction)
+
+
 @dataclass(frozen=True, slots=True)
 class BotCommand:
     """Armar, parar o consultar el bot de fase 2 (RF-18, RF-23)."""
 
-    action: Literal["on", "off", "status"]
+    action: BotAction
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +159,7 @@ def _venue(token: str) -> VenueId:
     venue = token.lower()
     if venue not in VENUES:
         raise CommandError(f"venue desconocido {token!r}: usar {' o '.join(VENUES)}")
-    return venue  # type: ignore[return-value]
+    return cast(VenueId, venue)
 
 
 def _positive(token: str, what: str) -> Decimal:
@@ -184,78 +189,102 @@ def _arity(name: str, args: list[str], *counts: int) -> None:
         raise CommandError(f"uso: {USAGE[name]}")
 
 
+def _parse_order(side: Side, args: list[str]) -> Command:
+    _arity(side, args, 3)
+    return PlaceOrder(
+        venue=_venue(args[0]),
+        side=side,
+        qty=_quantity(args[1]),
+        price=_positive(args[2], "precio"),
+    )
+
+
+def _parse_double(args: list[str]) -> Command:
+    _arity("dbl", args, 5)
+    qty = _positive(args[0], "cantidad")
+    buy_venue, sell_venue = _venue(args[1]), _venue(args[3])
+    if buy_venue == sell_venue:
+        raise CommandError("la orden doble necesita venues distintos en cada pierna")
+    return DoubleOrder(
+        qty=qty,
+        buy_venue=buy_venue,
+        buy_price=_positive(args[2], "precio de compra"),
+        sell_venue=sell_venue,
+        sell_price=_positive(args[4], "precio de venta"),
+    )
+
+
+def _parse_orders(args: list[str]) -> Command:
+    _arity("orders", args, 0, 1)
+    return ListOrders(_venue(args[0]) if args else None)
+
+
+def _parse_cancel(args: list[str]) -> Command:
+    _arity("cancel", args, 1)
+    target = args[0]
+    if target.lower() == "all":
+        return CancelAll()
+    if target.lower() in VENUES:
+        return CancelVenue(_venue(target))
+    return CancelOrder(target)  # los ids de orden distinguen mayúsculas
+
+
+def _parse_timeframe(args: list[str]) -> Command:
+    _arity("tf", args, 1)
+    timeframe = args[0].lower()
+    if timeframe not in TIMEFRAMES:
+        raise CommandError(f"timeframe {args[0]!r}: usar {', '.join(TIMEFRAMES)}")
+    return SetTimeframe(cast(Timeframe, timeframe))
+
+
+def _parse_bot(args: list[str]) -> Command:
+    _arity("bot", args, 1)
+    action = args[0].lower()
+    if action not in BOT_ACTIONS:
+        raise CommandError(f"uso: {USAGE['bot']}")
+    return BotCommand(cast(BotAction, action))
+
+
+def _parse_results(args: list[str]) -> Command:
+    _arity("results", args, 0, 1)
+    rng = args[0].lower() if args else "dia"
+    if rng not in RANGES:
+        raise CommandError(f"uso: {USAGE['results']}")
+    return ShowResults(cast(Range, rng))
+
+
+def _no_args(name: str, command: Command) -> Callable[[list[str]], Command]:
+    """Comando que no admite argumentos; `name` es la entrada de USAGE."""
+
+    def parse_it(args: list[str]) -> Command:
+        _arity(name, args, 0)
+        return command
+
+    return parse_it
+
+
+_PARSERS: dict[str, Callable[[list[str]], Command]] = {
+    "buy": lambda args: _parse_order("buy", args),
+    "sell": lambda args: _parse_order("sell", args),
+    "dbl": _parse_double,
+    "orders": _parse_orders,
+    "cancel": _parse_cancel,
+    "tf": _parse_timeframe,
+    "bot": _parse_bot,
+    "results": _parse_results,
+    "deposit": _no_args("deposit", ShowDeposits()),
+    "rebalance": _no_args("rebalance", ShowRebalance()),
+    "help": _no_args("help", ShowHelp()),
+    "?": _no_args("help", ShowHelp()),
+}
+
+
 def parse(text: str) -> Command:
+    """Traduce una línea de la TUI a un comando; `CommandError` si no tiene sentido."""
     tokens = text.split()
     if not tokens:
         raise CommandError("comando vacío")
-    name, args = tokens[0].lower(), tokens[1:]
-
-    if name in ("buy", "sell"):
-        _arity(name, args, 3)
-        return PlaceOrder(
-            venue=_venue(args[0]),
-            side=name,  # type: ignore[arg-type]
-            qty=_quantity(args[1]),
-            price=_positive(args[2], "precio"),
-        )
-
-    if name == "dbl":
-        _arity(name, args, 5)
-        qty = _positive(args[0], "cantidad")
-        buy_venue, sell_venue = _venue(args[1]), _venue(args[3])
-        if buy_venue == sell_venue:
-            raise CommandError("la orden doble necesita venues distintos en cada pierna")
-        return DoubleOrder(
-            qty=qty,
-            buy_venue=buy_venue,
-            buy_price=_positive(args[2], "precio de compra"),
-            sell_venue=sell_venue,
-            sell_price=_positive(args[4], "precio de venta"),
-        )
-
-    if name == "orders":
-        _arity(name, args, 0, 1)
-        return ListOrders(_venue(args[0]) if args else None)
-
-    if name == "cancel":
-        _arity(name, args, 1)
-        target = args[0]
-        if target.lower() == "all":
-            return CancelAll()
-        if target.lower() in VENUES:
-            return CancelVenue(_venue(target))
-        return CancelOrder(target)  # los ids de orden distinguen mayúsculas
-
-    if name == "tf":
-        _arity(name, args, 1)
-        if args[0].lower() not in TIMEFRAMES:
-            raise CommandError(f"timeframe {args[0]!r}: usar {', '.join(TIMEFRAMES)}")
-        return SetTimeframe(args[0].lower())  # type: ignore[arg-type]
-
-    if name == "bot":
-        _arity(name, args, 1)
-        action = args[0].lower()
-        if action not in ("on", "off", "status"):
-            raise CommandError(f"uso: {USAGE['bot']}")
-        return BotCommand(action)  # type: ignore[arg-type]
-
-    if name == "results":
-        _arity(name, args, 0, 1)
-        rng = args[0].lower() if args else "dia"
-        if rng not in RANGES:
-            raise CommandError(f"uso: {USAGE['results']}")
-        return ShowResults(rng)  # type: ignore[arg-type]
-
-    if name == "deposit":
-        _arity(name, args, 0)
-        return ShowDeposits()
-
-    if name == "rebalance":
-        _arity(name, args, 0)
-        return ShowRebalance()
-
-    if name in ("help", "?"):
-        _arity("help", args, 0)
-        return ShowHelp()
-
-    raise CommandError(f"comando desconocido {tokens[0]!r}: {', '.join(USAGE)}")
+    parser = _PARSERS.get(tokens[0].lower())
+    if parser is None:
+        raise CommandError(f"comando desconocido {tokens[0]!r}: {', '.join(USAGE)}")
+    return parser(tokens[1:])

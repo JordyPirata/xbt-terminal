@@ -220,3 +220,57 @@ def test_mensajes_legibles():
 def test_peticion_de_otro_venue_es_error_de_programacion():
     with pytest.raises(ValueError):
         check(req(venue="nx"), ctx(), LIMITS)
+
+
+@pytest.mark.spec("RF-10", "CA-04")
+class TestOrdenYTextoDeLasViolaciones:
+    """Fija el orden y el texto de cada violación (D-77: partir `check` no los cambia)."""
+
+    def test_compra_con_casi_todo_mal(self):
+        poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
+        context = ctx(book_ts=NOW - 20_000, open_orders=(own("sell", "1050"),), balances=poco)
+        got = check(req("buy", qty="0.10005", price="1100.001"), context, LIMITS)
+        assert [(v.code, v.message) for v in got] == [
+            ("stale_data", "book sin actualizar hace más de 15 s"),
+            (
+                "order_size",
+                "nocional 110.05510005 > 15 % del inventario total (400.00000000 USDT)"
+                " = 60.00000000",
+            ),
+            ("tick", "precio 1100.001 fuera del tick 0.01"),
+            ("lot", "cantidad 0.10005 fuera del lote 0.0001"),
+            ("mid_deviation", "precio a 10.00% del mid 1000 (máx. 5%)"),
+            ("self_cross", "compra a 1100.001 cruza tu venta abierta a 1050"),
+            ("insufficient_balance", "hace falta 110.27521025 USDT, disponible 100.00000000"),
+        ]
+
+    def test_venta_con_casi_todo_mal(self):
+        rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
+        market = replace(MARKET, min_qty=D("0.2"), min_notional=D("300"))
+        context = ctx(market=market, open_orders=(own("buy", "950"),), balances=rico)
+        got = check(req("sell", qty="0.15005", price="900.005"), context, LIMITS)
+        assert [(v.code, v.message) for v in got] == [
+            (
+                "order_size",
+                "nocional 135.04575025 > 15 % del inventario total (400.00000000 USDT)"
+                " = 60.00000000",
+            ),
+            ("tick", "precio 900.005 fuera del tick 0.01"),
+            ("lot", "cantidad 0.15005 fuera del lote 0.0001"),
+            ("min_qty", "cantidad 0.15005 < mínimo 0.2 BTCB2"),
+            ("min_notional", "nocional 135.04575025 < mínimo 300 USDT"),
+            ("mid_deviation", "precio a 10.00% del mid 1000 (máx. 5%)"),
+            ("self_cross", "venta a 900.005 cruza tu compra abierta a 950"),
+            ("insufficient_balance", "hace falta 0.15005000 BTCB2, disponible 0.10000000"),
+            ("venue_exposure", "valor en nk tras la orden 684.99575025 > tope 500 USDT"),
+        ]
+
+    def test_sin_mid_ni_inventario(self):
+        """Sin mid no se mira ni la desviación ni la exposición."""
+        rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
+        context = ctx(best_ask=None, inventory_value=None, balances=rico)
+        got = check(req("buy", qty="0.01"), context, LIMITS)
+        assert [(v.code, v.message) for v in got] == [
+            ("stale_data", "sin mid fiable (book vacío, incompleto o cruzado)"),
+            ("order_size", "no se puede calcular el inventario total para el tope del 15 %"),
+        ]

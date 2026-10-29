@@ -11,7 +11,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   del book de cada venue con el REST; si no coincide, el book queda en duda
   (bot "book viejo", órdenes `stale_data`), se vuelve a pedir el book y se
   apunta `book_resync`. La conexión viva ya no cuenta como frescura. Hechas
-  T-61 a T-65 y T-67 a T-78. 1399 tests, ruff limpio, `spec_trace` 69/74 (sin
+  T-61 a T-65 y T-67 a T-79. 1423 tests, ruff limpio, `spec_trace` 69/74 (sin
   test: RNF-01, RNF-21/T-32, CA-01, CA-02 y CA-10, pasados en real: D-20,
   D-43, D-57).
 - **T-77 desplegada** desde el 2026-10-28 23:55 UTC, con `lead_venue = "nx"`.
@@ -88,9 +88,6 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Tareas abiertas
 
-- **T-79** `todo` (D-77): `risk.check` y `commands.parse` más cortas, sin
-  cambio de comportamiento. Primera parte de la revisión de legibilidad; las
-  siguientes partes están listadas en D-77.
 - **T-66** `todo`: CA-16 en real. Parte local hecha (2026-10-26 23:32 UTC,
   t-2c6b97 colocada y cancelada desde la pantalla, en D-66). Falta la del
   server por SSH, con permiso del usuario.
@@ -101,6 +98,11 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
+0. **Legibilidad (D-77):** T-79 hecha (`risk.check` y `commands.parse`
+   partidas, mismo comportamiento; no cambia nada en el servidor). Las partes
+   siguientes (`wire.decode`, `ui/format.py`, `faults`, `ui/screens/`,
+   parámetros de `XbtApp`) esperan a que el usuario las pida, cada una con su
+   tarea.
 1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
    salen y en qué venue (en Neoxa se espera ~1 cada 3 a 4 min por carreras,
    D-76; muchos más, o en NonKYC con el book bien, sería un falso positivo que

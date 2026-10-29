@@ -182,20 +182,7 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 
 ## M17 — Legibilidad (D-77)
 
-### T-79 `risk.check` y `commands.parse` más cortas, mismo comportamiento · `todo` · RF-06, RF-07, RF-08, RF-10, CA-04 · D-77
-- Tests primero: casos que fijen el orden de las violaciones de `check` cuando
-  salen varias a la vez y los mensajes de error de `parse` de cada comando, si
-  `tests/unit/test_risk.py` y `tests/unit/test_commands.py` no los cubren ya.
-  Los tests existentes no cambian.
-- `core/risk.py`: `check` llama a una función privada por sección (`_stale`,
-  `_size`, `_grid`, `_mid_deviation`, `_self_cross`, `_balance`, `_exposure`),
-  cada una devuelve `list[Violation]`; sin nombres de una letra (`m`).
-- `core/commands.py`: `parse` busca el comando en un diccionario nombre →
-  función (`_parse_order`, `_parse_double`, ...); un helper para validar un
-  `Literal` quita los `# type: ignore` de `parse`.
-- Hecho cuando: `uv run ruff check core/risk.py core/commands.py --select
-  C901,PLR0911,PLR0912,PLR0915` sin avisos (desde `src/xbt_terminal`), y
-  pytest, ruff y `spec_trace` como siempre.
+### T-79 `risk.check` y `commands.parse` más cortas, mismo comportamiento · `done` · RF-06, RF-07, RF-08, RF-10, CA-04 · D-77
 
 ## Correcciones
 
