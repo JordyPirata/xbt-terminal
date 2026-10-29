@@ -79,8 +79,9 @@ def rest():
         yield mock
 
 
-async def collect(server: FakeNeoxa, until, timeout: float = 3.0):
-    """Eventos del stream hasta que `until(events)` sea cierto."""
+async def collect(server: FakeNeoxa, until, timeout: float = 3.0, on_event=None):
+    """Eventos del stream hasta que `until(events)` sea cierto. `on_event(venue,
+    events)`, si se da, se espera tras cada evento."""
     async with serve(server.handler, "127.0.0.1", 0) as srv:
         port = srv.sockets[0].getsockname()[1]
         async with httpx.AsyncClient() as http:
@@ -100,6 +101,8 @@ async def collect(server: FakeNeoxa, until, timeout: float = 3.0):
                 async with asyncio.timeout(timeout):
                     async for ev in stream:
                         events.append(ev)
+                        if on_event is not None:
+                            await on_event(venue, events)
                         if until(events):
                             return events
             finally:
@@ -199,3 +202,23 @@ class TestReconexion:
         server = FakeNeoxa("error", "stay")
         events = await collect(server, lambda evs: ("ws", "up") in states(evs))
         assert states(events) == [("ws", "reconnecting"), ("ws", "up")]
+
+
+@pytest.mark.spec("RNF-24")
+async def test_resync_reconecta_y_llega_otro_book(rest):
+    """D-76: cada mensaje de Neoxa es el book entero, así que basta reconectar."""
+    server = FakeNeoxa("stay", "stay")
+    asked = []
+
+    async def resync_after_first_book(venue, events):
+        if not asked and any(isinstance(e, BookSnapshot) for e in events):
+            asked.append(True)
+            await venue.resync()
+
+    events = await collect(
+        server,
+        lambda evs: len([e for e in evs if isinstance(e, BookSnapshot)]) == 2,
+        on_event=resync_after_first_book,
+    )
+    assert len(server.received) == 2
+    assert states(events)[0] == ("ws", "up") and states(events)[-1] == ("ws", "up")

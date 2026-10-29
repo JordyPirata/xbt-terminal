@@ -1864,9 +1864,11 @@ Al volver a suscribirse el usuario, el book quedó bien.
   local no permite. Los trades contra el pool de NonKYC salen dentro del spread
   (0.00318713 con bid 0.00318273 y ask 0.0031987, 2026-10-29 20:03 UTC): habría
   falsos positivos continuos.
-- Sin comprobar: que el REST y el WS de Neoxa den el mismo tope con los niveles
-  AMM. T-78 lo mira antes en real; si no coinciden, el contraste es solo para
-  NonKYC y se apunta aquí.
+- Neoxa, comprobado en T-78 (2026-10-29 ~20:40 UTC, 4 min, contraste cada
+  3 s, solo lecturas): 68 iguales, 6 descartados por un mensaje durante el REST
+  y 1 distinto (la cantidad del mejor bid, una carrera: el REST ya traía el
+  cambio que el WS mandó después). El contraste vale para los dos venues; en
+  Neoxa un falso desacuerdo cuesta una reconexión (~1 cada 3 a 4 min).
 - Con esto, el book congelado de hoy se habría visto en el primer contraste tras
   el primer cambio que no llegó, ~2 h antes de d-9820a4.
 **Toca:** RNF-16, RNF-24, RF-10, RF-19, CA-18, design.md §4 (tabla de

@@ -71,6 +71,13 @@ async def test_el_desfase_solo_bloquea_en_live(tmp_path):
     await engine.hub.aclose()
 
 
+@pytest.mark.spec("RNF-24")
+async def test_el_hub_contrasta_el_book_y_lo_apunta(tmp_path):
+    _, engine = engine_for(tmp_path)
+    assert engine.hub._book_check_s == 5 and engine.hub._journal is engine.orders._journal
+    await engine.hub.aclose()
+
+
 @pytest.mark.spec("RNF-14")
 async def test_un_registro_de_fallos_para_todos(tmp_path):
     """Hub, cuenta y órdenes reportan al mismo, con el journal: la barra los cuenta todos."""

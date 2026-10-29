@@ -932,3 +932,36 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   falla porque ya llenó no lee la orden aparte: la trae la cuenta (design.md
   §6.9 ajustado). 14 tests nuevos (`TestPrimeraPierna` en test_double y
   test_bot_service, y `lead_venue` en test_config_bot).
+
+### T-78 El book quieto se contrasta con el REST · `done` · RNF-16, RNF-24, RF-10, RF-19, CA-18 · dep T-77 · D-76
+- Antes del código, en real y solo con lecturas: comparar el tope del WS y del
+  REST de Neoxa unos minutos (niveles AMM incluidos). Si no coinciden, el
+  contraste queda solo para NonKYC y se apunta en D-76.
+- `risk.book_check_s` en la config (5 por defecto) y en `config.example.toml`.
+- Servicio de mercado del daemon: contraste periódico por venue con
+  `book_snapshot`; descarta el que se cruza con un mensaje del book; al
+  desacuerdo, marca el book no fresco, pide la resuscripción al adaptador y apunta
+  `book_resync`.
+- `OrderService.fresh_at`: último mensaje del book o último contraste que
+  coincide; fuera el latido de la conexión.
+- Adaptadores: NonKYC vuelve a pedir `subscribeOrderbook` en el mismo WS; Neoxa
+  reconecta.
+- design.md §4 (`stale_data`) y §6.9 ajustados antes de implementar.
+- Tests (CA-18): WS conectado sin cambios y REST distinto → bot sin disparar,
+  `stale_data`, `book_resync`, y dispara con el book nuevo; quieto y coincidente
+  → fresco más allá de `stale_after_s`; REST fallando → viejo a los
+  `stale_after_s`; mensaje durante el REST → contraste descartado. Ajustar los
+  tests de D-13 que esperan frescura por el latido.
+- Hecho: Neoxa comprobada en real antes del código (68 iguales, 1 carrera, 6
+  descartados en 4 min; en D-76). `risk.book_check_s` opcional (5 por defecto,
+  mínimo 1) en `RiskLimits` y `config.example.toml`. `MarketHub(journal=,
+  book_check_s=)`: tarea de contraste por venue junto al stream,
+  `check_book(vid)` (True/False/None), `VenueMarket.checked_at`, `suspect` y
+  `book_events`; un snapshot quita `suspect`, un delta no; evento `book_resync`
+  en el journal con los dos topes y aviso en `diag.log`. `StreamingVenue.resync`
+  cierra el WS (Neoxa); `NonKYCVenue.resync` vuelve a pedir el book en el mismo
+  WS y la sesión descarta lo que llega hasta el snapshot (vale con un sequence
+  menor). `OrderService.fresh_at` sin el latido de la conexión. design.md §4,
+  §6.1 y §6.9 ajustados. 21 tests nuevos (test_book_check, `TestFrescura`
+  reescrita, dos de CA-18 en test_bot_service, `resync` en los dos streams,
+  config y arranque).

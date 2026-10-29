@@ -102,6 +102,15 @@ class TestConfig:
         with pytest.raises(ConfigError, match=r"risk.max_clock_skew_s: falta"):
             load_config(path)
 
+    @pytest.mark.spec("RNF-24")
+    def test_contraste_del_book(self, tmp_path):
+        assert load_config(EXAMPLE).risk.book_check_s == 5
+        sin = example_with(tmp_path, "book_check_s           = 5", "")
+        assert load_config(sin).risk.book_check_s == 5  # opcional: por defecto, 5 s
+        cero = example_with(tmp_path, "book_check_s           = 5", "book_check_s = 0")
+        with pytest.raises(ConfigError, match=r"risk\.book_check_s"):
+            load_config(cero)
+
     def test_balances_cada_10s_como_maximo(self, tmp_path):
         p = example_with(tmp_path, "balances_every_s      = 10", "balances_every_s = 11")
         with pytest.raises(ConfigError, match=r"polling\.balances_every_s"):

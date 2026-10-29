@@ -53,6 +53,9 @@ class FakeFeed:
         self.queue: asyncio.Queue = asyncio.Queue()
         self.fail_market = fail_market  # cuántas llamadas a market() fallan antes
         self.calls: list[str] = []
+        # book REST para el contraste de D-76: un BookSnapshot, una excepción o
+        # None (el de siempre)
+        self.rest_book: BookSnapshot | Exception | None = None
 
     def push(self, *events) -> None:
         for ev in events:
@@ -67,7 +70,12 @@ class FakeFeed:
 
     async def book_snapshot(self, depth: int) -> BookSnapshot:
         self.calls.append("book")
-        return book(self.id, "0.00720000", "0.00730000")
+        if isinstance(self.rest_book, Exception):
+            raise self.rest_book
+        return self.rest_book or book(self.id, "0.00720000", "0.00730000")
+
+    async def resync(self) -> None:
+        self.calls.append("resync")
 
     async def recent_trades(self, limit: int):
         return []

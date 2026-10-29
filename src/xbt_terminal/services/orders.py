@@ -729,10 +729,11 @@ class OrderService:
         return tuple(orders.values()), balances
 
     def fresh_at(self, venue: VenueId) -> int | None:
-        """Último momento en que el book se sabe al día (D-13)."""
+        """Último momento en que el book se sabe al día: el último mensaje del book
+        o el último contraste con el REST que coincidió. La conexión viva ya no
+        basta (D-76, corrige D-13); un book en duda no está al día."""
         st = self._hub.state[venue]
-        book = st.book
-        times = [book.received_at] if book.valid and book.received_at is not None else []
-        if st.conn is not None and st.conn.status == "up" and st.conn_at is not None:
-            times.append(st.conn_at)
+        if not st.book.valid or st.suspect:
+            return None
+        times = [t for t in (st.book.received_at, st.checked_at) if t is not None]
         return max(times) if times else None

@@ -63,7 +63,11 @@ class BotRig:
         self.clock = Clock()
         self.feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         self.faults = Faults()
-        self.hub = MarketHub(self.feeds, history=50, retry_s=0.01, clock=self.clock)
+        self.logs = tmp_path / "logs"
+        self.journal = Journal(self.logs, "live" if live else "dry-run", Redactor([]))
+        self.hub = MarketHub(
+            self.feeds, history=50, retry_s=0.01, clock=self.clock, journal=self.journal
+        )
         bal = {"BTC": Balance("BTC", D("1")), "BTCB2": Balance("BTCB2", D("1000"))}
         own = {"nk": bal | (nk_extra or {}), "nx": bal}
         self.venues = {
@@ -71,8 +75,6 @@ class BotRig:
                              clock=self.clock)
             for vid, feed in self.feeds.items()
         }  # fmt: skip
-        self.logs = tmp_path / "logs"
-        self.journal = Journal(self.logs, "live" if live else "dry-run", Redactor([]))
         self.account = AccountService(
             self.venues, journal=self.journal, retry_s=0.01, clock=self.clock, faults=self.faults
         )
@@ -203,6 +205,46 @@ class TestBloqueos:
         await asyncio.sleep(0.1)
         assert rig.orders.doubles == {}
         assert rig.bot.last_skip.reason == "blocked" and "book viejo" in rig.bot.last_skip.detail
+
+    @pytest.mark.spec("RNF-24", "CA-18")
+    async def test_ws_conectado_sin_cambios_y_rest_distinto(self, rig):
+        """d-9820a4: el WS de NonKYC seguía "up" sin mandar cambios y el bid que
+        veía el bot ya no estaba. Con el contraste, no dispara hasta el book nuevo."""
+        rig.books()
+        await rig.until(lambda: rig.hub.state["nx"].book.valid)
+        rig.clock.now += 16_000
+        for vid in ("nk", "nx"):  # latido de la conexión: ya no da frescura
+            rig.hub.apply(vid, ConnState(vid, "market", "ws", "up", 10.0, rig.clock.now))
+        rig.feeds["nx"].rest_book = BookSnapshot(
+            "nx", (Level(D("0.00720000"), D("50")),), (Level(D("0.00730000"), D("50")),), NOW
+        )
+        assert await rig.hub.check_book("nx") is True  # Neoxa confirma su book
+        rig.feeds["nk"].rest_book = BookSnapshot(
+            "nk", (Level(D("0.00690000"), D("50")),), (Level(D("0.00720000"), D("50")),), NOW
+        )
+        assert await rig.hub.check_book("nk") is False
+        rig.bot.arm()
+        await asyncio.sleep(0.1)
+        assert rig.orders.doubles == {}
+        assert rig.bot.last_skip.reason == "blocked" and "book viejo" in rig.bot.last_skip.detail
+        assert [r["venue"] for r in rig.events("book_resync")] == ["nk"]
+        rig.books()  # llega el book nuevo y el cruce sigue
+        await rig.until(lambda: len(rig.orders.doubles) == 1)
+
+    @pytest.mark.spec("RNF-24", "CA-18")
+    async def test_book_quieto_confirmado_dispara_pasado_stale_after_s(self, rig):
+        rig.books()
+        await rig.until(lambda: rig.hub.state["nx"].book.valid)
+        rig.clock.now += 300_000
+        rig.feeds["nk"].rest_book = BookSnapshot(
+            "nk", (Level(D("0.00690000"), D("50")),), (Level(D("0.00700000"), D("50")),), NOW
+        )
+        rig.feeds["nx"].rest_book = BookSnapshot(
+            "nx", (Level(D("0.00720000"), D("50")),), (Level(D("0.00730000"), D("50")),), NOW
+        )
+        assert await rig.hub.check_book("nk") and await rig.hub.check_book("nx")
+        rig.bot.arm()
+        await rig.until(lambda: len(rig.orders.doubles) == 1)
 
     async def test_fallo_del_venue(self, rig):
         rig.hub.state["nx"].error = "RuntimeError: bug"

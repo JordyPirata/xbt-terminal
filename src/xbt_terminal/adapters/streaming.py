@@ -18,8 +18,8 @@ base pone el resto:
 - `timed`: cada respuesta REST con cabecera `Date` actualiza `clock_skew_ms`,
   el desfase del reloj del venue contra el local (RNF-16, D-30).
 
-Spec: RF-01, RF-14, CA-06, RNF-03, RNF-09, RNF-12, RNF-16 · design.md §4, §6.1
-Tareas: T-08, T-09, T-12, T-25, T-29
+Spec: RF-01, RF-14, CA-06, RNF-03, RNF-09, RNF-12, RNF-16, RNF-24 · design.md §4, §6.1
+Tareas: T-08, T-09, T-12, T-25, T-29, T-78
 """
 
 from __future__ import annotations
@@ -191,6 +191,15 @@ class StreamingVenue:
     def _ws_events(self) -> AsyncIterator[MarketEvent]:
         """Una sesión WS: datos (book, deltas, trades); lanza o termina al caer."""
         raise NotImplementedError
+
+    async def resync(self) -> None:
+        """Pide un book nuevo porque el local no coincide con el REST (D-76). Por
+        defecto cierra el WS: el supervisor reconecta y la sesión nueva empieza
+        con un snapshot. Sin WS abierto (respaldo REST), cada vuelta ya lo es."""
+        ws = self._ws
+        if ws is not None:
+            log.warning("%s: book distinto del REST; se reconecta el WS", self.name)
+            await ws.close()
 
     # -- utilidades para los venues --------------------------------------------
 

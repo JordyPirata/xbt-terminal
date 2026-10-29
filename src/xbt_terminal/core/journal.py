@@ -43,6 +43,7 @@ EVENTS = frozenset(
         "bot_miss",  # la primera pierna no llenó (D-75)
         "notice",  # avisos del daemon (RF-30, D-61)
         "value",  # valor de la cuenta (RF-32, D-69)
+        "book_resync",  # book local distinto del REST (RNF-24, D-76)
     }
 )
 

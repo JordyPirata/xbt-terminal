@@ -9,6 +9,14 @@ Por cada venue:
      carga, que ya cuentan en el histórico y sumarían volumen dos veces.
    - Los `ConnState` se guardan para la barra de estado.
 
+Con `book_check_s`, el hub contrasta cada tanto el tope del book local (mejor
+bid y mejor ask, precio y cantidad) con el book REST del venue (RNF-24, D-76):
+el WS de NonKYC puede seguir conectado sin mandar cambios. Si coincide, ese
+momento cuenta como frescura (`checked_at`); si no, el book queda en duda
+(`suspect`) hasta el siguiente snapshot o un contraste que coincida, se pide un
+book nuevo al adaptador y se apunta `book_resync`. Un contraste durante el que
+llega un mensaje del book no cuenta, y un REST fallido no confirma nada.
+
 Los cambios se avisan a los suscriptores como `(venue, qué)`, con `qué` ∈
 market | book | candles | conn. La UI decide cuándo redibujar (throttle). Los
 eventos que el hub acepta (book, trades que no descarta, conexión) también se
@@ -20,27 +28,31 @@ Cada venue corre aparte bajo `supervised` (RNF-14, D-28): un bug en uno se
 reporta a `faults`, marca su mercado caído y se reintenta con backoff, sin
 parar al otro.
 
-Spec: RF-01, RF-02, RF-03, RF-14, RNF-14 · design.md §6.1 · Tareas: T-12, T-13, T-27, T-62
+Spec: RF-01, RF-02, RF-03, RF-14, RNF-14, RNF-24 · design.md §6.1
+Tareas: T-12, T-13, T-27, T-62, T-78
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import aclosing
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 import httpx
 
 from ..adapters.base import MarketData, MarketEvent, VenueError, describe
 from ..adapters.streaming import now_ms
-from ..core.book import L2Book
+from ..core.book import BookRow, L2Book
 from ..core.candles import CandleBuilder
+from ..core.journal import Journal
 from ..core.models import (
     BookDelta,
     BookSnapshot,
     ConnState,
+    Level,
     MarketSpec,
     Timeframe,
     Trade,
@@ -51,6 +63,7 @@ from .faults import Faults, supervised
 log = logging.getLogger(__name__)
 
 TIMEFRAMES: tuple[Timeframe, ...] = ("1m", "5m", "1h", "4h", "1d")
+CHECK_DEPTH = 5  # niveles pedidos al REST en el contraste: solo cuenta el tope
 Listener = Callable[[VenueId, str], None]
 EventListener = Callable[[VenueId, BookSnapshot | BookDelta | Trade | ConnState], None]
 
@@ -69,6 +82,9 @@ class VenueMarket:
     loaded_at: int = 0  # trades anteriores ya están en el histórico
     conn_at: int | None = None  # cuándo llegó el último ConnState (reloj del hub)
     last_trade: Trade | None = field(default=None)
+    checked_at: int | None = None  # último contraste con el REST que coincidió (D-76)
+    suspect: bool = False  # el último contraste no coincidió y no hay book nuevo
+    book_events: int = 0  # mensajes del book aplicados: detectan la carrera del contraste
 
 
 class MarketHub:
@@ -80,8 +96,12 @@ class MarketHub:
         retry_s: float = 5.0,
         clock: Callable[[], int] = now_ms,
         faults: Faults | None = None,
+        journal: Journal | None = None,
+        book_check_s: float | None = None,
     ) -> None:
         self._venues = dict(venues)
+        self._journal = journal
+        self._book_check_s = book_check_s  # None: sin contraste con el REST
         self.faults = faults or Faults(clock=clock)
         self._history = history
         self._retry_s = retry_s
@@ -155,9 +175,57 @@ class MarketHub:
     async def _run_venue(self, vid: VenueId, venue: MarketData) -> None:
         st = self.state[vid]
         await self._load(vid, venue, st)
-        async with aclosing(venue.market_stream()) as stream:
-            async for event in stream:
-                self.apply(vid, event)
+        checks = asyncio.create_task(self._check_books(vid)) if self._book_check_s else None
+        try:
+            async with aclosing(venue.market_stream()) as stream:
+                async for event in stream:
+                    self.apply(vid, event)
+        finally:
+            if checks is not None:
+                checks.cancel()
+                await asyncio.gather(checks, return_exceptions=True)
+
+    async def _check_books(self, vid: VenueId) -> None:
+        assert self._book_check_s is not None
+        while True:
+            await asyncio.sleep(self._book_check_s)
+            try:
+                await self.check_book(vid)
+            except Exception as exc:  # un bug aquí no puede parar el mercado
+                self.faults.report("book-check", exc, venue=vid)
+
+    async def check_book(self, vid: VenueId) -> bool | None:
+        """Contrasta el tope del book local con el REST (RNF-24, D-76). True si
+        coincide, False si no (y pide un book nuevo), None si no hay contraste:
+        sin book, REST fallido o un mensaje del book mientras se esperaba."""
+        st = self.state[vid]
+        if not (st.ready and st.book.valid):
+            return None
+        seen = st.book_events
+        try:
+            rest = await self._venues[vid].book_snapshot(CHECK_DEPTH)
+        except (VenueError, httpx.HTTPError) as exc:
+            log.debug("%s: contraste del book sin REST: %s", vid, describe(exc))
+            return None
+        if st.book_events != seen or not st.book.valid:
+            return None
+        local = _top(*st.book.top(1))
+        # el L2Book borra los niveles con qty 0: el REST se lee igual
+        remote = _top(*((lv for lv in side if lv.qty > 0) for side in (rest.bids, rest.asks)))
+        if local == remote:
+            st.checked_at, st.suspect = self._clock(), False
+            return True
+        st.suspect = True
+        log.warning("%s: book local (%s) distinto del REST (%s)", vid, _text(local), _text(remote))
+        if self._journal is not None:
+            self._journal.write(
+                "book_resync", venue=vid, data={"local": _sides(local), "rest": _sides(remote)}
+            )
+        resync = getattr(self._venues[vid], "resync", None)
+        if resync is not None:
+            await resync()
+        self._notify(vid, "book")
+        return False
 
     async def _load(self, vid: VenueId, venue: MarketData, st: VenueMarket) -> None:
         while True:
@@ -183,6 +251,9 @@ class MarketHub:
         st = self.state[vid]
         if isinstance(event, BookSnapshot | BookDelta):
             st.book.apply(event, received_at=self._clock())
+            st.book_events += 1
+            if isinstance(event, BookSnapshot):
+                st.suspect = False  # un delta sobre un book malo no lo arregla
             self._emit(vid, event)
             self._notify(vid, "book")
         elif isinstance(event, Trade):
@@ -197,3 +268,29 @@ class MarketHub:
             st.conn, st.conn_at = event, self._clock()
             self._emit(vid, event)
             self._notify(vid, "conn")
+
+
+Top = tuple[tuple[Decimal, Decimal] | None, tuple[Decimal, Decimal] | None]
+
+
+def _level(lv: BookRow | Level | None) -> tuple[Decimal, Decimal] | None:
+    return (lv.price, lv.qty) if lv is not None else None
+
+
+def _top(bids: Iterable[BookRow | Level], asks: Iterable[BookRow | Level]) -> Top:
+    """(precio, cantidad) del mejor bid y del mejor ask; None si falta el lado."""
+    best_bid = max(bids, key=lambda lv: lv.price, default=None)
+    best_ask = min(asks, key=lambda lv: lv.price, default=None)
+    return _level(best_bid), _level(best_ask)
+
+
+def _sides(top: Top) -> dict[str, list[Decimal] | None]:
+    bid, ask = top
+    return {"bid": list(bid) if bid else None, "ask": list(ask) if ask else None}
+
+
+def _text(top: Top) -> str:
+    return ", ".join(
+        f"{name} {lv[0]:f} × {lv[1]:f}" if lv else f"sin {name}"
+        for name, lv in zip(("bid", "ask"), top, strict=True)
+    )

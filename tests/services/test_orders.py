@@ -215,18 +215,33 @@ class TestRechazos:
         assert "0.00014500" in result.message and "0.00 " not in result.message
 
 
-@pytest.mark.spec("RF-10", "CA-04")
+@pytest.mark.spec("RF-10", "CA-04", "RNF-16", "RNF-24", "CA-18")
 class TestFrescura:
-    """Un book quieto con la conexión viva no está viejo (D-13)."""
+    """Un book quieto solo vale si lo confirma el contraste con el REST (D-76);
+    la conexión viva ya no basta (D-13 corregida)."""
 
-    async def test_book_quieto_con_latido_reciente_vale(self, tmp_path):
+    async def test_book_quieto_confirmado_por_el_rest_vale(self, tmp_path):
         s = Setup(tmp_path, book_ts=NOW - 300_000)  # 5 min sin cambios, como NonKYC
-        s.hub.apply("nk", ConnState("nk", "market", "ws", "up", 150.0, NOW - 300_000))
+        s.hub.state["nk"].checked_at = NOW - 4_000
         assert isinstance(await s.orders.prepare(buy()), Pending)
 
-    async def test_book_quieto_y_conexion_caida_no_vale(self, tmp_path):
+    async def test_book_quieto_con_latido_reciente_ya_no_vale(self, tmp_path):
+        """Así disparó d-9820a4: WS conectado, sin cambios del book desde hacía 2 h."""
         s = Setup(tmp_path, book_ts=NOW - 300_000)
-        s.hub.apply("nk", ConnState("nk", "market", "ws", "reconnecting", None, NOW))
+        s.hub_now = NOW
+        s.hub.apply("nk", ConnState("nk", "market", "ws", "up", 150.0, NOW))
+        assert "stale_data" in codes(await s.orders.prepare(buy()))
+
+    async def test_contraste_viejo_no_vale(self, tmp_path):
+        """Con el REST fallando no hay confirmaciones: a los stale_after_s, viejo."""
+        s = Setup(tmp_path, book_ts=NOW - 300_000)
+        s.hub.state["nk"].checked_at = NOW - 16_000
+        assert "stale_data" in codes(await s.orders.prepare(buy()))
+
+    async def test_book_en_duda_no_vale_aunque_sea_reciente(self, tmp_path):
+        s = Setup(tmp_path)
+        s.hub.state["nk"].checked_at = NOW
+        s.hub.state["nk"].suspect = True  # el último contraste no coincidió
         assert "stale_data" in codes(await s.orders.prepare(buy()))
 
     async def test_book_quieto_sin_estado_no_vale(self, tmp_path):

@@ -49,6 +49,9 @@ LAST_TRADE = (
     .replace('"quantity":"0.5095"', '"quantity":"0.7777"')
 )
 OTHER_SYMBOL = update_book(SEQ + 1).replace("BTCB2/BTC", "XMR/BTC")
+_reset = json.loads(FRAMES["snapshotOrderbook"])
+_reset["params"]["sequence"] = 5
+RESET_SNAPSHOT = json.dumps(_reset)
 
 
 class FakeNonKYC:
@@ -85,6 +88,15 @@ class FakeNonKYC:
         else:
             for frame in UPDATES:
                 await ws.send(frame)
+        if script == "resync":  # el book se congela y el venue reinicia su sequence
+            await ws.send(FRAMES["updateTrades"])
+            await expect("subscribeOrderbook")  # pedido por `resync()` (D-76)
+            await ws.send(update_book(LAST_SEQ + 1, bids=[("0.0070", "1")]))  # anterior
+            await ws.send(RESET_SNAPSHOT)
+            await ws.send(update_book(6, bids=[("0.0071", "2")]))
+            await ws.send(LAST_TRADE)
+            await ws.wait_closed()
+            return
         if script == "dup":
             await ws.send(UPDATES[0])  # repetido: ya aplicado
             await asyncio.sleep(0.2)  # más que reorder_wait_s
@@ -128,7 +140,8 @@ def make_venue(http, port: int) -> NonKYCVenue:
     )
 
 
-async def collect(server, until, timeout: float = 3.0):
+async def collect(server, until, timeout: float = 3.0, on_event=None):
+    """`on_event(venue, events)`, si se da, se espera tras cada evento."""
     async with serve(server.handler, "127.0.0.1", 0) as srv:
         port = srv.sockets[0].getsockname()[1]
         async with httpx.AsyncClient() as http:
@@ -139,6 +152,8 @@ async def collect(server, until, timeout: float = 3.0):
                 async with asyncio.timeout(timeout):
                     async for ev in stream:
                         events.append(ev)
+                        if on_event is not None:
+                            await on_event(venue, events)
                         if until(events):
                             return events
             finally:
@@ -249,6 +264,33 @@ class TestWebSocket:
         valid = [book.apply(e) for e in book_events(events)]
         assert valid == [True, False, True]  # el hueco invalida, el snapshot repara
         assert book.valid and book.seq == SEQ
+
+    @pytest.mark.spec("RNF-24")
+    async def test_resync_pide_el_book_en_el_mismo_ws(self, rest):
+        """D-76: sin reconectar; lo que llega entre la petición y el snapshot se
+        descarta, y el snapshot vale aunque su sequence sea menor (reinicio)."""
+        server = FakeNonKYC("resync")
+        asked = []
+
+        async def resync_after_live_trade(venue, events):
+            if not asked and any(isinstance(e, Trade) and e.qty == D("0.5095") for e in events):
+                asked.append(True)
+                await venue.resync()
+
+        events = await collect(server, is_last, on_event=resync_after_live_trade)
+        assert len(server.received) == 1  # la misma conexión
+        assert [m["method"] for m in server.received[0]] == [
+            "subscribeOrderbook",
+            "subscribeTrades",
+            "subscribeOrderbook",
+        ]
+        books = book_events(events)
+        assert [type(e).__name__ for e in books[-2:]] == ["BookSnapshot", "BookDelta"]
+        assert [e.seq for e in books[-2:]] == [5, 6]
+        assert all(e.seq <= LAST_SEQ or e.seq in (5, 6) for e in books)  # el anterior, fuera
+        book = L2Book("nk")
+        assert all(book.apply(e) for e in books)
+        assert book.seq == 6 and book.valid
 
     async def test_lote_inicial_no_repite_trades(self, rest):
         server = FakeNonKYC("drop", "stay")

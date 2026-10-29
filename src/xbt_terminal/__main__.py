@@ -172,7 +172,9 @@ def build_engine(
     else:
         journal = Journal(logs, settings.mode, settings.redactor)
         faults = Faults(journal)  # uno para todos: la barra cuenta los de la sesión
-        hub = MarketHub(venues, faults=faults)
+        hub = MarketHub(
+            venues, faults=faults, journal=journal, book_check_s=cfg.risk.book_check_s
+        )
         trading = trading_venues(settings, venues, hub)
         every = cfg.polling.balances_every_s
         account = AccountService(trading, journal=journal, balances_every_s=every, faults=faults)

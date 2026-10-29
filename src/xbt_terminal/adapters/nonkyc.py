@@ -8,7 +8,8 @@ REST en `https://api.nonkyc.io/api/v2`; WS público JSON-RPC 2.0 en
 - El símbolo va como `BTCB2/BTC` en query y WS, y como `BTCB2_BTC` en rutas.
 - `sequence` del book: el del WS sirve para encadenar deltas; el del REST es
   otro contador, así que los snapshots REST salen con `seq` None. Ante un hueco
-  el adaptador se vuelve a suscribir y llega un snapshot nuevo.
+  el adaptador se vuelve a suscribir y llega un snapshot nuevo. Lo mismo con
+  `resync()`, cuando el book local no coincide con el REST (D-76).
 - Sin velas de 1m: se construyen con los últimos trades REST (máx. 500).
 - Fees no expuestas por API: vienen de la config (0.2 %/0.2 %, D-42).
 - Privado REST firmado: `X-API-SIGN` = HMAC-SHA256(secret, key + url + body +
@@ -21,7 +22,8 @@ REST en `https://api.nonkyc.io/api/v2`; WS público JSON-RPC 2.0 en
 - Un envío sin respuesta clara es incierto (D-26) y se reconcilia por
   `userProvidedId` con `recent_orders`.
 
-Spec: RF-01, RF-05, RF-08, RF-09, RNF-05, RNF-12 · design.md §4 · Tareas: T-09, T-17, T-25
+Spec: RF-01, RF-05, RF-08, RF-09, RNF-05, RNF-12, RNF-24 · design.md §4
+Tareas: T-09, T-17, T-25, T-78
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 from collections.abc import AsyncIterator, Iterable, Mapping
 from contextlib import aclosing
@@ -63,6 +66,8 @@ from ..core.models import (
 from .base import Limiter, MarketEvent, PrivateEvent, ReadOnlyError, VenueError
 from .private import OrderTracker, PrivateSource, fan_in, poll_private
 from .streaming import WS_CLOSE_TIMEOUT_S, WS_ERRORS, StreamingVenue, iso_ms
+
+log = logging.getLogger(__name__)
 
 REST_URL = "https://api.nonkyc.io/api/v2"
 WS_URL = "wss://ws.nonkyc.io"
@@ -357,6 +362,7 @@ class NonKYCVenue(StreamingVenue):
         self._taker_fee = taker_fee
         self._http = http or httpx.AsyncClient(timeout=10.0)
         self._reorder_wait_s = reorder_wait_s
+        self._resync = False  # `resync()` pidió el book: la sesión espera el snapshot
         self._credentials = credentials
         self._private_every_s = private_every_s
         self._private_safety_s = private_safety_s
@@ -634,6 +640,16 @@ class NonKYCVenue(StreamingVenue):
 
     # -- WS --------------------------------------------------------------------
 
+    async def resync(self) -> None:
+        """Vuelve a pedir el book en el mismo WS, como ante un hueco (D-76). Lo que
+        llegue hasta el snapshot se descarta: puede encadenar con el book malo."""
+        ws = self._ws
+        if ws is None:
+            return
+        log.warning("%s: book distinto del REST; se vuelve a pedir", self.name)
+        self._resync = True
+        await ws.send(self._request("subscribeOrderbook", 4))
+
     def _request(self, method: str, req_id: int) -> str:
         return json.dumps({"method": method, "params": {"symbol": self.symbol}, "id": req_id})
 
@@ -658,6 +674,9 @@ class NonKYCVenue(StreamingVenue):
                     seq = None
                     await ws.send(self._request("subscribeOrderbook", 3))
                     continue
+                if self._resync:
+                    self._resync, seq = False, None
+                    pending.clear()
                 msg = self.parsing(_loads, frame)
                 if not isinstance(msg, dict):
                     raise VenueError(f"NonKYC WS: mensaje inesperado {str(frame)[:80]!r}")

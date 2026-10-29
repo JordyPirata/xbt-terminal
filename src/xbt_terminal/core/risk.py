@@ -37,6 +37,7 @@ class RiskLimits:
     stale_after_s: int
     hanging_leg_after_s: int
     max_clock_skew_s: int = 5  # con el venue; por encima, sin live (RNF-16, D-30)
+    book_check_s: int = 5  # contraste del book con el REST (RNF-24, D-76)
 
 
 @dataclass(frozen=True, slots=True)

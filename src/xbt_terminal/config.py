@@ -280,6 +280,7 @@ def load_config(path: Path) -> AppConfig:
         stale_after_s=r.int("stale_after_s"),
         hanging_leg_after_s=r.int("hanging_leg_after_s"),
         max_clock_skew_s=r.int("max_clock_skew_s"),
+        **({"book_check_s": r.int("book_check_s", min=1)} if "book_check_s" in r.data else {}),
     )
     r.done()
 

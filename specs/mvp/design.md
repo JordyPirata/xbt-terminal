@@ -214,6 +214,15 @@ adapter.market_stream ──▶ MarketHub ──▶ L2Book.apply()  ──▶ Bo
   Un trade anterior a la vela en curso se ignora. Guarda 500 velas como máximo.
 - Render del book con throttle de 100 ms para cumplir RNF-06 (<500 ms) sin
   redibujar por cada mensaje.
+- Contraste con el REST (RNF-24, D-76): con `risk.book_check_s`, cada tanto
+  `MarketHub.check_book` pide `book_snapshot(5)` y compara mejor bid y mejor
+  ask (precio y cantidad) con el `L2Book`. Coincide → `VenueMarket.checked_at`.
+  No coincide → `suspect` (hasta el siguiente snapshot o un contraste que
+  coincida), `book_resync` en el journal y `resync()` del adaptador: NonKYC
+  vuelve a mandar `subscribeOrderbook` en el mismo WS y descarta lo que llegue
+  hasta el snapshot; Neoxa (la base) cierra el WS y el supervisor reconecta.
+  Si llega un mensaje del book mientras se espera el REST (`book_events`
+  cambia), el contraste no cuenta; un REST fallido tampoco.
 - Reconexión: backoff exponencial 0.5 s → 30 s con jitter; tras 3 fallos
   seguidos activa polling REST hasta que el WS vuelva (CA-06).
 - Latencia: RTT de ping WS o de la última petición REST, media móvil.
@@ -273,7 +282,7 @@ significa ok. Se evalúan todas, no solo la primera. `check(req, ctx, limits)` e
 | `venue_exposure` | `BTC total + BTCB2 total × mid` tras la orden `> max_venue_exposure` (D-07) | `risk.max_venue_exposure` |
 | `self_cross` | compra a precio ≥ mi ask abierto más bajo, o venta ≤ mi bid abierto más alto, en el mismo venue | — |
 | `tick` / `lot` / `min_qty` / `min_notional` | precio o cantidad fuera de la rejilla o bajo el mínimo del mercado | `MarketSpec` |
-| `stale_data` | sin mid (falta un lado o book cruzado), o book sin noticias en más de `stale_after_s`: cuenta la llegada (hora local, `L2Book.received_at`, RNF-16) del último mensaje del book o el último latido de una conexión "up" (D-13) | `risk.stale_after_s` |
+| `stale_data` | sin mid (falta un lado o book cruzado), o book sin noticias en más de `stale_after_s`: cuenta la llegada (hora local, `L2Book.received_at`, RNF-16) del último mensaje del book o el último contraste con el REST que coincidió (`checked_at`, RNF-24); con el book en duda (`suspect`), no hay frescura. El latido de la conexión ya no cuenta (D-76, corrige D-13) | `risk.stale_after_s` |
 | `insufficient_balance` | compra: `available(quote) < nocional × (1 + taker_fee)`; venta: `available(base) < qty` | — |
 | `venue_error` | no se pudieron leer saldos u órdenes del venue para validar (D-16); lo pone `OrderService`, no `check` | — |
 | `clock_skew` | solo en live: desfase de reloj con el venue sin medir o `> max_clock_skew_s` (D-30); lo pone `OrderService` | `risk.max_clock_skew_s` |
@@ -442,7 +451,7 @@ añade `uncertain_open` y `double_open` antes de llamar a `decide`.
 
 - Se suscribe a `MarketHub` y `AccountService`; en cada cambio de book, si está
   `armed`, comprueba las condiciones de RF-19 que no son de precio (frescura con
-  `received_at`, `clock_skew_ms`, `Faults` del venue, inciertas abiertas,
+  `OrderService.fresh_at`, la misma de `stale_data`, `clock_skew_ms`, `Faults` del venue, inciertas abiertas,
   cualquier doble sin terminar, también manual) y llama a `decide`. Los avisos
   de hub y cuenta solo ponen un `asyncio.Event`: se evalúa una vez por vuelta
   aunque lleguen varios mensajes.
