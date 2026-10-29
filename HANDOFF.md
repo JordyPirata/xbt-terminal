@@ -4,24 +4,22 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-29, 20:30 UTC)
+## Estado (2026-10-29, 21:00 UTC)
 
-- Spec en **v0.29** (D-76). **T-78 hecha y fusionada en `main`, sin desplegar
-  todavía en el servidor**: el daemon contrasta cada `book_check_s` (5 s) el tope
+- Spec en **v0.29** (D-76). **T-78 desplegada** (`f2cf49a`; daemon reiniciado
+  el 2026-10-29 20:48:51 UTC, bot `armed` desde las 20:49:03): el daemon contrasta cada `book_check_s` (5 s) el tope
   del book de cada venue con el REST; si no coincide, el book queda en duda
   (bot "book viejo", órdenes `stale_data`), se vuelve a pedir el book y se
   apunta `book_resync`. La conexión viva ya no cuenta como frescura. Hechas
   T-61 a T-65 y T-67 a T-78. 1399 tests, ruff limpio, `spec_trace` 69/74 (sin
   test: RNF-01, RNF-21/T-32, CA-01, CA-02 y CA-10, pasados en real: D-20,
   D-43, D-57).
-- **T-77 desplegada:** daemon reiniciado el 2026-10-28 23:55 UTC con
-  `lead_venue = "nx"`.
+- **T-77 desplegada** desde el 2026-10-28 23:55 UTC, con `lead_venue = "nx"`.
 - **2026-10-29, book de NonKYC congelado (D-76):** el WS siguió conectado pero
   sin `updateOrderbook` desde ~17:45 UTC; el bot disparó d-9820a4, d-f1fe90 y
   d-6eca2e (19:58 a 20:01 UTC) contra un bid que ya no estaba: 0.0234 XBT
   comprados de más en Neoxa, sin cuadrar. El usuario se volvió a suscribir y el
-  book quedó bien. Hasta desplegar T-78 puede repetirse: si el mid de NonKYC
-  en `value` no se mueve, volver a suscribirse antes de rearmar.
+  book quedó bien. Con T-78 eso lo ve el contraste (`book_resync`).
 - **Arquitectura:** `xbt daemon [--live]` es el único proceso que habla con
   los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
   comisiones, muestreo del valor). `xbt` (alias `attach`) es la pantalla:
@@ -36,11 +34,14 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   sistema `xbt` (no `--user`; pararlo o arrancarlo pide sudo), `ExecStart=
   /home/jordypirata/.local/bin/xbt daemon --live`, `Restart=on-failure`.
   `xbt` instalado con `uv tool install --reinstall ~/xbt-terminal`, un clon
-  que no llega a GitHub: el código se le sube desde local con
-  `git push servidor:xbt-terminal main:refs/heads/incoming` y allí
-  `git merge --ff-only incoming && git branch -d incoming`. Bot `armed` desde las
-  03:56:42 UTC. Pantalla: `ssh -t servidor env COLORTERM=truecolor
-  xbt`.
+  de GitHub (`origin`) que tira con una deploy key de solo lectura
+  (`~/.ssh/github_xbt`, puesta por el usuario el 2026-10-29). **Desplegar:**
+  `git push origin main` en local; en el servidor, `cd ~/xbt-terminal && git
+  pull --ff-only && uv tool install --reinstall ~/xbt-terminal`, y el usuario
+  hace `sudo systemctl restart xbt` y `bot on`. El modo automático de Claude
+  Code no deja tocar el servidor por SSH (push ni instalación): esos pasos los
+  hace el usuario; leer journal y logs por SSH sí. Pantalla: `ssh -t servidor
+  env COLORTERM=truecolor xbt`.
 - **Migración desde local (2026-10-27):** daemon local parado a las 03:38 UTC
   (bot `off` desde las 03:32, nada en vuelo). `config.toml`, `.env` y todo el
   journal copiados con rsync al servidor, idénticos (sha256). Los logs del
@@ -97,14 +98,12 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-1. **Desplegar T-78** (con permiso del usuario): `git push servidor:xbt-terminal
-   main:refs/heads/incoming`, merge `--ff-only` allí, `uv tool install
-   --reinstall ~/xbt-terminal`, y que el usuario haga `sudo systemctl restart
-   xbt` y `bot on`. La config del servidor no necesita `book_check_s` (5 por
-   defecto). Después mirar en el journal cuántos `book_resync` salen: en Neoxa
-   se espera ~1 cada 3 a 4 min por carreras (D-76); muchos más, o en NonKYC con
-   el book bien, sería un falso positivo que comparar. Y seguir con lo de T-77:
-   `bot_miss` y `hanging_leg` (consulta en `specs/archive/handoff-historia.md`).
+1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
+   salen y en qué venue (en Neoxa se espera ~1 cada 3 a 4 min por carreras,
+   D-76; muchos más, o en NonKYC con el book bien, sería un falso positivo que
+   comparar con el REST), y `bot_miss` y `hanging_leg` (consulta en
+   `specs/archive/handoff-historia.md`). Cuadrar a mano los 0.0234 XBT de las
+   colgadas del 2026-10-29 si el usuario lo pide.
 2. Corregir d-550cd7 a mano (queda fuera de los 50 trades de NonKYC): leer sus
    4 trades de `/account/trades` con un límite mayor y añadir los `fill_fee`,
    con el daemon parado. Pendiente de que el usuario lo pida.

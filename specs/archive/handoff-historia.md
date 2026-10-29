@@ -672,3 +672,10 @@ tests de `test_cross.py`.
    revisarlo con los datos de después de T-77. Consulta rápida:
    `grep -h '"bot_fire"' ~/.local/state/xbt/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
    y cruzarla con `hanging_leg` del mismo journal.
+
+## Retirado del HANDOFF el 2026-10-29 (despliegue)
+
+- Hasta el 2026-10-29 el clon del servidor no llegaba a GitHub: el código se le
+  subía desde local con `git push servidor:xbt-terminal main:refs/heads/incoming`
+  y allí `git merge --ff-only incoming && git branch -d incoming`. Lo sustituye
+  `git pull` desde GitHub con deploy key.
