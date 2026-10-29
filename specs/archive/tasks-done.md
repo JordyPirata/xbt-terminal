@@ -1016,3 +1016,18 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
 - Medido (dos `VenueAccount` con 20 órdenes y 50 fills, mínimo de 5 × 200):
   antes 3.9 ms, partida sin caché 4.8 ms (+23 %, recorría la cadena en cada
   valor), con `_decoder` en caché 2.9 ms (−28 %).
+
+### T-81 Formateadores de sats y % en `ui/format.py` · `done` · RF-04, RF-25, RF-29 · dep T-80 · D-77
+- Tests primero: `tests/unit/test_format.py` con el texto exacto de cada
+  formato (con y sin signo, `None` → "—", miles con espacio).
+- `ui/format.py`: `fmt_sats`, `fmt_sats_grouped`, `fmt_pct` (decimales y signo
+  por nombre), `fmt_share` (parte del inventario) y `fmt_btc_sats_pct`; sustituyen a `_sats`, `_pct`,
+  `_sats_text` y `_pct1` de `ui/app.py` y a `_fmt` de `ui/panels.py`, sin
+  cambiar ningún texto de la pantalla. Los booleanos, solo por nombre.
+- Hecho cuando: ninguno de los cinco queda en `ui/`, y pytest, ruff y
+  `spec_trace` como siempre.
+- Hecho: `tests/unit/test_format.py` primero (en rojo: el módulo no existía).
+  `ui/format.py` con `MISSING = "—"` y cinco funciones; `fmt_share` nombra
+  los cuatro usos de "un decimal, sin signo" de la pantalla de reequilibrio.
+  `ui/app.py` ya no importa `sats`. Ningún test de UI cambió: los textos de la
+  pantalla son los mismos.

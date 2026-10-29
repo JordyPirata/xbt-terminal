@@ -56,7 +56,7 @@ from ..core.commands import (
     ShowResults,
     parse,
 )
-from ..core.cross import Quote, sats
+from ..core.cross import Quote
 from ..core.inventory import InventoryTarget, inventory
 from ..core.models import (
     BASE_LABEL,
@@ -97,6 +97,7 @@ from ..services.remote import (
     RemoteResults,
 )
 from .clipboard import Clipboard
+from .format import fmt_pct, fmt_sats, fmt_sats_grouped, fmt_share
 from .panels import (
     VENUE_NAME,
     AccountView,
@@ -417,16 +418,6 @@ RANGE_NAMES: dict[Range, str] = {"dia": "hoy (UTC)", "7d": "7 días", "todo": "t
 STATUS_NAMES = {"closed": "cerrada", "hanging": "COLGADA", "no_fills": "sin fills"}
 
 
-def _sats(btc: Decimal | None, signed: bool = True) -> str:
-    if btc is None:
-        return "—"
-    return f"{sats(btc):{'+' if signed else ''}.0f}"
-
-
-def _pct(value: Decimal | None) -> str:
-    return "—" if value is None else f"{value:+.2f} %"
-
-
 TAB_NAMES = {"doubles": "Dobles", "value": "Valor de la cuenta"}
 RESULTS_EVERY_S = 60.0  # abierta, se vuelve a pedir el informe (RF-32, D-69)
 
@@ -562,7 +553,7 @@ class ResultsScreen(ModalScreen[None]):
         """`priced`: tokens cuya fee ya va en sats (D-65)."""
         started = datetime.fromtimestamp(d.started / 1000, UTC).strftime("%m-%d %H:%M:%S")
         avg = lambda v: "—" if v is None else f"{v:.8f}"  # noqa: E731
-        fees = _sats(d.fees + d.token_fees, signed=False)
+        fees = fmt_sats(d.fees + d.token_fees, signed=False)
         valued = [f"{q:f} {a}" for a, q in d.other_fees if a in priced]
         loose = [f"{q:f} {a}" for a, q in d.other_fees if a not in priced]
         if valued:  # ya en sats (D-65): la cantidad, para saber de dónde salen
@@ -572,7 +563,7 @@ class ResultsScreen(ModalScreen[None]):
         return (
             started, d.id, d.origin, f"{d.buy_venue or '?'}→{d.sell_venue or '?'}",
             f"{d.matched:f}", avg(d.buy_avg), avg(d.sell_avg), fees,
-            _pct(d.expected_pct), _pct(d.result_pct), _sats(d.result),
+            fmt_pct(d.expected_pct), fmt_pct(d.result_pct), fmt_sats(d.result),
             "—" if d.mismatch == 0 else f"{d.mismatch:+f}", STATUS_NAMES[d.status],
         )  # fmt: skip
 
@@ -583,8 +574,9 @@ class ResultsScreen(ModalScreen[None]):
         parts = [f"{s.closed} dobles cerradas"]
         if s.closed:
             parts += [
-                f"total {s.total:+.8f} BTC · {_sats(s.total)} sats",
-                f"media {_sats(s.mean)} · mejor {_sats(s.best)} · peor {_sats(s.worst)} sats",
+                f"total {s.total:+.8f} BTC · {fmt_sats(s.total)} sats",
+                f"media {fmt_sats(s.mean)} · mejor {fmt_sats(s.best)} "
+                f"· peor {fmt_sats(s.worst)} sats",
             ]
         if s.prices:  # RF-25, D-65: fees en token restadas a su precio de ahora
             used = ", ".join(f"{a} a {p:.8f} BTC" for a, p in s.prices)
@@ -657,7 +649,7 @@ class ResultsScreen(ModalScreen[None]):
         since = datetime.fromtimestamp(s.since / 1000, UTC).strftime("%m-%d %H:%M")
         return [
             f"último tramo desde {since} UTC (tras el último salto > 5 %): "
-            f"cambio {_sats(s.change)} sats en {s.count} muestras"
+            f"cambio {fmt_sats(s.change)} sats en {s.count} muestras"
         ]
 
     def row_count(self) -> int:
@@ -816,14 +808,6 @@ class DepositScreen(ModalScreen[None]):
         self.dismiss(None)
 
 
-def _sats_text(btc: Decimal | None) -> str:
-    return "—" if btc is None else f"{sats(btc):,.0f} sats".replace(",", " ")
-
-
-def _pct1(value: Decimal | None) -> str:
-    return "—" if value is None else f"{value:.1f} %"
-
-
 class RebalanceScreen(ModalScreen[None]):
     """Plan de reequilibrio (RF-29): dos alternativas de una transferencia que
     igualan el % de BTCB2 de los venues, con las comisiones pedidas al abrir y
@@ -907,8 +891,8 @@ class RebalanceScreen(ModalScreen[None]):
 
     @staticmethod
     def _state(p: Plan) -> str:
-        venues = " · ".join(f"{VENUE_NAME[v]} {_pct1(pct)}" for v, pct in p.before.items())
-        return f"{BASE_LABEL} por venue ahora: {venues} · total {_pct1(p.total_pct)}"
+        venues = " · ".join(f"{VENUE_NAME[v]} {fmt_share(pct)}" for v, pct in p.before.items())
+        return f"{BASE_LABEL} por venue ahora: {venues} · total {fmt_share(p.total_pct)}"
 
     @staticmethod
     def _route(t: Transfer) -> str:
@@ -917,11 +901,11 @@ class RebalanceScreen(ModalScreen[None]):
     @classmethod
     def _cells(cls, t: Transfer) -> tuple[str | Text, ...]:
         fee = "—" if t.fee is None else f"{t.fee:f}"
-        after = " · ".join(f"{VENUE_NAME[v]} {_pct1(pct)}" for v, pct in t.after.items())
+        after = " · ".join(f"{VENUE_NAME[v]} {fmt_share(pct)}" for v, pct in t.after.items())
         state = Text("viable", style="green") if t.viable else Text(f"⚠ {t.problem}", "yellow")
         return (
             cls._route(t), f"{t.amount:f}", fee, f"{t.debited:f}", f"{t.received:f}",
-            _sats_text(t.cost_btc), after, state,
+            fmt_sats_grouped(t.cost_btc), after, state,
         )  # fmt: skip
 
     def _notes(self, p: Plan, held: Mapping[VenueId, Holding]) -> str:
@@ -932,7 +916,7 @@ class RebalanceScreen(ModalScreen[None]):
             lines = [
                 f"Recomendada: {self._route(best)}, pedir {best.amount:f} "
                 f"{asset_label(best.asset)} en el retiro (salen {best.debited:f}, llegan "
-                f"{best.received:f}); comisión {_sats_text(best.cost_btc)}"
+                f"{best.received:f}); comisión {fmt_sats_grouped(best.cost_btc)}"
             ]
             if self._limits is not None and best.cost_btc is not None:
                 lim = self._limits
@@ -946,7 +930,8 @@ class RebalanceScreen(ModalScreen[None]):
         t = self._target
         if t is not None and p.total_pct is not None and not t.in_band(p.total_pct):
             lines.append(
-                f"⚠ el total ({_pct1(p.total_pct)}) está fuera de la banda {t.low}-{t.high} %: "
+                f"⚠ el total ({fmt_share(p.total_pct)}) está fuera de la banda "
+                f"{t.low}-{t.high} %: "
                 "una transferencia no lo cambia; se corrige comprando o vendiendo a mano"
             )
         lines.append(

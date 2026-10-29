@@ -33,6 +33,7 @@ from ..core.inventory import Inventory, InventoryTarget
 from ..core.models import BASE_LABEL, ZERO, Balance, Candle, MarketSpec, Timeframe, VenueId
 from ..core.results import DoubleResult
 from ..core.valuation import ValueSample, segments, thin
+from .format import fmt_btc_sats_pct
 
 TITLES: dict[VenueId, str] = {
     "nk": f"NonKYC {BASE_LABEL}/BTC",
@@ -323,16 +324,10 @@ def axis_format(timeframe: Timeframe) -> str:
     return {"1h": "%d %H:%M", "4h": "%d %H:%M", "1d": "%m-%d"}.get(timeframe, "%H:%M")
 
 
-def _fmt(value: Decimal, pct: Decimal, signed: bool) -> str:
-    """precio · sats · %, con los % que ya calcula `core/cross.py`."""
-    sign = "+" if signed else ""
-    return f"{value:{sign}.8f} · {sats(value):{sign}.0f} sats · {pct:{sign}.2f} %"
-
-
 def _stats_line(venue: VenueId, stats: VenueStats | None) -> str:
     if stats is None:
         return f"{NAMES[venue]:<7} mid {DASH}  spread {DASH}"
-    spread = _fmt(stats.spread, stats.spread_pct, signed=False)
+    spread = fmt_btc_sats_pct(stats.spread, stats.spread_pct, signed=False)
     return f"{NAMES[venue]:<7} mid {stats.mid:.8f}  spread {spread}"
 
 
@@ -341,9 +336,9 @@ def _route_text(buy: VenueId, sell: VenueId, route: Route | None) -> Text:
     if route is None:
         out.append(f"bruto {DASH}  neto {DASH}", style="dim")
         return out
-    out.append(f"bruto {_fmt(route.gross, route.gross_pct, signed=True)}  ")
+    out.append(f"bruto {fmt_btc_sats_pct(route.gross, route.gross_pct, signed=True)}  ")
     style = "bold green" if route.net > 0 else "dim red"
-    out.append(f"neto {_fmt(route.net, route.net_pct, signed=True)}", style=style)
+    out.append(f"neto {fmt_btc_sats_pct(route.net, route.net_pct, signed=True)}", style=style)
     return out
 
 
@@ -361,7 +356,7 @@ def render_cross(nk: Quote | None, nx: Quote | None, note: str = "") -> Text:
         out.append_text(_route_text(buy, sell, route))
         out.append("\n")
     if view and view.mid_diff is not None and view.mid_diff_pct is not None:
-        diff = _fmt(view.mid_diff, view.mid_diff_pct, signed=True)
+        diff = fmt_btc_sats_pct(view.mid_diff, view.mid_diff_pct, signed=True)
     else:
         diff = DASH
     out.append(f"nx - nk  {diff}", style="bold")
