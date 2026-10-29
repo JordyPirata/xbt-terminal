@@ -86,6 +86,7 @@ dicen en su propia nota.
 | D-74 | 2026-10-26 | Licencia AGPL-3.0 y guía de despliegue (T-76) |
 | D-75 | 2026-10-27 | El bot envía primero la pierna de Neoxa y la otra solo si llena (requirements v0.28, T-77) |
 | D-76 | 2026-10-29 | El book quieto se contrasta con el REST; la conexión viva ya no basta (requirements v0.29, T-78, corrige la frescura de D-13) |
+| D-77 | 2026-10-29 | Legibilidad por partes, sin cambio de comportamiento; primero `risk.check` y `commands.parse` (T-79) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1873,3 +1874,29 @@ Al volver a suscribirse el usuario, el book quedó bien.
   el primer cambio que no llegó, ~2 h antes de d-9820a4.
 **Toca:** RNF-16, RNF-24, RF-10, RF-19, CA-18, design.md §4 (tabla de
 `stale_data`), §6.9, config.example.toml, T-78.
+
+## D-77 · 2026-10-29 · Legibilidad: funciones más cortas, mismo comportamiento (T-79)
+**Contexto:** revisión de legibilidad (Clean Code y PEP 8) del 2026-10-29. Con
+la config del proyecto, ruff no da avisos; con `C90`, `PLR`, `N`, `BLE` y `ARG`
+salen funciones de complejidad alta (`wire.decode` 28, `risk.check` 20,
+`commands.parse` 18), constructores de hasta 21 parámetros (`XbtApp`),
+`ui/app.py` con 1 634 líneas, acceso a privados entre clases
+(`services/remote.py`), `faults` como lista de un elemento y cinco
+formateadores de sats y % casi iguales en `ui/`.
+**Decisión:**
+- Se arregla por partes, una tarea por parte, sin cambio de comportamiento:
+  los tests existentes no se tocan salvo para añadir casos, y ningún requisito
+  cambia (no hay versión nueva de requirements.md).
+- Primera parte (T-79): `core/risk.py` `check` y `core/commands.py` `parse`,
+  que son puros y con tests propios. `check` se parte en una función por
+  sección (datos de mercado, tamaño, rejilla, mid, cruce propio, saldo,
+  exposición) que mantiene el orden de las violaciones; `parse` pasa a un
+  diccionario de comando → función, y un helper para los `Literal` quita los
+  `# type: ignore`. Las dos quedan con complejidad ≤ 10 (C901) y ≤ 6 returns.
+- Siguientes partes, por orden, cada una con su tarea cuando el usuario la
+  pida: `wire.decode`; formateadores en `ui/format.py`; `faults: Faults | None`
+  en vez de lista; `ui/app.py` en `ui/screens/`; parámetros de `XbtApp`
+  agrupados.
+- Activar `C90` y `N` en `pyproject.toml` queda para cuando las partes que
+  saltan estén hechas (si no, habría que llenar el código de `noqa`).
+**Toca:** T-79 (sin cambios en requirements ni design).

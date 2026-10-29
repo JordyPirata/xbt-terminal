@@ -88,6 +88,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Tareas abiertas
 
+- **T-79** `todo` (D-77): `risk.check` y `commands.parse` más cortas, sin
+  cambio de comportamiento. Primera parte de la revisión de legibilidad; las
+  siguientes partes están listadas en D-77.
 - **T-66** `todo`: CA-16 en real. Parte local hecha (2026-10-26 23:32 UTC,
   t-2c6b97 colocada y cancelada desde la pantalla, en D-66). Falta la del
   server por SSH, con permiso del usuario.
