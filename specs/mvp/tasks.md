@@ -176,6 +176,28 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 
 ### T-77 El bot envía primero la pierna de `lead_venue` · `done` · RF-07, RF-20, RF-21, RF-22, RF-23, CA-08 · dep T-74 · D-75
 
+## M16 — Book contrastado con el REST (v0.29, D-76)
+
+### T-78 El book quieto se contrasta con el REST · `todo` · RNF-16, RNF-24, RF-10, RF-19, CA-18 · dep T-77 · D-76
+- Antes del código, en real y solo con lecturas: comparar el tope del WS y del
+  REST de Neoxa unos minutos (niveles AMM incluidos). Si no coinciden, el
+  contraste queda solo para NonKYC y se apunta en D-76.
+- `risk.book_check_s` en la config (5 por defecto) y en `config.example.toml`.
+- Servicio de mercado del daemon: contraste periódico por venue con
+  `book_snapshot`; descarta el que se cruza con un mensaje del book; al
+  desacuerdo, marca el book no fresco, pide la resuscripción al adaptador y apunta
+  `book_resync`.
+- `OrderService.fresh_at`: último mensaje del book o último contraste que
+  coincide; fuera el latido de la conexión.
+- Adaptadores: NonKYC vuelve a pedir `subscribeOrderbook` en el mismo WS; Neoxa
+  reconecta.
+- design.md §4 (`stale_data`) y §6.9 ajustados antes de implementar.
+- Tests (CA-18): WS conectado sin cambios y REST distinto → bot sin disparar,
+  `stale_data`, `book_resync`, y dispara con el book nuevo; quieto y coincidente
+  → fresco más allá de `stale_after_s`; REST fallando → viejo a los
+  `stale_after_s`; mensaje durante el REST → contraste descartado. Ajustar los
+  tests de D-13 que esperan frescura por el latido.
+
 ## Correcciones
 
 ### T-43 Errores sin texto · `done` · RF-19, RF-21, RF-11 · dep T-36 · D-51

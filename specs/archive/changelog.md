@@ -147,3 +147,9 @@ Es historia: la spec vigente es la de `requirements.md`.
 > colgadas en Neoxa el 2026-10-27: 14 de las 15 piernas del bot que Neoxa no
 > llenó al recibirlas quedaron colgadas. Con `bot.lead_venue`, la otra pierna
 > sale solo por lo que llenó la primera; si no llena, no hay doble (`bot_miss`).
+
+> **Cambio v0.28 → v0.29 (D-76): el book quieto se contrasta con el REST
+> (RNF-16, RNF-24, CA-18).** Pedido por el usuario tras tres piernas colgadas en
+> NonKYC el 2026-10-29 (d-9820a4, d-f1fe90, d-6eca2e): su WS siguió conectado
+> pero dejó de mandar cambios del book desde ~17:45 UTC, y el bot disparó contra
+> un bid que ya no existía. La conexión viva deja de bastar como frescura.

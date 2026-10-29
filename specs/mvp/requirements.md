@@ -1,6 +1,6 @@
 # xbt-terminal — Requerimientos MVP
 
-Versión 0.28 · 2026-10-27 · @JordyPirata · Estado: **aprobado para diseño**
+Versión 0.29 · 2026-10-29 · @JordyPirata · Estado: **aprobado para diseño**
 
 > Historial de versiones (qué cambió en cada una y por qué): `specs/archive/changelog.md`.
 
@@ -156,7 +156,7 @@ por IP y comparte presupuesto entre polling y órdenes.
 | RNF-13 | Validar y enviar una orden es atómico por venue: mientras haya un envío en vuelo en un venue, otra orden de ese venue no se valida sin contar la primera. Los topes de RF-10 no se pueden pasar con órdenes confirmadas a la vez. |
 | RNF-14 | Un fallo inesperado (un bug, el disco lleno) no cierra la terminal: se aísla al venue o al servicio donde ocurre, se escribe con su traceback (redactado) y se muestra en pantalla. Un venue caído no tumba al otro. |
 | RNF-15 | Salir no deja envíos a medias: un envío o una cancelación en vuelo terminan y se apuntan en el journal antes de cerrar. En live, salir con órdenes abiertas pide confirmación y dice cuántas hay. |
-| RNF-16 | La frescura del book (RF-10) se mide con el reloj local de recepción, no con la hora del exchange. Al arrancar se mide el desfase con cada venue; si pasa de `max_clock_skew_s`, se avisa y no se permite el live. |
+| RNF-16 | La frescura del book (RF-10) se mide con el reloj local de recepción, no con la hora del exchange. Al arrancar se mide el desfase con cada venue; si pasa de `max_clock_skew_s`, se avisa y no se permite el live. Un book quieto solo cuenta como fresco mientras lo confirme el contraste de RNF-24; la conexión viva sola ya no basta. |
 | RNF-17 | Solo puede correr un daemon a la vez por directorio de datos: el segundo no arranca y dice por qué. El cliente (RF-31) no cuenta: no toma el lock ni escribe el journal. |
 | RNF-18 | `.env` no puede ser legible por el grupo ni por otros: en live no se arranca y en el resto se avisa. El journal y los logs se crean solo legibles por el usuario (`0600`, directorio `0700`). |
 | RNF-19 | Hay un log de diagnóstico rotativo, separado del journal, con los errores de red, carga y reconexión de cada venue. Pasa por el `Redactor` y nunca escribe en la pantalla. |
@@ -164,6 +164,7 @@ por IP y comparte presupuesto entre polling y órdenes.
 | RNF-21 | Cada cambio pasa por CI: instalación con el lockfile (`uv sync --frozen`), pytest, ruff y `spec_trace`. |
 | RNF-22 | La decisión del bot (disparar o no, con qué precios y cantidad, y por qué no) es una función pura en `core/`, sin I/O ni reloj propio, probada con books sintéticos. El bucle del bot no hace más peticiones que la operación manual: los envíos comparten el limitador de Neoxa (RNF-03). |
 | RNF-23 | Latencia del bot: `decide` con 50 niveles por lado y `max_walk_pct` en los dos venues tarda menos de 5 ms (mediana); de un cambio de book que cruza a la llamada a `prepare_double` del bot, menos de 50 ms (mediana, venues simulados); `top(50)` de un book de 1000 niveles por lado, menos de 2 ms. Tests de latencia en la suite. |
+| RNF-24 | El daemon contrasta cada `risk.book_check_s` (5 s por defecto) el book local de cada venue con su book REST: mejor bid y mejor ask, precio y cantidad. Si coinciden, ese momento cuenta como frescura del book (RNF-16). Si no, el book local deja de ser fresco hasta que llega uno nuevo del venue: se vuelve a suscribir (NonKYC) o a conectar (Neoxa), y se apunta `book_resync` en el journal con los dos topes y en `diag.log`. Un contraste en el que llega un mensaje del book mientras se espera el REST no cuenta, ni para un lado ni para el otro. Un REST fallido no confirma: si fallan todos durante `stale_after_s`, el book queda viejo. |
 
 Fuente de los límites de Neoxa: [documentación de su API](https://neoxa.exchange/api-docs).
 
@@ -222,6 +223,7 @@ reequilibrio CA-14 (v0.14), daemon CA-15 (v0.17) y cliente CA-16 (v0.21).
 | CA-15 | Con venues simulados, un daemon en dry-run arranca con el bot `off`; un cliente lo arma, se cierra, y el bot sigue armado y dispara; otro cliente ve el mismo estado; SIGTERM deja los envíos en vuelo en el journal. En live en el server: el bot sigue armado tras cerrar el cliente y la sesión SSH. | Automático + manual en live |
 | CA-16 | Con venues simulados y un daemon en dry-run, un cliente coloca y confirma una orden simple y una doble, y cancela; otro cliente ve las mismas órdenes y piernas; tras cerrar el cliente las órdenes siguen en el daemon; una propuesta caducada o ya usada se rechaza; el cliente no abre conexiones a los venues. En live en el server: una orden mínima colocada y cancelada desde el cliente por SSH. | Automático + manual en live |
 | CA-17 | Con un journal con muestras `value` (y un hueco), la pestaña "Valor de la cuenta" muestra solo las del rango, corta la línea en el hueco y da primero, último, cambio, máximo y mínimo correctos; sin muestras, lo dice. Con la ventana abierta, una muestra nueva aparece sin cerrarla, y la selección de la tabla no se mueve. Con `z`, las gráficas muestran solo las muestras posteriores al último salto. Con venues simulados, el daemon apunta una muestra en cada múltiplo del intervalo y se la salta si falta un mid. | Automático |
+| CA-18 | Con venues simulados y un daemon en dry-run, un WS que sigue conectado pero deja de mandar cambios mientras el book REST cambia: el bot no dispara y las órdenes se rechazan por book viejo a partir del primer contraste que no coincide, se apunta `book_resync` y, con el book nuevo, vuelve a disparar. Un book quieto que coincide con el REST sigue fresco más allá de `stale_after_s`; con el REST fallando, deja de serlo a los `stale_after_s`. | Automático |
 
 ## Preguntas abiertas
 

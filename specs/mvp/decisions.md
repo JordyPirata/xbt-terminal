@@ -85,6 +85,7 @@ dicen en su propia nota.
 | D-73 | 2026-10-26 | El comando y las rutas pasan a `xbt` (requirements v0.27, T-75) |
 | D-74 | 2026-10-26 | Licencia AGPL-3.0 y guía de despliegue (T-76) |
 | D-75 | 2026-10-27 | El bot envía primero la pierna de Neoxa y la otra solo si llena (requirements v0.28, T-77) |
+| D-76 | 2026-10-29 | El book quieto se contrasta con el REST; la conexión viva ya no basta (requirements v0.29, T-78, corrige la frescura de D-13) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1826,3 +1827,47 @@ vio el bot ya no estaba. `max_move_pct` no las separa (`move` de Neoxa 0.14 y
   colgadas de NonKYC (6 en 634 disparos). Se revisa con `bot_fire` y
   `hanging_leg` tras unos días.
 **Toca:** RF-07, RF-20, RF-21, RF-23, CA-08, design.md §6.9, T-77.
+
+## D-76 · 2026-10-29 · El book quieto se contrasta con el REST; la conexión viva ya no basta (requirements v0.29, T-78)
+**Contexto:** d-9820a4 (19:58:48 UTC), d-f1fe90 (20:00:25) y d-6eca2e
+(20:01:40) del 2026-10-29: compra en Neoxa llena y venta en NonKYC a
+0.00318575 cancelada con 0.0021, 0 y 0 XBT llenos; 0.0234 XBT comprados de más
+en Neoxa. Las tres con `move` 0 y una neta esperada del 3.1 %. El mid de NonKYC
+del journal (`value`) quedó fijo en 0.003216845 desde las 17:50 UTC, con trades
+de ~1 BTCB2 cada minuto en el venue y el book REST cambiando: el WS de NonKYC
+siguió conectado (sin caídas desde las 16:46) pero dejó de mandar
+`updateOrderbook`. Un WS nuevo, a las 20:05, solo recibió el snapshot y ningún
+cambio en 40 s; con el REST cambiando, parece que NonKYC no los publica. Coincide con
+liquidez añadida al pool de NonKYC, sin comprobar si es la causa. Por D-13,
+un book quieto con la conexión "up" cuenta como fresco: el bot no lo podía ver.
+Al volver a suscribirse el usuario, el book quedó bien.
+**Decisión:**
+- Cada `risk.book_check_s` (5 s) el daemon pide el book REST de cada venue
+  (`book_snapshot`) y compara mejor bid y mejor ask, precio y cantidad, con el
+  local. Solo el tope: el resto del book REST puede venir recortado.
+- Coincide → ese momento es la frescura del book. La frescura pasa a ser la más
+  reciente entre el último mensaje del book y el último contraste que coincide;
+  el latido de la conexión "up" de D-13 deja de contar.
+- No coincide → el book local deja de ser fresco (el bot dice "book viejo", las
+  órdenes se rechazan por `stale_data`) hasta que llega uno nuevo del venue;
+  NonKYC se vuelve a suscribir en el mismo WS (como ante un hueco) y Neoxa
+  vuelve a conectar (cada mensaje suyo es el book entero). `book_resync` en el
+  journal con los dos topes y aviso en `diag.log`.
+- Si llega un mensaje del book mientras se espera el REST, el contraste no
+  cuenta: la carrera daría un falso desacuerdo, y el mensaje ya da frescura.
+  Un falso desacuerdo que pase igual solo cuesta una suscripción.
+- Un REST fallido no confirma nada; con `stale_after_s` = 15 y contraste cada
+  5 s, aguanta dos fallos seguidos antes de bloquear.
+- Coste: 12 peticiones/min por venue, dentro de los 240 de NonKYC y de los 480
+  de Neoxa compartidos con el polling (RNF-03, RNF-05).
+- Descartado: dar el book por malo cuando un trade sale a un precio que el book
+  local no permite. Los trades contra el pool de NonKYC salen dentro del spread
+  (0.00318713 con bid 0.00318273 y ask 0.0031987, 2026-10-29 20:03 UTC): habría
+  falsos positivos continuos.
+- Sin comprobar: que el REST y el WS de Neoxa den el mismo tope con los niveles
+  AMM. T-78 lo mira antes en real; si no coinciden, el contraste es solo para
+  NonKYC y se apunta aquí.
+- Con esto, el book congelado de hoy se habría visto en el primer contraste tras
+  el primer cambio que no llegó, ~2 h antes de d-9820a4.
+**Toca:** RNF-16, RNF-24, RF-10, RF-19, CA-18, design.md §4 (tabla de
+`stale_data`), §6.9, config.example.toml, T-78.

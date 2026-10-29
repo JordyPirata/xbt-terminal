@@ -649,3 +649,26 @@ Precios de referencia del 2026-10-20 (solo una foto, no un patrón): NonKYC
 0.00727748 / 0.00730299, Neoxa 0.00735714 / 0.00742999. Son los que usan los
 tests de `test_cross.py`.
 
+
+## Retirado del HANDOFF el 2026-10-29
+
+### Estado (2026-10-27, 22:30 UTC)
+
+- Spec en **v0.28** (changelog en `specs/archive/changelog.md`). T-77
+  fusionada en `main` e instalada en el servidor (`960f727`, con
+  `lead_venue = "nx"` en su config), **pero el daemon sigue con la versión
+  anterior hasta que el usuario lo reinicie**. Hechas T-61 a T-65 y T-67 a T-77. 1378
+  tests, ruff limpio, `spec_trace` 67/72 (sin test: RNF-01, RNF-21/T-32, CA-01, CA-02 y
+  CA-10, pasados en real: D-20, D-43, D-57).
+1. **Terminar de desplegar T-77** (D-75): ya fusionada, instalada y con
+   `lead_venue = "nx"` en la config del servidor (copia previa en
+   `~/.config/xbt/config.toml.bak-pre-t77`). Falta que el usuario haga
+   `sudo systemctl restart xbt` y rearmar con `bot on` (la confirmación dice
+   "envía primero la pierna de Neoxa"). Después mirar `bot_miss` (cuántos y
+   cuándo), `hanging_leg` (deberían quedar solo las de NonKYC) y que no frene
+   nada más. Ojo: `bot_miss` no para el bot (elegido por el usuario); si
+   salen muchos seguidos, es que el book de Neoxa que ve no es el real.
+   `max_move_pct` se queda en 1.0: no distingue las colgadas de Neoxa;
+   revisarlo con los datos de después de T-77. Consulta rápida:
+   `grep -h '"bot_fire"' ~/.local/state/xbt/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
+   y cruzarla con `hanging_leg` del mismo journal.

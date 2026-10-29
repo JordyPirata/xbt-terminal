@@ -4,14 +4,21 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-27, 22:30 UTC)
+## Estado (2026-10-29, 20:30 UTC)
 
-- Spec en **v0.28** (changelog en `specs/archive/changelog.md`). T-77
-  fusionada en `main` e instalada en el servidor (`960f727`, con
-  `lead_venue = "nx"` en su config), **pero el daemon sigue con la versión
-  anterior hasta que el usuario lo reinicie**. Hechas T-61 a T-65 y T-67 a T-77. 1378
-  tests, ruff limpio, `spec_trace` 67/72 (sin test: RNF-01, RNF-21/T-32, CA-01, CA-02 y
-  CA-10, pasados en real: D-20, D-43, D-57).
+- Spec en **v0.29** (D-76, T-78 `todo`): el book quieto se contrasta con el REST
+  cada `book_check_s`; la conexión viva ya no basta como frescura. Hechas T-61
+  a T-65 y T-67 a T-77. 1378 tests, ruff limpio, `spec_trace` 67/74 (sin test:
+  RNF-01, RNF-21/T-32, RNF-24 y CA-18 (T-78), CA-01, CA-02 y CA-10, pasados
+  en real: D-20, D-43, D-57).
+- **T-77 desplegada:** daemon reiniciado el 2026-10-28 23:55 UTC con
+  `lead_venue = "nx"`.
+- **2026-10-29, book de NonKYC congelado (D-76):** el WS siguió conectado pero
+  sin `updateOrderbook` desde ~17:45 UTC; el bot disparó d-9820a4, d-f1fe90 y
+  d-6eca2e (19:58 a 20:01 UTC) contra un bid que ya no estaba: 0.0234 XBT
+  comprados de más en Neoxa, sin cuadrar. El usuario se volvió a suscribir y el
+  book quedó bien. Hasta T-78 puede repetirse: si el mid de NonKYC en `value`
+  no se mueve, volver a suscribirse antes de rearmar.
 - **Arquitectura:** `xbt daemon [--live]` es el único proceso que habla con
   los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
   comisiones, muestreo del valor). `xbt` (alias `attach`) es la pantalla:
@@ -87,18 +94,10 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-1. **Terminar de desplegar T-77** (D-75): ya fusionada, instalada y con
-   `lead_venue = "nx"` en la config del servidor (copia previa en
-   `~/.config/xbt/config.toml.bak-pre-t77`). Falta que el usuario haga
-   `sudo systemctl restart xbt` y rearmar con `bot on` (la confirmación dice
-   "envía primero la pierna de Neoxa"). Después mirar `bot_miss` (cuántos y
-   cuándo), `hanging_leg` (deberían quedar solo las de NonKYC) y que no frene
-   nada más. Ojo: `bot_miss` no para el bot (elegido por el usuario); si
-   salen muchos seguidos, es que el book de Neoxa que ve no es el real.
-   `max_move_pct` se queda en 1.0: no distingue las colgadas de Neoxa;
-   revisarlo con los datos de después de T-77. Consulta rápida:
-   `grep -h '"bot_fire"' ~/.local/state/xbt/journal-2026102[67].jsonl | grep -o '"double":"[^"]*"\|"move":{[^}]*}'`
-   y cruzarla con `hanging_leg` del mismo journal.
+1. **T-78** (D-76): primero comparar en real el tope WS/REST de Neoxa; después
+   el contraste periódico. Mientras tanto, las tareas de T-77 siguen: mirar
+   `bot_miss` y `hanging_leg` tras unos días (consulta en
+   `specs/archive/handoff-historia.md`).
 2. Corregir d-550cd7 a mano (queda fuera de los 50 trades de NonKYC): leer sus
    4 trades de `/account/trades` con un límite mayor y añadir los `fill_fee`,
    con el daemon parado. Pendiente de que el usuario lo pida.
