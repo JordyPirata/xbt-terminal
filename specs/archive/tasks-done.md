@@ -991,3 +991,28 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   vez de `# type: ignore` (también en `_venue`); alias `BotAction` y
   `BOT_ACTIONS`. C901/PLR0911/PLR0912/PLR0915 sin avisos en los dos ficheros;
   pyright sin errores en ellos.
+
+### T-80 `wire.decode` más corta, mismo comportamiento · `done` · RF-31, RNF-07 · dep T-79 · D-77
+- Tests primero: un caso por rama de `decode` (Any, None, unión, Literal,
+  Decimal, dataclass, mapping, secuencias, escalares, tipo desconocido), con
+  el tipo de excepción y el texto de cada error, si `tests/services/test_wire.py`
+  no los cubre ya. Los tests existentes no cambian.
+- `services/wire.py`: `decode` queda en un despachador corto que llama a una
+  función por familia de tipos (`_decode_union`, `_decode_literal`,
+  `_decode_decimal`, `_decode_dataclass`, `_decode_mapping`,
+  `_decode_sequence`, `_decode_scalar`).
+- Hecho cuando: `uv run ruff check services/wire.py --select
+  C901,PLR0911,PLR0912,PLR0915` sin avisos (desde `src/xbt_terminal`), y
+  pytest, ruff y `spec_trace` como siempre.
+- Hecho: tests primero, en verde con el código de antes (`TestCadaTipo` en
+  `test_wire.py`: valor y tipo devueltos por cada familia, y tipo de excepción
+  y texto exacto de cada error). `decode` elige el decodificador en
+  `_decoder` (con `@cache`: una vez por tipo) recorriendo `_DECODERS` por
+  orden; una función por familia (`_decode_none`, `_decode_union`,
+  `_decode_literal`, `_decode_decimal`, `_decode_dataclass`,
+  `_decode_mapping`, `_decode_sequence`, `_decode_scalar`,
+  `_decode_unknown`). C901/PLR0911/PLR0912/PLR0915 sin avisos; pyright sin
+  errores.
+- Medido (dos `VenueAccount` con 20 órdenes y 50 fills, mínimo de 5 × 200):
+  antes 3.9 ms, partida sin caché 4.8 ms (+23 %, recorría la cadena en cada
+  valor), con `_decoder` en caché 2.9 ms (−28 %).

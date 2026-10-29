@@ -14,6 +14,7 @@ import json
 import types
 import typing
 from collections import abc, deque
+from collections.abc import Callable
 from decimal import Decimal, InvalidOperation
 from functools import cache
 from typing import Any
@@ -74,73 +75,118 @@ def _hints(cls: type) -> dict[str, Any]:
 
 
 def decode(tp: Any, data: Any) -> Any:
+    """Rehace `tp` desde el JSON de `data`; `TypeError` o `ValueError` si no encaja."""
+    return _decoder(tp)(tp, data)
+
+
+@cache
+def _decoder(tp: Any) -> Callable[[Any, Any], Any]:
+    """El decodificador de `tp`, elegido una vez por tipo: va en cada mensaje."""
     origin = typing.get_origin(tp)
-    args = typing.get_args(tp)
-    if tp is Any:
-        return data
-    if tp is type(None):
-        if data is not None:
-            raise TypeError(f"se esperaba null y llegó {data!r}")
-        return None
-    if origin in (typing.Union, types.UnionType):
-        if data is None and type(None) in args:
-            return None
-        errors = []
-        for arg in args:
-            if arg is type(None):
-                continue
-            try:
-                return decode(arg, data)
-            except (TypeError, ValueError) as exc:
-                errors.append(str(exc))
-        raise TypeError(f"{data!r} no encaja en {tp}: {'; '.join(errors)}")
-    if origin is typing.Literal:
-        if data not in args:
-            raise ValueError(f"{data!r} no es uno de {args}")
-        return data
-    if tp is Decimal:
-        if not isinstance(data, str):
-            raise TypeError(f"un Decimal llega como texto, no {type(data).__name__}")
-        try:
-            return Decimal(data)
-        except InvalidOperation:
-            raise ValueError(f"Decimal inválido: {data!r}") from None
-    if dataclasses.is_dataclass(tp):
-        if not isinstance(data, dict):
-            raise TypeError(f"{tp.__name__} llega como objeto")
-        hints = _hints(tp)
-        kwargs: dict[str, Any] = {}
-        for f in dataclasses.fields(tp):
-            if not f.init or f.name not in data:
-                continue
-            value = decode(hints[f.name], data[f.name])
-            if isinstance(value, deque) and f.default_factory is not dataclasses.MISSING:
-                fresh = f.default_factory()  # conserva el `maxlen` del campo
-                fresh.extend(value)
-                value = fresh
-            kwargs[f.name] = value
-        return tp(**kwargs)
-    if origin in (dict, typing.Mapping, abc.Mapping):
-        if not isinstance(data, dict):
-            raise TypeError("se esperaba un objeto")
-        key_t, val_t = args
-        return {decode(key_t, k): decode(val_t, v) for k, v in data.items()}
-    if origin in (list, tuple, deque, set, frozenset):
-        if not isinstance(data, list):
-            raise TypeError("se esperaba una lista")
-        if origin is tuple and not (len(args) == 2 and args[1] is Ellipsis):
-            return tuple(decode(a, v) for a, v in zip(args, data, strict=True))
-        items = [decode(args[0], v) for v in data]
-        if origin is deque:
-            return deque(items)
-        return origin(items)
-    if tp in (int, str, bool, float):
-        if tp is float and isinstance(data, int) and not isinstance(data, bool):
-            return float(data)
-        if not isinstance(data, tp) or (tp is int and isinstance(data, bool)):
-            raise TypeError(f"se esperaba {tp.__name__} y llegó {data!r}")
-        return data
+    for matches, decoder in _DECODERS:
+        if matches(tp, origin):
+            return decoder
+    return _decode_unknown
+
+
+def _decode_unknown(tp: Any, data: Any) -> Any:
     raise TypeError(f"tipo sin decodificar: {tp!r}")
+
+
+def _decode_none(tp: Any, data: Any) -> None:
+    if data is not None:
+        raise TypeError(f"se esperaba null y llegó {data!r}")
+
+
+def _decode_union(tp: Any, data: Any) -> Any:
+    """Prueba cada tipo de la unión por orden; el primero que encaja gana."""
+    args = typing.get_args(tp)
+    if data is None and type(None) in args:
+        return None
+    errors = []
+    for arg in args:
+        if arg is type(None):
+            continue
+        try:
+            return decode(arg, data)
+        except (TypeError, ValueError) as exc:
+            errors.append(str(exc))
+    raise TypeError(f"{data!r} no encaja en {tp}: {'; '.join(errors)}")
+
+
+def _decode_literal(tp: Any, data: Any) -> Any:
+    args = typing.get_args(tp)
+    if data not in args:
+        raise ValueError(f"{data!r} no es uno de {args}")
+    return data
+
+
+def _decode_decimal(tp: Any, data: Any) -> Decimal:
+    if not isinstance(data, str):
+        raise TypeError(f"un Decimal llega como texto, no {type(data).__name__}")
+    try:
+        return Decimal(data)
+    except InvalidOperation:
+        raise ValueError(f"Decimal inválido: {data!r}") from None
+
+
+def _decode_dataclass(tp: Any, data: Any) -> Any:
+    """Solo los campos que llegan y van al `__init__`; el resto, por defecto."""
+    if not isinstance(data, dict):
+        raise TypeError(f"{tp.__name__} llega como objeto")
+    hints = _hints(tp)
+    kwargs: dict[str, Any] = {}
+    for f in dataclasses.fields(tp):
+        if not f.init or f.name not in data:
+            continue
+        value = decode(hints[f.name], data[f.name])
+        if isinstance(value, deque) and f.default_factory is not dataclasses.MISSING:
+            fresh = f.default_factory()  # conserva el `maxlen` del campo
+            fresh.extend(value)
+            value = fresh
+        kwargs[f.name] = value
+    return tp(**kwargs)
+
+
+def _decode_mapping(tp: Any, data: Any) -> dict[Any, Any]:
+    if not isinstance(data, dict):
+        raise TypeError("se esperaba un objeto")
+    key_t, val_t = typing.get_args(tp)
+    return {decode(key_t, k): decode(val_t, v) for k, v in data.items()}
+
+
+def _decode_sequence(tp: Any, data: Any) -> Any:
+    """Listas, tuplas (de largo fijo o `tuple[X, ...]`), deques y conjuntos."""
+    if not isinstance(data, list):
+        raise TypeError("se esperaba una lista")
+    origin, args = typing.get_origin(tp), typing.get_args(tp)
+    if origin is tuple and not (len(args) == 2 and args[1] is Ellipsis):
+        return tuple(decode(a, v) for a, v in zip(args, data, strict=True))
+    return origin(decode(args[0], v) for v in data)
+
+
+def _decode_scalar(tp: Any, data: Any) -> Any:
+    """int, str, bool y float; un bool no vale como número."""
+    is_bool = isinstance(data, bool)
+    if tp is float and isinstance(data, int) and not is_bool:
+        return float(data)
+    if not isinstance(data, tp) or (tp is int and is_bool):
+        raise TypeError(f"se esperaba {tp.__name__} y llegó {data!r}")
+    return data
+
+
+# Por orden: la primera que encaja decide (`decode`).
+_DECODERS: tuple[tuple[Callable[[Any, Any], bool], Callable[[Any, Any], Any]], ...] = (
+    (lambda tp, origin: tp is Any, lambda tp, data: data),
+    (lambda tp, origin: tp is type(None), _decode_none),
+    (lambda tp, origin: origin in (typing.Union, types.UnionType), _decode_union),
+    (lambda tp, origin: origin is typing.Literal, _decode_literal),
+    (lambda tp, origin: tp is Decimal, _decode_decimal),
+    (lambda tp, origin: dataclasses.is_dataclass(tp), _decode_dataclass),
+    (lambda tp, origin: origin in (dict, typing.Mapping, abc.Mapping), _decode_mapping),
+    (lambda tp, origin: origin in (list, tuple, deque, set, frozenset), _decode_sequence),
+    (lambda tp, origin: tp in (int, str, bool, float), _decode_scalar),
+)
 
 
 # -- mensajes del daemon ----------------------------------------------------------

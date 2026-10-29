@@ -1,9 +1,12 @@
 """Modelos ↔ JSON para el socket del daemon (T-52, RF-31, D-61): `Decimal` como
 texto, sin `float` en dinero y de vuelta al mismo objeto."""
 
+import dataclasses
 import json
 from collections import deque
+from collections.abc import Mapping
 from decimal import Decimal
+from typing import Any, Literal
 
 import pytest
 
@@ -73,3 +76,95 @@ class TestLineas:
     def test_un_float_en_dinero_no_pasa(self):
         with pytest.raises((TypeError, ValueError)):
             decode(Balance, {"asset": "BTC", "available": 0.1, "locked": "0"})
+
+
+@dataclasses.dataclass
+class Sample:
+    """Dataclass de prueba: valor por defecto, deque con `maxlen` y campo sin init."""
+
+    a: int
+    b: str = "x"
+    c: deque[int] = dataclasses.field(default_factory=lambda: deque(maxlen=2))
+    d: int = dataclasses.field(default=7, init=False)
+
+
+@pytest.mark.spec("RF-31", "RNF-07")
+class TestCadaTipo:
+    """Fija qué devuelve `decode` con cada familia de tipos (D-77: partirla no lo cambia)."""
+
+    @pytest.mark.parametrize(
+        ("tp", "data", "expected"),
+        [
+            (Any, {"x": 1}, {"x": 1}),
+            (type(None), None, None),
+            (int | None, None, None),
+            (int | str, "a", "a"),
+            (Literal["a", "b"], "a", "a"),
+            (Decimal, "1.5", D("1.5")),
+            (dict[str, int], {"k": 1}, {"k": 1}),
+            (Mapping[str, int], {"k": 1}, {"k": 1}),
+            (list[int], [1, 2], [1, 2]),
+            (tuple[int, str], [1, "a"], (1, "a")),
+            (tuple[int, ...], [1, 2], (1, 2)),
+            (set[int], [1, 1], {1}),
+            (frozenset[int], [2], frozenset({2})),
+            (int, 1, 1),
+            (bool, True, True),
+            (float, 1.5, 1.5),
+        ],
+    )
+    def test_valores(self, tp, data, expected):
+        got = decode(tp, data)
+        assert got == expected and type(got) is type(expected)
+
+    def test_deque_y_float_desde_entero(self):
+        assert decode(deque[int], [1]) == deque([1])
+        assert type(decode(deque[int], [1])) is deque
+        assert type(decode(float, 1)) is float
+
+    def test_dataclass(self):
+        assert decode(Sample, {"a": 1}) == Sample(1)
+        got = decode(Sample, {"a": 1, "c": [1, 2, 3], "d": 9, "z": 0})
+        # conserva el maxlen del campo; ignora claves de más y campos sin init
+        assert got.c == deque([2, 3]) and got.c.maxlen == 2 and got.d == 7
+
+    @pytest.mark.parametrize(
+        ("tp", "data", "error", "message"),
+        [
+            (type(None), 0, TypeError, "se esperaba null y llegó 0"),
+            (
+                int | Decimal,
+                1.5,
+                TypeError,
+                "1.5 no encaja en int | decimal.Decimal: se esperaba int y llegó 1.5;"
+                " un Decimal llega como texto, no float",
+            ),
+            (
+                int | None,
+                "x",
+                TypeError,
+                "'x' no encaja en int | None: se esperaba int y llegó 'x'",
+            ),
+            (Literal["a", "b"], "c", ValueError, "'c' no es uno de ('a', 'b')"),
+            (Decimal, 1, TypeError, "un Decimal llega como texto, no int"),
+            (Decimal, "abc", ValueError, "Decimal inválido: 'abc'"),
+            (Sample, [1], TypeError, "Sample llega como objeto"),
+            (Sample, {"a": "1"}, TypeError, "se esperaba int y llegó '1'"),
+            (dict[str, int], [], TypeError, "se esperaba un objeto"),
+            (list[int], {}, TypeError, "se esperaba una lista"),
+            (int, True, TypeError, "se esperaba int y llegó True"),
+            (int, "1", TypeError, "se esperaba int y llegó '1'"),
+            (bool, 1, TypeError, "se esperaba bool y llegó 1"),
+            (str, 1, TypeError, "se esperaba str y llegó 1"),
+            (float, True, TypeError, "se esperaba float y llegó True"),
+            (bytes, b"", TypeError, "tipo sin decodificar: <class 'bytes'>"),
+        ],
+    )
+    def test_errores(self, tp, data, error, message):
+        with pytest.raises(error) as exc:
+            decode(tp, data)
+        assert type(exc.value) is error and str(exc.value) == message
+
+    def test_tupla_de_largo_fijo_con_menos_elementos(self):
+        with pytest.raises(ValueError):
+            decode(tuple[int, str], [1])

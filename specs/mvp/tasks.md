@@ -184,6 +184,8 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 
 ### T-79 `risk.check` y `commands.parse` más cortas, mismo comportamiento · `done` · RF-06, RF-07, RF-08, RF-10, CA-04 · D-77
 
+### T-80 `wire.decode` más corta, mismo comportamiento · `done` · RF-31, RNF-07 · dep T-79 · D-77
+
 ## Correcciones
 
 ### T-43 Errores sin texto · `done` · RF-19, RF-21, RF-11 · dep T-36 · D-51
