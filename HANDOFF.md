@@ -4,8 +4,22 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-29, 21:00 UTC)
+## Estado (2026-10-30, 02:15 UTC)
 
+- **Legibilidad (D-77, D-78), T-79 a T-85 hechas en `main`, sin desplegar.**
+  Refactor sin cambio de comportamiento: `risk.check` y `commands.parse`
+  partidas (T-79); `wire.decode` por familia de tipos, con el decodificador en
+  caché, ~28 % más rápida (T-80); formatos de sats y % en `ui/format.py`
+  (T-81); los fallos se piden al `Engine` con `report_fault`, `fault_count` y
+  `subscribe_faults` (T-82, D-78 corrige a D-77: la lista de registros es
+  real); pantallas modales en `ui/screens/`, `ui/app.py` de 1620 a ~810
+  líneas (T-83); `XbtApp(hub, view=ClientView, services=ClientServices, ...)`,
+  10 parámetros en vez de 21 (T-84); ruff con `C90` (tope 12) y `N`,
+  `nonkyc._ws_events` con `_BookOrder` y `ws_message`, `remote._handle` con
+  tabla de handlers, excepciones con sufijo `Error` (`DaemonGoneError`,
+  `DaemonRefusedError`, `RefusedError`, `AlreadyRunningError`) (T-85).
+  `origin` tiene hasta T-79 (`ae81b99`); T-80 a T-85 (6 commits) sin push.
+  El servidor sigue en T-78 (`f2cf49a`).
 - Spec en **v0.29** (D-76). **T-78 desplegada** (`f2cf49a`; daemon reiniciado
   el 2026-10-29 20:48:51 UTC, bot `armed` desde las 20:49:03): el daemon contrasta cada `book_check_s` (5 s) el tope
   del book de cada venue con el REST; si no coincide, el book queda en duda
@@ -98,12 +112,11 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-0. **Legibilidad (D-77, D-78):** hechas T-79 (`risk.check`,
-   `commands.parse`), T-80 (`wire.decode`, ~28 % más rápida), T-81 (formatos
-   en `ui/format.py`), T-82 (fallos pedidos al `Engine`) y T-83 (pantallas en
-   `ui/screens/`), T-84 (`XbtApp` con `view` y `services`) y T-85 (ruff con
-   `C90`, tope 12, y `N`), mismo comportamiento. D-77 terminada. Las
-   excepciones del cliente son ahora `DaemonGoneError` y `DaemonRefusedError`.
+0. **Desplegar T-79 a T-85** cuando el usuario quiera (push de los 6 commits y
+   los pasos de siempre). No cambia el comportamiento, pero sí código que corre
+   en el daemon: el stream WS de NonKYC (`_BookOrder`), la decodificación del
+   socket y el cliente remoto (el protocolo no cambia). Tras reiniciar, mirar `diag.log` y que el book de NonKYC se mueva y no
+   salgan `book_resync` de más en NonKYC.
 1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
    salen y en qué venue (en Neoxa se espera ~1 cada 3 a 4 min por carreras,
    D-76; muchos más, o en NonKYC con el book bien, sería un falso positivo que
@@ -252,5 +265,13 @@ Resueltas: PA-01 → D-08, PA-02 → D-10, PA-03 → D-19, PA-04 → D-42, PA-05
   `side_effect` de la ruta del fixture (con `name=`).
 - **NonKYC firma la url exacta:** construir la query con `urlencode` y pasar la
   url ya hecha a httpx (no `params=`), o la firma no coincide.
+- **Commits firmados con GPG:** si el pinentry no se atiende a tiempo, `git
+  commit` falla con "signing failed: Timeout" u "Operation cancelled" y no
+  deja commit (lo preparado sigue en el índice). Repetir cuando el usuario
+  esté para desbloquear la clave.
+- **Refactors sin cambio de comportamiento (D-77):** tests de caracterización
+  primero (en verde con el código de antes), y medir antes y después si el
+  código está en un camino caliente: partir `wire.decode` sin caché la hizo un
+  23 % más lenta.
 - El trazador cuenta un ID como cubierto con un solo test: RF-05 y RNF-03 solo
   tienen tests de topes en la config, no del comportamiento real.
