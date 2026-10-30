@@ -50,6 +50,40 @@ class TestPiernaColgada:
         assert [f.where for f in faults] == ["engine"]
 
 
+@pytest.mark.spec("RNF-14", "RF-30")
+class TestFallos:
+    """Con registros distintos en órdenes y hub (D-78), el motor los junta."""
+
+    def test_cada_servicio_trae_el_suyo(self, tmp_path):
+        s = double.Setup(tmp_path)
+        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        assert s.orders.faults is not s.hub.faults
+        assert engine.faults == [s.orders.faults, s.hub.faults]
+
+    def test_report_fault_apunta_en_el_de_ordenes(self, tmp_path):
+        s = double.Setup(tmp_path)
+        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        fault = engine.report_fault("control", RuntimeError("bug"))
+        assert fault.where == "control" and "bug" in fault.error
+        assert s.orders.faults.count == 1 and s.hub.faults.count == 0
+
+    def test_sin_ordenes_apunta_en_el_del_hub(self, tmp_path):
+        s = double.Setup(tmp_path)
+        engine = Engine(s.hub, mode="dry-run")
+        engine.report_fault("ui", RuntimeError("bug"))
+        assert s.hub.faults.count == 1
+
+    def test_fault_count_suma_y_subscribe_faults_oye_todos(self, tmp_path):
+        s = double.Setup(tmp_path)
+        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        seen = []
+        engine.subscribe_faults(seen.append)
+        s.orders.faults.report("journal", RuntimeError("a"))
+        s.hub.faults.report("market", RuntimeError("b"))
+        assert engine.fault_count == 2
+        assert [f.where for f in seen] == ["journal", "market"]
+
+
 @pytest.mark.spec("RNF-12", "RF-30")
 class TestReconciliacion:
     async def test_el_bucle_reconcilia_y_avisa(self, tmp_path):

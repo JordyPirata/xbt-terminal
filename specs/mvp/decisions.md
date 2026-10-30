@@ -87,6 +87,7 @@ dicen en su propia nota.
 | D-75 | 2026-10-27 | El bot envía primero la pierna de Neoxa y la otra solo si llena (requirements v0.28, T-77) |
 | D-76 | 2026-10-29 | El book quieto se contrasta con el REST; la conexión viva ya no basta (requirements v0.29, T-78, corrige la frescura de D-13) |
 | D-77 | 2026-10-29 | Legibilidad por partes, sin cambio de comportamiento; primero `risk.check` y `commands.parse` (T-79) |
+| D-78 | 2026-10-29 | Los fallos se piden al `Engine` (`report_fault`, `fault_count`, `subscribe_faults`), no a su lista (T-82, corrige D-77) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1900,3 +1901,23 @@ formateadores de sats y % casi iguales en `ui/`.
 - Activar `C90` y `N` en `pyproject.toml` queda para cuando las partes que
   saltan estén hechas (si no, habría que llenar el código de `noqa`).
 **Toca:** T-79 (sin cambios en requirements ni design).
+
+## D-78 · 2026-10-29 · Los fallos se piden al `Engine`, no a su lista (T-82, corrige D-77)
+**Contexto:** D-77 proponía cambiar `Engine.faults: list[Faults]` por
+`Faults | None`. Al mirarlo, la lista es real: en la app hay un registro
+compartido, pero cuando cada servicio se crea suelto (los tests, y cualquier
+`Engine` sin el `__main__`) órdenes, cuenta y hub traen cada uno el suyo, y el
+`Engine` se suscribe a todos y suma sus cuentas. Lo que confunde es que
+`control.py`, `wire.py` y `ui/app.py` miren dentro: `faults[0].report(...)`,
+`sum(f.count for f in faults)` y `faults: list[Any]` en el protocolo `Runner`.
+El hub siempre trae un registro, así que la lista nunca está vacía y los
+`if engine.faults:` no tenían otra rama posible.
+**Decisión:**
+- `Engine.faults` sigue siendo la lista de registros distintos.
+- `Engine.report_fault(where, exc)` apunta en el primero (el de órdenes si
+  hay, si no el de la cuenta, si no el del hub: el mismo que antes),
+  `Engine.fault_count` suma los de todos y `Engine.subscribe_faults(listener)`
+  se suscribe a todos.
+- `control.py`, `wire.py` y `ui/app.py` usan solo esas tres; `Runner` las
+  declara con su tipo en vez de `faults: list[Any]`.
+**Toca:** T-82 (sin cambios en requirements ni design).

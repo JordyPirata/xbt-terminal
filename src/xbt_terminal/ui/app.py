@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Protocol
+from typing import Protocol
 
 from rich.text import Text
 from textual import events
@@ -129,8 +129,11 @@ class Runner(Protocol):
     """Lo que la app necesita de quien corre los servicios: con daemon, un
     `Engine` sin órdenes sobre el mercado remoto; en los tests, el de verdad."""
 
-    faults: list[Any]
+    @property
+    def fault_count(self) -> int: ...
 
+    def report_fault(self, where: str, exc: BaseException) -> Fault: ...
+    def subscribe_faults(self, listener: Callable[[Fault], None]) -> None: ...
     def subscribe(self, listener: Callable[[Notice], None]) -> None: ...
     def services(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]: ...
     def watchers(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]: ...
@@ -1047,7 +1050,6 @@ class XbtApp(App[None]):
         self._shown_double: str | None = None
         # avisos, fallos y bucles que no dependen de la pantalla (D-61, D-66)
         self.engine = engine
-        self._faults = self.engine.faults
 
     def compose(self) -> ComposeResult:
         yield StatusBar()
@@ -1084,8 +1086,7 @@ class XbtApp(App[None]):
             self.say(f"⚠ {warning}", error=True)
         if self.bot is not None:
             self.bot.subscribe(self._on_bot)
-        for faults in self._faults:
-            faults.subscribe(self._on_fault)
+        self.engine.subscribe_faults(self._on_fault)
         if self.account is not None:
             self.account.subscribe(self._on_account)
         if self.orders is not None:
@@ -1202,7 +1203,7 @@ class XbtApp(App[None]):
             for venue in VENUES
         }
         uncertain = len(self.orders.uncertain) if self.orders is not None else 0
-        faults = sum(f.count for f in self._faults)
+        faults = self.engine.fault_count
         if remote is not None:  # lo del daemon (RF-31)
             uncertain, faults = len(remote.uncertain), faults + remote.faults
         bot = self.bot.state.status if self.bot is not None else None
@@ -1294,7 +1295,7 @@ class XbtApp(App[None]):
         except (DaemonGone, DaemonRefused) as exc:
             self.say(str(exc), error=True)
         except Exception as exc:
-            self._faults[0].report(where, exc)
+            self.engine.report_fault(where, exc)
 
     # -- comandos ---------------------------------------------------------------
 

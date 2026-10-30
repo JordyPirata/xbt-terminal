@@ -20,7 +20,7 @@ from ..core.notices import VENUE, Notice
 from .account import AccountService
 from .bot import BotService
 from .deposits import DepositService
-from .faults import Faults
+from .faults import Fault, Faults
 from .market import MarketHub
 from .orders import OrderService, Reconciled
 from .rebalance import RebalanceService
@@ -70,7 +70,7 @@ class Engine:
         if value_every_s is not None and account is not None and journal is not None:
             self.values = ValueRecorder(
                 account, hub, journal, every_s=value_every_s,
-                faults=self.faults[0] if self.faults else None,
+                faults=self._main_faults,
             )  # fmt: skip
         hub.subscribe(self._on_hub)
         if orders is not None and account is not None:
@@ -80,6 +80,26 @@ class Engine:
 
     def subscribe(self, listener: Callable[[Notice], None]) -> None:
         self._listeners.append(listener)
+
+    # -- fallos (RNF-14, D-78) ----------------------------------------------------
+
+    def report_fault(self, where: str, exc: BaseException) -> Fault:
+        """Apunta un fallo en el registro principal: el de órdenes si hay, si no el
+        de la cuenta, si no el del hub (siempre hay uno)."""
+        return self._main_faults.report(where, exc)
+
+    @property
+    def _main_faults(self) -> Faults:
+        return self.faults[0]  # el hub siempre trae uno: nunca está vacía
+
+    @property
+    def fault_count(self) -> int:
+        """Fallos de la sesión, sumados entre todos los registros."""
+        return sum(f.count for f in self.faults)
+
+    def subscribe_faults(self, listener: Callable[[Fault], None]) -> None:
+        for faults in self.faults:
+            faults.subscribe(listener)
 
     def _say(self, text: str, *, error: bool = False) -> None:
         notice = Notice(text, error)
@@ -117,7 +137,7 @@ class Engine:
             try:
                 await self.reconcile()
             except Exception as exc:  # un bug aquí no puede parar la búsqueda
-                self.faults[0].report("reconcile", exc)
+                self.report_fault("reconcile", exc)
 
     # -- piernas colgadas (RF-07) -------------------------------------------------
 
@@ -127,7 +147,7 @@ class Engine:
         try:
             new = self.orders.check_doubles()
         except Exception as exc:  # cada segundo: un bug aquí no puede cerrar nada
-            self.faults[0].report("engine", exc)
+            self.report_fault("engine", exc)
             return
         for double_id in new:
             self._say(

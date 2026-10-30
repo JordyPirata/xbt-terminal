@@ -1031,3 +1031,20 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   los cuatro usos de "un decimal, sin signo" de la pantalla de reequilibrio.
   `ui/app.py` ya no importa `sats`. Ningún test de UI cambió: los textos de la
   pantalla son los mismos.
+
+### T-82 Los fallos se piden al `Engine` · `done` · RNF-14, RF-30, RF-31 · dep T-81 · D-78
+- Tests primero en `tests/services/test_engine.py`: con registros distintos en
+  órdenes y hub, `report_fault` apunta en el de órdenes, `fault_count` suma
+  los dos y `subscribe_faults` oye los dos. Los tests existentes no cambian.
+- `services/engine.py`: `report_fault`, `fault_count` y `subscribe_faults`;
+  los bucles del motor y `ValueRecorder` usan el mismo registro que antes.
+- `services/control.py`, `services/wire.py` y `ui/app.py` usan solo esas tres;
+  fuera los `faults[0]` y los `if engine.faults:`. `Runner` las declara.
+- Hecho cuando: `grep -rn "faults\[0\]" src` solo encuentra
+  `Engine._main_faults`, y pytest, ruff y `spec_trace` como siempre.
+- Hecho: `TestFallos` en `test_engine.py` primero (3 en rojo; el cuarto fija
+  que órdenes y hub traen registros distintos). `Engine.report_fault`,
+  `fault_count`, `subscribe_faults` y `_main_faults` (el único `faults[0]`).
+  Fuera la rama `log.exception` de `ControlServer._guarded`, que no podía
+  darse (la lista nunca está vacía). `Runner` sin `Any`. Pyright: los mismos 8
+  errores previos en `ui/app.py`, ninguno nuevo.

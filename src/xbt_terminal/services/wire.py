@@ -246,7 +246,7 @@ def snapshot(engine: Engine) -> Snapshot:
         hanging=dict(orders.hanging) if orders is not None else {},
         uncertain=[u.req for u in orders.uncertain.values()] if orders is not None else [],
         in_flight=orders.in_flight if orders is not None else 0,
-        faults=sum(f.count for f in engine.faults),
+        faults=engine.fault_count,
         can_trade={vid: orders.can_trade(vid) for vid in VENUES} if orders is not None else {},
         deposit_venues=engine.deposits.venues if engine.deposits is not None else (),
         fee_venues=engine.rebalance.venues if engine.rebalance is not None else (),

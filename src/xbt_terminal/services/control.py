@@ -172,8 +172,7 @@ class ControlServer:
         self._subscribed = True
         engine = self._engine
         engine.subscribe(self._on_notice)
-        for faults in engine.faults:
-            faults.subscribe(self._on_fault)
+        engine.subscribe_faults(self._on_fault)
         if engine.bot is not None:
             engine.bot.subscribe(lambda _state: self._dirty.set())
         if engine.account is not None:
@@ -195,10 +194,7 @@ class ControlServer:
         try:
             work()
         except Exception as exc:
-            if self._engine.faults:
-                self._engine.faults[0].report("control", exc)
-            else:
-                log.exception("socket de control: fallo al reenviar el mercado")
+            self._engine.report_fault("control", exc)
 
     def _forward(self, venue: VenueId, event: MarketEvent) -> None:
         if isinstance(event, Trade):
@@ -249,8 +245,7 @@ class ControlServer:
         try:
             return {"type": "state", "state": snapshot(self._engine)}
         except Exception as exc:  # un bug aquí no puede tumbar el daemon (RNF-14)
-            if self._engine.faults:
-                self._engine.faults[0].report("control", exc)
+            self._engine.report_fault("control", exc)
             return None
 
     def _line(self, message: dict[str, Any]) -> bytes:
@@ -338,8 +333,7 @@ class ControlServer:
         except (KeyError, TypeError, ValueError) as exc:
             return {**head, "error": f"petición mal formada: {exc}"}
         except Exception as exc:  # un bug no tumba el daemon (RNF-14)
-            if self._engine.faults:
-                self._engine.faults[0].report("control", exc)
+            self._engine.report_fault("control", exc)
             return {**head, "error": f"fallo del daemon: {exc}"}
         finally:
             self._dirty.set()

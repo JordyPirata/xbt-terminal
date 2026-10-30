@@ -188,6 +188,8 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 
 ### T-81 Formateadores de sats y % en `ui/format.py` · `done` · RF-04, RF-25, RF-29 · dep T-80 · D-77
 
+### T-82 Los fallos se piden al `Engine` · `done` · RNF-14, RF-30, RF-31 · dep T-81 · D-78
+
 ## Correcciones
 
 ### T-43 Errores sin texto · `done` · RF-19, RF-21, RF-11 · dep T-36 · D-51
