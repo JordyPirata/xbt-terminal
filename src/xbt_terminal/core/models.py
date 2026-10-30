@@ -35,7 +35,7 @@ def asset_label(asset: str) -> str:
     return ASSET_LABELS.get(asset, asset)
 
 
-def D(value: Decimal | str | int) -> Decimal:
+def D(value: Decimal | str | int) -> Decimal:  # noqa: N802 — idioma para Decimal
     """Construye un Decimal rechazando float, que ya llegaría con error binario."""
     if isinstance(value, float):
         raise TypeError(f"float no permitido en importes: {value!r}; usar str")

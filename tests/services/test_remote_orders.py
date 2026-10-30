@@ -21,7 +21,7 @@ from xbt_terminal.services.orders import (
     Rejected,
     Sent,
 )
-from xbt_terminal.services.remote import DaemonGone, DaemonRefused, RemoteEngine
+from xbt_terminal.services.remote import DaemonGoneError, DaemonRefusedError, RemoteEngine
 
 from .test_double_orders import Setup as DoubleSetup
 from .test_uncertain import Rig
@@ -96,7 +96,7 @@ class TestOrdenSimple:
             pending = await remote.orders.prepare(buy())
             token = remote.orders._tokens[id(pending)][1]
             await remote.orders.confirm(pending)
-            with pytest.raises(DaemonRefused, match="caducada o ya usada"):
+            with pytest.raises(DaemonRefusedError, match="caducada o ya usada"):
                 await remote.request("confirm", {"token": token})
             assert events(d.s.lines()).count("order_sent") == 1
 
@@ -111,7 +111,7 @@ class TestOrdenSimple:
 
     async def test_un_token_desconocido(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
-            with pytest.raises(DaemonRefused, match="caducada o ya usada"):
+            with pytest.raises(DaemonRefusedError, match="caducada o ya usada"):
                 await remote.request("confirm", {"token": "inventado"})
 
     async def test_dos_clientes_con_el_mismo_token_solo_uno_envia(self, tmp_path):
@@ -123,14 +123,14 @@ class TestOrdenSimple:
                 b.request("confirm", {"token": token}),
                 return_exceptions=True,
             )
-            assert sum(isinstance(r, DaemonRefused) for r in results) == 1
+            assert sum(isinstance(r, DaemonRefusedError) for r in results) == 1
             assert events(d.s.lines()).count("order_sent") == 1
 
     async def test_en_solo_lectura_no_hay_ordenes(self, tmp_path):
         s = Rig(tmp_path)
         s.orders = None
         async with Daemon(tmp_path, setup=s) as d, Linked(d) as remote:
-            with pytest.raises(DaemonRefused, match="solo lectura"):
+            with pytest.raises(DaemonRefusedError, match="solo lectura"):
                 await remote.orders.prepare(buy())
 
 
@@ -188,11 +188,11 @@ class TestSinDaemon:
             asking = asyncio.create_task(remote.orders.prepare(buy()))
             await asyncio.sleep(0.05)
             await d.server.aclose()
-            with pytest.raises(DaemonGone):
+            with pytest.raises(DaemonGoneError):
                 await asking
             gate.set()
 
     async def test_sin_conexion_no_se_manda(self, tmp_path):
         remote = RemoteEngine(tmp_path / "no.sock", has_bot=False)
-        with pytest.raises(DaemonGone):
+        with pytest.raises(DaemonGoneError):
             await remote.orders.prepare(buy())

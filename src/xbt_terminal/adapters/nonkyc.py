@@ -34,7 +34,7 @@ import hmac
 import json
 import logging
 import secrets
-from collections.abc import AsyncIterator, Iterable, Mapping
+from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
 from contextlib import aclosing
 from decimal import Decimal
 from typing import Any
@@ -192,6 +192,21 @@ def parse_ws_trade(raw: dict[str, Any]) -> tuple[str, Trade]:
         side=_side(raw.get("side")),  # type: ignore[arg-type]
         ts=int(raw["timestampms"]),
     )
+
+
+def ws_message(msg: Any, symbol: str, frame: str) -> dict[str, Any] | None:
+    """El mensaje del WS si es del par; None si es otra cosa (respuestas a
+    peticiones, otros símbolos). Un error del venue o algo que no es un objeto
+    cortan la sesión con `VenueError`."""
+    if not isinstance(msg, dict):
+        raise VenueError(f"NonKYC WS: mensaje inesperado {str(frame)[:80]!r}")
+    if msg.get("error"):
+        err = msg["error"]
+        raise VenueError(f"NonKYC WS: {err.get('code')} {err.get('message')}")
+    params = msg.get("params")
+    if not isinstance(params, dict) or params.get("symbol") != symbol:
+        return None
+    return msg
 
 
 def parse_candles(payload: dict[str, Any]) -> list[Candle]:
@@ -661,62 +676,84 @@ class NonKYCVenue(StreamingVenue):
         async with self.ws_connect() as ws:
             await ws.send(self._request("subscribeOrderbook", 1))
             await ws.send(self._request("subscribeTrades", 2))
-            seq: int | None = None  # último delta entregado; None = esperando snapshot
-            pending: dict[int, BookDelta] = {}
+            book = _BookOrder()
             while True:
                 try:
-                    timeout = self._reorder_wait_s if pending else None
+                    timeout = self._reorder_wait_s if book.waiting else None
                     frame = await asyncio.wait_for(ws.recv(), timeout)
                 except TimeoutError:
-                    for delta in sorted(pending.values(), key=lambda d: d.seq or 0):
+                    for delta in book.gap():
                         yield delta
-                    pending.clear()
-                    seq = None
                     await ws.send(self._request("subscribeOrderbook", 3))
                     continue
                 if self._resync:
-                    self._resync, seq = False, None
-                    pending.clear()
-                msg = self.parsing(_loads, frame)
-                if not isinstance(msg, dict):
-                    raise VenueError(f"NonKYC WS: mensaje inesperado {str(frame)[:80]!r}")
-                if msg.get("error"):
-                    err = msg["error"]
-                    raise VenueError(f"NonKYC WS: {err.get('code')} {err.get('message')}")
-                params = msg.get("params")
-                if not isinstance(params, dict) or params.get("symbol") != self.symbol:
-                    continue  # respuestas a peticiones, otros símbolos
-                method = msg.get("method")
-                if method == "snapshotOrderbook":
-                    snap = self.parsing(
-                        parse_book, params, int(msg["timestamp"]), int(params["sequence"])
-                    )
-                    seq = snap.seq
-                    pending = {k: d for k, d in pending.items() if seq is not None and k > seq}
-                    yield snap
-                    for delta in self._drain(pending, snap.seq):
-                        seq = delta.seq
-                        yield delta
-                elif method == "updateOrderbook":
-                    ts = params.get("timestamp")
-                    delta = self.parsing(parse_delta, params, iso_ms(ts) if ts else self._clock())
-                    if seq is None or delta.seq is None or delta.seq <= seq:
-                        continue  # antes del snapshot, o viejo/duplicado
-                    pending[delta.seq] = delta
-                    for ready in self._drain(pending, seq):
-                        seq = ready.seq
-                        yield ready
-                elif method in ("snapshotTrades", "updateTrades"):
-                    raws = params.get("data") or []
-                    parsed = self.parsing(lambda rs: [parse_ws_trade(r) for r in rs], raws)
-                    for trade in self.fresh(parsed):
-                        yield trade
+                    self._resync = False
+                    book.reset()
+                msg = ws_message(self.parsing(_loads, frame), self.symbol, frame)
+                if msg is None:
+                    continue
+                for event in self._ws_message_events(book, msg):
+                    yield event
 
-    @staticmethod
-    def _drain(pending: dict[int, BookDelta], seq: int | None) -> list[BookDelta]:
-        """Saca de `pending` los deltas que encadenan con `seq`, en orden."""
-        out: list[BookDelta] = []
-        while seq is not None and seq + 1 in pending:
-            seq += 1
-            out.append(pending.pop(seq))
+    def _ws_message_events(self, book: _BookOrder, msg: dict[str, Any]) -> Sequence[MarketEvent]:
+        """Lo que sale de un mensaje del par: book en orden o trades nuevos."""
+        method, params = msg.get("method"), msg["params"]
+        if method == "snapshotOrderbook":
+            snap = self.parsing(parse_book, params, int(msg["timestamp"]), int(params["sequence"]))
+            return book.snapshot(snap)
+        if method == "updateOrderbook":
+            ts = params.get("timestamp")
+            return book.delta(
+                self.parsing(parse_delta, params, iso_ms(ts) if ts else self._clock())
+            )
+        if method in ("snapshotTrades", "updateTrades"):
+            raws = params.get("data") or []
+            return self.fresh(self.parsing(lambda rs: [parse_ws_trade(r) for r in rs], raws))
+        return []
+
+
+class _BookOrder:
+    """Orden de los deltas del book en una sesión WS: entrega cada uno cuando
+    encadena con el anterior y guarda los adelantados hasta que llega el que falta."""
+
+    def __init__(self) -> None:
+        self.seq: int | None = None  # último delta entregado; None = esperando snapshot
+        self.pending: dict[int, BookDelta] = {}
+
+    @property
+    def waiting(self) -> bool:
+        """Hay deltas adelantados esperando al que falta."""
+        return bool(self.pending)
+
+    def reset(self) -> None:
+        """A esperar un snapshot nuevo; lo pendiente se descarta."""
+        self.seq = None
+        self.pending.clear()
+
+    def gap(self) -> list[BookDelta]:
+        """Hueco real: los pendientes, en orden, y a esperar un snapshot."""
+        out = sorted(self.pending.values(), key=lambda d: d.seq or 0)
+        self.reset()
+        return out
+
+    def snapshot(self, snap: BookSnapshot) -> list[MarketEvent]:
+        """El snapshot y los pendientes que encadenan con él."""
+        self.seq = snap.seq
+        after = snap.seq
+        self.pending = {k: d for k, d in self.pending.items() if after is not None and k > after}
+        return [snap, *self._drain()]
+
+    def delta(self, delta: BookDelta) -> list[MarketEvent]:
+        """Los deltas que ya se pueden entregar; nada si es viejo o llega antes del
+        snapshot."""
+        if self.seq is None or delta.seq is None or delta.seq <= self.seq:
+            return []
+        self.pending[delta.seq] = delta
+        return self._drain()
+
+    def _drain(self) -> list[MarketEvent]:
+        out: list[MarketEvent] = []
+        while self.seq is not None and self.seq + 1 in self.pending:
+            self.seq += 1
+            out.append(self.pending.pop(self.seq))
         return out

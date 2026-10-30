@@ -69,11 +69,11 @@ class TestQuantizeQty:
 
 @pytest.mark.spec("RNF-07")
 class TestSoloDecimal:
-    def test_D_rechaza_float(self):
+    def test_D_rechaza_float(self):  # noqa: N802
         with pytest.raises(TypeError):
             D(0.1)
 
-    def test_D_acepta_str_e_int(self):
+    def test_D_acepta_str_e_int(self):  # noqa: N802
         assert D("0.1") == Decimal("0.1")
         assert D(3) == Decimal(3)
 

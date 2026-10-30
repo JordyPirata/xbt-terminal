@@ -8,7 +8,7 @@ import pytest
 from xbt_terminal.core.models import Balance, D
 from xbt_terminal.services.control import ControlServer
 from xbt_terminal.services.engine import Engine
-from xbt_terminal.services.remote import DaemonGone, RemoteEngine, probe
+from xbt_terminal.services.remote import DaemonGoneError, RemoteEngine, probe
 
 from .test_control import FakeBot
 from .test_uncertain import Rig
@@ -61,11 +61,11 @@ class TestProbar:
             assert not (await probe(d.path)).has_bot
 
     async def test_sin_daemon(self, tmp_path):
-        with pytest.raises(DaemonGone, match="xbt daemon"):
+        with pytest.raises(DaemonGoneError, match="xbt daemon"):
             await probe(tmp_path / "no.sock")
 
     async def test_una_ruta_que_no_cabe_se_explica(self, tmp_path):
-        with pytest.raises(DaemonGone, match="no se puede abrir el socket"):
+        with pytest.raises(DaemonGoneError, match="no se puede abrir el socket"):
             await probe(tmp_path / ("x" * 120) / "d.sock")
 
 
@@ -174,3 +174,39 @@ class TestReconectar:
         remote.subscribe(notices.append)
         remote.bot.arm()
         assert notices[0].error and "sin conexión con el daemon" in notices[0].text
+
+
+@pytest.mark.spec("RF-31")
+class TestMensajesDelDaemon:
+    """`_handle` reparte cada tipo de mensaje (T-85); sin conexión, solo avisos."""
+
+    def heard(self, tmp_path):
+        remote = RemoteEngine(tmp_path / "x.sock", has_bot=False)
+        out = []
+        remote.subscribe(out.append)
+        return remote, out
+
+    def test_un_tipo_desconocido_no_hace_nada(self, tmp_path):
+        remote, out = self.heard(tmp_path)
+        remote._handle({"type": "nuevo", "x": 1})
+        remote._handle({"x": 1})
+        assert out == []
+
+    def test_reply_con_error_sin_esperar_se_avisa(self, tmp_path):
+        remote, out = self.heard(tmp_path)
+        remote._handle({"type": "reply", "id": 99, "error": "no"})
+        remote._handle({"type": "reply", "id": 98})
+        assert [(n.text, n.error) for n in out] == [("no", True)]
+
+    def test_error_sin_esperar_se_avisa(self, tmp_path):
+        remote, out = self.heard(tmp_path)
+        remote._handle({"type": "error", "id": 97, "error": "sin saldo"})
+        assert [(n.text, n.error) for n in out] == [
+            ("el daemon no aceptó la orden: sin saldo", True)
+        ]
+
+    def test_aviso_y_fallo(self, tmp_path):
+        remote, out = self.heard(tmp_path)
+        remote._handle({"type": "notice", "text": "hola", "error": False})
+        remote._handle({"type": "fault", "message": "bug"})
+        assert [(n.text, n.error) for n in out] == [("hola", False), ("daemon: bug", True)]

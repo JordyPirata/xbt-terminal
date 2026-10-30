@@ -713,7 +713,7 @@ Dos formas de arrancar el mismo binario:
     daemon por `token` 60 s, de un solo uso; uno caducado, usado o desconocido
     se contesta con error. Nunca viajan `Settings` ni credenciales.
 - `services/remote.py` (cliente): `RemoteEngine` (conexión, reconexión,
-  peticiones con `id` y futuros; `DaemonGone` a las pendientes si cae),
+  peticiones con `id` y futuros; `DaemonGoneError` a las pendientes si cae),
   `RemoteMarket` (misma forma que `MarketHub.state`, velas con
   `CandleBuilder`), `RemoteAccount`, `RemoteBot`, `RemoteOrders` (misma cara
   async que `OrderService`), `RemoteResults`, `RemoteDeposits` y

@@ -67,11 +67,11 @@ REPLIES: dict[str, type] = {
 LIMIT = 2**22  # una foto con muchas dobles cabe de sobra
 
 
-class DaemonGone(Exception):
+class DaemonGoneError(Exception):
     pass
 
 
-class DaemonRefused(Exception):
+class DaemonRefusedError(Exception):
     """El daemon contestó a una petición con un error (el texto es para el usuario)."""
 
 
@@ -86,12 +86,12 @@ async def _open(path: Path) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]
     try:
         return await asyncio.open_unix_connection(str(path), limit=LIMIT)
     except (FileNotFoundError, ConnectionRefusedError) as exc:
-        raise DaemonGone(
+        raise DaemonGoneError(
             f"no hay daemon escuchando en {path}: arráncalo con `xbt daemon` "
             "(o indica su socket con --socket)"
         ) from exc
     except OSError as exc:  # p. ej. una ruta de más de 107 bytes, o sin permiso
-        raise DaemonGone(f"no se puede abrir el socket {path}: {exc}") from exc
+        raise DaemonGoneError(f"no se puede abrir el socket {path}: {exc}") from exc
 
 
 async def probe(path: Path, timeout: float = 5.0) -> Hello:
@@ -102,13 +102,14 @@ async def probe(path: Path, timeout: float = 5.0) -> Hello:
             hello = loads(await reader.readline())
             state = loads(await reader.readline())
     except (TimeoutError, ValueError) as exc:
-        raise DaemonGone(f"el daemon de {path} no contesta bien: {exc}") from exc
+        raise DaemonGoneError(f"el daemon de {path} no contesta bien: {exc}") from exc
     finally:
         writer.close()
     try:
         view = decode(ClientView | None, hello.get("view"))
     except (TypeError, ValueError) as exc:
-        raise DaemonGone(f"el daemon de {path} manda una config que no se entiende: {exc}") from exc
+        message = f"el daemon de {path} manda una config que no se entiende: {exc}"
+        raise DaemonGoneError(message) from exc
     return Hello(str(hello["mode"]), state.get("state", {}).get("bot") is not None, view)
 
 
@@ -239,7 +240,7 @@ class RemoteResults:
         """Pide el informe del rango; devuelve el error, si lo hubo."""
         try:
             _, raw, _ = await self._link.request("results", {"range": rng})
-        except (DaemonGone, DaemonRefused) as exc:
+        except (DaemonGoneError, DaemonRefusedError) as exc:
             self.error = str(exc)
             return self.error
         self._reports[rng] = decode(Report, raw)
@@ -261,7 +262,8 @@ class RemoteDeposits:
     async def load(self) -> list[DepositRow]:
         try:
             _, raw, _ = await self._link.request("deposits", {})
-        except (DaemonGone, DaemonRefused) as exc:  # cada fila lo dice, como un fallo del venue
+        # cada fila lo dice, como un fallo del venue
+        except (DaemonGoneError, DaemonRefusedError) as exc:
             return [DepositRow(vid, a, None, str(exc)) for vid in self.venues for a in ASSETS]
         return list(decode(Rows, raw).rows)
 
@@ -280,7 +282,7 @@ class RemoteRebalance:
     async def load(self) -> dict[tuple[VenueId, str], FeeInfo]:
         try:
             _, raw, _ = await self._link.request("withdrawal_fees", {})
-        except (DaemonGone, DaemonRefused) as exc:
+        except (DaemonGoneError, DaemonRefusedError) as exc:
             return {(vid, a): str(exc) for vid in self.venues for a in ASSETS}
         return {(r.venue, r.asset): r.fee for r in decode(Fees, raw).fees}
 
@@ -333,7 +335,7 @@ class RemoteOrders:
     """Las órdenes del daemon con la cara de `OrderService` que usa la app. La
     propuesta se guarda con su referencia hasta confirmarla; un rechazo del daemon
     al confirmar (propuesta caducada…) vuelve como el resultado de error que la app
-    ya sabe enseñar. Sin daemon, `DaemonGone`."""
+    ya sabe enseñar. Sin daemon, `DaemonGoneError`."""
 
     def __init__(self, link: RemoteEngine) -> None:
         self._link = link
@@ -379,7 +381,7 @@ class RemoteOrders:
     def _token(self, proposal: object) -> str:
         entry = self._tokens.pop(id(proposal), None)
         if entry is None or entry[0] is not proposal:
-            raise DaemonRefused("esa propuesta no salió de este cliente")
+            raise DaemonRefusedError("esa propuesta no salió de este cliente")
         return entry[1]
 
     async def prepare(self, cmd: PlaceOrder) -> Pending | Rejected:
@@ -388,7 +390,7 @@ class RemoteOrders:
     async def confirm(self, pending: Pending) -> Sent | Failed | Uncertain | Rejected:
         try:
             return await self._ask("confirm", {"token": self._token(pending)})  # type: ignore[no-any-return]
-        except DaemonRefused as exc:
+        except DaemonRefusedError as exc:
             return Failed(pending.req, f"el daemon no la envió: {exc}", local=True)
 
     async def prepare_double(self, cmd: DoubleOrder) -> PendingDouble | DoubleRejected:
@@ -397,7 +399,7 @@ class RemoteOrders:
     async def confirm_double(self, pending: PendingDouble) -> DoubleSent | DoubleRejected:
         try:
             return await self._ask("confirm_double", {"token": self._token(pending)})  # type: ignore[no-any-return]
-        except DaemonRefused as exc:
+        except DaemonRefusedError as exc:
             why = (Violation("daemon", f"el daemon no la envió: {exc}"),)
             return DoubleRejected(pending.id, (Rejected(pending.buy.req, why),))
 
@@ -410,7 +412,7 @@ class RemoteOrders:
     async def execute_cancel(self, plan: CancelPlan) -> CancelResult:
         try:
             return await self._ask("execute_cancel", {"token": self._token(plan)})  # type: ignore[no-any-return]
-        except DaemonRefused as exc:
+        except DaemonRefusedError as exc:
             error = f"el daemon no canceló: {exc}"
             return CancelResult(
                 {vid: len(o) for vid, o in plan.orders.items()},
@@ -437,6 +439,20 @@ class RemoteEngine:
         self._waiting: dict[int, asyncio.Future[tuple[str, Any, str | None]]] = {}
         self._listeners: list[Callable[[Notice], None]] = []
         self._link_listeners: list[Callable[[bool], None]] = []
+        # qué hacer con cada tipo de mensaje del daemon (`_handle`)
+        self._handlers: dict[Any, Callable[[dict[str, Any]], None]] = {
+            "hello": self._on_hello,
+            "state": self._on_state,
+            "market_init": self._on_market,
+            "book": self._on_market,
+            "trade": self._on_market,
+            "conn": self._on_market,
+            "fill": self._on_fill,
+            "notice": self._on_notice,
+            "fault": self._on_fault,
+            "reply": self._on_reply,
+            "error": self._on_error,
+        }
 
     # -- lo que lee la app -------------------------------------------------------
 
@@ -487,9 +503,9 @@ class RemoteEngine:
 
     async def request(self, cmd: str, args: dict[str, Any]) -> tuple[str, Any, str | None]:
         """Manda una petición y espera su respuesta: `(kind, valor sin decodificar,
-        token)`. Error del daemon → `DaemonRefused`; sin daemon → `DaemonGone`."""
+        token)`. Error del daemon → `DaemonRefusedError`; sin daemon → `DaemonGoneError`."""
         if self._writer is None or not self.connected:
-            raise DaemonGone("sin conexión con el daemon: no se mandó nada")
+            raise DaemonGoneError("sin conexión con el daemon: no se mandó nada")
         rid = next(self._ids)
         future: asyncio.Future[tuple[str, Any, str | None]] = (
             asyncio.get_running_loop().create_future()
@@ -508,7 +524,7 @@ class RemoteEngine:
             return False
         if not future.done():
             if msg.get("error") is not None:
-                future.set_exception(DaemonRefused(str(msg["error"])))
+                future.set_exception(DaemonRefusedError(str(msg["error"])))
             else:
                 future.set_result((str(msg["kind"]), msg.get("value"), msg.get("token")))
         return True
@@ -516,7 +532,7 @@ class RemoteEngine:
     def _abandon(self) -> None:
         for future in self._waiting.values():
             if not future.done():
-                future.set_exception(DaemonGone("se perdió la conexión con el daemon"))
+                future.set_exception(DaemonGoneError("se perdió la conexión con el daemon"))
         self._waiting.clear()
 
     async def run(self) -> None:
@@ -524,7 +540,7 @@ class RemoteEngine:
         while True:
             try:
                 reader, self._writer = await _open(self.path)
-            except DaemonGone:
+            except DaemonGoneError:
                 await asyncio.sleep(self._retry_s)
                 continue
             try:
@@ -552,32 +568,45 @@ class RemoteEngine:
         kind = msg.get("type")
         if kind in ("reply", "error") and self._answered(msg):
             return
-        if kind == "hello":
-            mode = str(msg["mode"])
-            if self.mode is not None and mode != self.mode:
-                self._say(f"⚠ el daemon ahora corre en {mode} (antes {self.mode})", error=True)
-            self.mode = mode
-            if not self.connected:
-                self._set_link(True)
-        elif kind == "state":
-            before = self.doubles
-            self.snapshot = decode(Snapshot, msg["state"])
-            self.orders._changed(before, self.snapshot.doubles)
-            self.account._update(self.snapshot.accounts)
-            if self.bot is not None:
-                self.bot._update(self.snapshot)
-        elif kind in ("market_init", "book", "trade", "conn"):
-            self._market(kind, decode(VenueId, msg["venue"]), msg)
-        elif kind == "fill":
-            self.account._notify(decode(VenueId, msg["venue"]), "fill")
-        elif kind == "notice":
-            self._say(str(msg["text"]), error=bool(msg["error"]))
-        elif kind == "fault":
-            self._say(f"daemon: {msg['message']}", error=True)
-        elif kind == "reply" and msg.get("error"):
+        handler = self._handlers.get(kind)  # un tipo nuevo del daemon no rompe nada
+        if handler is not None:
+            handler(msg)
+
+    def _on_hello(self, msg: dict[str, Any]) -> None:
+        mode = str(msg["mode"])
+        if self.mode is not None and mode != self.mode:
+            self._say(f"⚠ el daemon ahora corre en {mode} (antes {self.mode})", error=True)
+        self.mode = mode
+        if not self.connected:
+            self._set_link(True)
+
+    def _on_state(self, msg: dict[str, Any]) -> None:
+        before = self.doubles
+        self.snapshot = decode(Snapshot, msg["state"])
+        self.orders._changed(before, self.snapshot.doubles)
+        self.account._update(self.snapshot.accounts)
+        if self.bot is not None:
+            self.bot._update(self.snapshot)
+
+    def _on_market(self, msg: dict[str, Any]) -> None:
+        self._market(msg["type"], decode(VenueId, msg["venue"]), msg)
+
+    def _on_fill(self, msg: dict[str, Any]) -> None:
+        self.account._notify(decode(VenueId, msg["venue"]), "fill")
+
+    def _on_notice(self, msg: dict[str, Any]) -> None:
+        self._say(str(msg["text"]), error=bool(msg["error"]))
+
+    def _on_fault(self, msg: dict[str, Any]) -> None:
+        self._say(f"daemon: {msg['message']}", error=True)
+
+    def _on_reply(self, msg: dict[str, Any]) -> None:
+        """Una respuesta que nadie esperaba: solo cuenta si trae un error."""
+        if msg.get("error"):
             self._say(str(msg["error"]), error=True)
-        elif kind == "error":
-            self._say(f"el daemon no aceptó la orden: {msg['error']}", error=True)
+
+    def _on_error(self, msg: dict[str, Any]) -> None:
+        self._say(f"el daemon no aceptó la orden: {msg['error']}", error=True)
 
     def _market(self, kind: str, vid: VenueId, msg: dict[str, Any]) -> None:
         if kind == "market_init":

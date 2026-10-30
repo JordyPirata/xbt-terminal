@@ -74,8 +74,8 @@ from ..core.proposals import (
 from ..core.rebalance import Holding, holdings
 from ..core.results import Range
 from ..services.remote import (
-    DaemonGone,
-    DaemonRefused,
+    DaemonGoneError,
+    DaemonRefusedError,
     RemoteAccount,
     RemoteBot,
     RemoteDeposits,
@@ -488,7 +488,7 @@ class XbtApp(App[None]):
         """Un bug en una acción se reporta y la terminal sigue."""
         try:
             await work
-        except (DaemonGone, DaemonRefused) as exc:
+        except (DaemonGoneError, DaemonRefusedError) as exc:
             self.say(str(exc), error=True)
         except Exception as exc:
             self.engine.report_fault(where, exc)
@@ -525,7 +525,8 @@ class XbtApp(App[None]):
             return
         try:
             await self._dispatch(command)
-        except (DaemonGone, DaemonRefused) as exc:  # conectada: el daemon no está o no quiso
+        # conectada: el daemon no está o no quiso
+        except (DaemonGoneError, DaemonRefusedError) as exc:
             self.say(str(exc), error=True)
 
     async def _dispatch(self, command: Command) -> None:

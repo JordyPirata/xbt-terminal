@@ -13,7 +13,7 @@ from xbt_terminal.adapters.neoxa import NeoxaVenue
 from xbt_terminal.adapters.nonkyc import NonKYCVenue
 from xbt_terminal.config import load_settings
 from xbt_terminal.core.bot import FeeToken
-from xbt_terminal.paths import AlreadyRunning, InstanceLock
+from xbt_terminal.paths import AlreadyRunningError, InstanceLock
 from xbt_terminal.services.wire import ClientView
 from xbt_terminal.ui.app import XbtApp
 from xbt_terminal.ui.clipboard import system_copy
@@ -256,7 +256,7 @@ def served(monkeypatch):
 
     async def fake_run(engine, stop, *, on_ready=None, socket=None, book_depth=None, view=None):
         seen.update(engine=engine, socket=socket, book_depth=book_depth, view=view)
-        with pytest.raises(AlreadyRunning):
+        with pytest.raises(AlreadyRunningError):
             InstanceLock(engine.results.directory).acquire()
         on_ready()
 

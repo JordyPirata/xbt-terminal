@@ -31,7 +31,7 @@ from .core.models import VenueId
 from .core.ratelimit import RateLimiter
 from .core.secrets import Redactor
 from .diaglog import setup_diagnostics
-from .paths import AlreadyRunning, InstanceLock, private_dir, resolve_paths
+from .paths import AlreadyRunningError, InstanceLock, private_dir, resolve_paths
 from .services.account import AccountService
 from .services.bot import BotService
 from .services.control import SOCKET_NAME, socket_problem
@@ -42,7 +42,7 @@ from .services.faults import Faults
 from .services.market import MarketHub
 from .services.orders import OrderService
 from .services.rebalance import RebalanceService
-from .services.remote import DaemonGone, Hello, RemoteEngine, probe
+from .services.remote import DaemonGoneError, Hello, RemoteEngine, probe
 from .services.results import ResultsService
 from .services.wire import ClientView
 from .ui.app import ClientServices, XbtApp
@@ -242,7 +242,7 @@ DEFAULT_VIEW = ClientView(15, "1m", {}, None, None)  # un daemon que no manda su
 def client(data: Path, socket: Path) -> None:
     try:
         hello = asyncio.run(probe(socket))
-    except DaemonGone as exc:
+    except DaemonGoneError as exc:
         raise SystemExit(f"No se puede conectar: {exc}.") from None
     private_dir(data)
     # el cliente no tiene keys que redactar
@@ -314,7 +314,7 @@ def main() -> None:
     lock = InstanceLock(paths.data)
     try:
         lock.acquire()
-    except AlreadyRunning as exc:
+    except AlreadyRunningError as exc:
         raise SystemExit(str(exc)) from None
     diag = setup_diagnostics(paths.data, settings.redactor, settings.config.log.level)
     logging.getLogger(__name__).info("arranque en %s, datos en %s", settings.mode, paths.data)

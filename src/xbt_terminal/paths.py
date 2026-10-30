@@ -81,7 +81,7 @@ def env_permission_problem(path: Path) -> str | None:
     )
 
 
-class AlreadyRunning(Exception):
+class AlreadyRunningError(Exception):
     pass
 
 
@@ -107,7 +107,7 @@ class InstanceLock:
         except BlockingIOError:
             pid = os.read(fd, 32).decode(errors="replace").strip() or "?"
             os.close(fd)
-            raise AlreadyRunning(
+            raise AlreadyRunningError(
                 f"Ya hay un daemon corriendo con los datos en {self.data} "
                 f"(pid {pid}). Ciérralo o arranca con otro --data-dir."
             ) from None

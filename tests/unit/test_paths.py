@@ -6,7 +6,7 @@ import pytest
 
 from xbt_terminal.config import ConfigError, load_settings
 from xbt_terminal.paths import (
-    AlreadyRunning,
+    AlreadyRunningError,
     InstanceLock,
     env_permission_problem,
     private_dir,
@@ -75,7 +75,7 @@ def test_directorio_de_datos_0700(tmp_path):
 def test_segunda_instancia_rechazada(tmp_path):
     first = InstanceLock(tmp_path)
     first.acquire()
-    with pytest.raises(AlreadyRunning, match=str(os.getpid())) as exc:
+    with pytest.raises(AlreadyRunningError, match=str(os.getpid())) as exc:
         InstanceLock(tmp_path).acquire()
     assert str(tmp_path) in str(exc.value)
     first.release()

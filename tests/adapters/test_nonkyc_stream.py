@@ -14,7 +14,8 @@ import pytest
 import respx
 from websockets.asyncio.server import serve
 
-from xbt_terminal.adapters.nonkyc import REST_URL, NonKYCVenue
+from xbt_terminal.adapters.base import VenueError
+from xbt_terminal.adapters.nonkyc import REST_URL, NonKYCVenue, ws_message
 from xbt_terminal.adapters.streaming import iso_ms
 from xbt_terminal.core.book import L2Book
 from xbt_terminal.core.models import BookDelta, BookSnapshot, ConnState, D, Level, Trade
@@ -346,3 +347,27 @@ async def test_cerrar_el_stream_cierra_el_ws(rest):
                     break
             await asyncio.sleep(0.1)  # que lleguen y se encolen los frames restantes
             await asyncio.wait_for(stream.aclose(), 1.5)
+
+
+@pytest.mark.spec("RF-01", "RF-02")
+class TestMensajeWS:
+    """`ws_message` decide qué mensajes del WS cuentan (T-85)."""
+
+    def test_el_del_par_pasa_entero(self):
+        msg = {"method": "updateTrades", "params": {"symbol": "BTCB2/BTC", "data": []}}
+        assert ws_message(msg, "BTCB2/BTC", "frame") is msg
+
+    def test_otro_simbolo_o_sin_params_se_ignora(self):
+        other = {"method": "updateTrades", "params": {"symbol": "NKYC/BTC"}}
+        assert ws_message(other, "BTCB2/BTC", "frame") is None
+        assert ws_message({"result": True, "id": 1}, "BTCB2/BTC", "frame") is None
+        assert ws_message({"params": [1]}, "BTCB2/BTC", "frame") is None
+
+    def test_lo_que_no_es_un_objeto_es_error(self):
+        with pytest.raises(VenueError, match=r"^NonKYC WS: mensaje inesperado '\[1, 2\]'$"):
+            ws_message([1, 2], "BTCB2/BTC", "[1, 2]")
+
+    def test_el_error_del_venue_es_error(self):
+        msg = {"error": {"code": 2001, "message": "Symbol not found"}, "id": 1}
+        with pytest.raises(VenueError, match=r"^NonKYC WS: 2001 Symbol not found$"):
+            ws_message(msg, "BTCB2/BTC", "frame")

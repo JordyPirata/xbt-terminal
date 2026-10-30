@@ -1089,3 +1089,30 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   tests que la usan no cambian; solo las tres construcciones directas
   (`test_attach_ui`, `test_ca15`, `test_ca16`). Pyright: los mismos 10 errores
   previos en `ui/app.py` y `__main__.py`.
+
+### T-85 ruff vigila complejidad y nombres · `done` · RNF-21 · dep T-84 · D-77
+- `pyproject.toml`: `C90` con `max-complexity = 12` y `N` en `select`.
+- Lo que salta se arregla, no se calla, salvo `D()` (idioma para `Decimal`,
+  con `# noqa: N802` en la función y sus dos tests):
+  - Excepciones con sufijo `Error`: `AlreadyRunningError`, `RefusedError`,
+    `DaemonGoneError`, `DaemonRefusedError` (también en design.md).
+  - `services/remote.py` `_handle`: diccionario tipo de mensaje → función.
+  - `adapters/nonkyc.py` `_ws_events`: la validación del mensaje (objeto, error
+    del venue, símbolo) sale a una función pura `ws_message`; los trades, a
+    su propia función.
+- Tests primero: `ws_message` (objeto, error, otro símbolo, respuesta sin
+  `params`) y `_handle` con un tipo desconocido, un `reply` con error y un
+  `error` sin esperar respuesta.
+- `bot.decide`/`search` (12) y `account.apply` (11) quedan dentro del tope; el
+  oráculo `tests/unit/bot_reference.py` (11) también, y no se toca.
+- Hecho cuando: `uv run ruff check .` sin avisos con las reglas nuevas, y
+  pytest y `spec_trace` como siempre.
+- Hecho: tests primero (`TestMensajeWS`, en rojo: no existía `ws_message`;
+  `TestMensajesDelDaemon`, en verde con el `_handle` de antes).
+  `_ws_events` (15) se queda en el bucle de la sesión: el reordenado de
+  deltas pasa a `_BookOrder` (seq, pendientes, `snapshot`, `delta`, `gap`,
+  `reset`) y cada mensaje a `_ws_message_events`. `_handle` (13) con
+  `_handlers` en `__init__` y un `_on_*` por tipo. Excepciones renombradas
+  en src, tests y design.md. `max-complexity = 12` en `[tool.ruff.lint.mccabe]`.
+  Pyright: ningún error nuevo (uno de varianza con `fresh` se arregló
+  devolviendo `Sequence`).

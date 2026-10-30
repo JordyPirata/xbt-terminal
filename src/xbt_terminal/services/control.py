@@ -70,7 +70,7 @@ CANCELS: dict[str, type[CancelOrder | CancelVenue | CancelAll]] = {
 T = TypeVar("T")
 
 
-class Refused(Exception):
+class RefusedError(Exception):
     """Una petición que el daemon no atiende; el texto va al cliente."""
 
 
@@ -328,7 +328,7 @@ class ControlServer:
         args = msg.get("args") or {}
         try:
             value, token = await work(args if isinstance(args, dict) else {})
-        except Refused as exc:
+        except RefusedError as exc:
             return {**head, "error": str(exc)}
         except (KeyError, TypeError, ValueError) as exc:
             return {**head, "error": f"petición mal formada: {exc}"}
@@ -383,17 +383,17 @@ class ControlServer:
         """La propuesta del token, una sola vez: se quita antes de ningún await."""
         entry = self._proposals.pop(str(args.get("token")), None)
         if entry is None or entry[1] <= asyncio.get_running_loop().time():
-            raise Refused("propuesta caducada o ya usada: vuelve a pedir la orden")
+            raise RefusedError("propuesta caducada o ya usada: vuelve a pedir la orden")
         value = entry[0]
         if not isinstance(value, kind):
-            raise Refused("esa referencia es de otra clase de propuesta")
+            raise RefusedError("esa referencia es de otra clase de propuesta")
         return value
 
     @property
     def _orders(self) -> OrderService:
         orders = self._engine.orders
         if orders is None:
-            raise Refused("el daemon está en solo lectura: no hay órdenes")
+            raise RefusedError("el daemon está en solo lectura: no hay órdenes")
         return orders
 
     async def _prepare(self, args: dict[str, Any]) -> tuple[Any, str | None]:
@@ -413,7 +413,7 @@ class ControlServer:
     async def _plan_cancel(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         kind = CANCELS.get(str(args.get("kind")))
         if kind is None:
-            raise Refused(f"cancelación desconocida: {args.get('kind')!r}")
+            raise RefusedError(f"cancelación desconocida: {args.get('kind')!r}")
         result = await self._orders.plan_cancel(decode(kind, args.get("value") or {}))
         return result, self._propose(result) if isinstance(result, CancelPlan) else None
 
@@ -425,7 +425,7 @@ class ControlServer:
     async def _results(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         results = self._engine.results
         if results is None:
-            raise Refused("el daemon no tiene resultados (sin journal)")
+            raise RefusedError("el daemon no tiene resultados (sin journal)")
         rng = decode(Range, args["range"])
         await results.refresh_prices()
         # leer los journals de todo el rango es disco: fuera del loop
@@ -434,12 +434,12 @@ class ControlServer:
     async def _deposits(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         deposits = self._engine.deposits
         if deposits is None or not deposits.venues:
-            raise Refused("depósitos: el daemon no tiene keys de ningún venue")
+            raise RefusedError("depósitos: el daemon no tiene keys de ningún venue")
         return Rows(tuple(await deposits.load())), None
 
     async def _withdrawal_fees(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         rebalance = self._engine.rebalance
         if rebalance is None or not rebalance.venues:
-            raise Refused("reequilibrio: el daemon no tiene keys de ningún venue")
+            raise RefusedError("reequilibrio: el daemon no tiene keys de ningún venue")
         fees = await rebalance.load()
         return Fees(tuple(FeeRow(vid, asset, fee) for (vid, asset), fee in fees.items())), None
