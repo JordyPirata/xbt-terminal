@@ -45,7 +45,7 @@ from .services.rebalance import RebalanceService
 from .services.remote import DaemonGone, Hello, RemoteEngine, probe
 from .services.results import ResultsService
 from .services.wire import ClientView
-from .ui.app import XbtApp
+from .ui.app import ClientServices, XbtApp
 from .ui.clipboard import system_copy
 
 
@@ -216,24 +216,23 @@ def build_client_app(socket: Path, hello: Hello) -> XbtApp:
     view = hello.view or DEFAULT_VIEW
     remote = RemoteEngine(socket, has_bot=hello.has_bot)
     hub = remote.market
-    return XbtApp(
-        hub,
-        run_hub=False,
-        book_levels=view.book_levels,
-        timeframe=view.timeframe,
-        mode=hello.mode,
-        account=remote.account,
+    services = ClientServices(
         orders=remote.orders,
+        account=remote.account,
         bot=remote.bot,
-        fee_discounts=view.fee_discounts,
         results=remote.results,
         deposits=remote.deposits,
         rebalance=remote.rebalance,
-        inventory_target=view.inventory,
-        clipboard=system_copy,  # OSC 52 no llega en GNOME Terminal (D-52)
-        bot_limits=view.bot_limits,
-        engine=Engine(hub, mode=hello.mode),  # type: ignore[arg-type]  # solo avisos
         remote=remote,
+    )
+    return XbtApp(
+        hub,
+        view=view,
+        mode=hello.mode,
+        engine=Engine(hub, mode=hello.mode),  # type: ignore[arg-type]  # solo avisos
+        services=services,
+        run_hub=False,
+        clipboard=system_copy,  # OSC 52 no llega en GNOME Terminal (D-52)
     )
 
 

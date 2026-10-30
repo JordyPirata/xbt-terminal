@@ -1066,3 +1066,26 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   tests, 25 líneas de import en 15 ficheros y el `monkeypatch` de
   `test_ca17.py`. Las referencias a tareas de los docstrings nuevos son solo
   las comprobables (T-19 órdenes, T-21 ayuda).
+
+### T-84 `XbtApp` con sus parámetros agrupados · `done` · RF-31 · dep T-83 · D-77
+- Tests primero: `tests/ui/test_app_params.py`, la app construida con
+  `view=ClientView(...)` y `services=ClientServices(...)` expone lo mismo que
+  antes (`book_levels`, `timeframe`, `inventory_target`, `bot_limits`, las
+  caras del daemon).
+- `ui/app.py`: `ClientServices` (orders, account, bot, results, deposits,
+  rebalance, remote; todas opcionales) y `view: ClientView` (de
+  `services/wire.py`, el que ya manda el daemon en `hello`) en vez de 12
+  parámetros sueltos. Fuera `orders_note`, que nadie pasa. Los atributos de
+  la app no cambian.
+- `__main__.py` pasa el `ClientView` del `hello` tal cual; `tests/ui/local.py`
+  traduce sus kwargs, así los tests que usan `local_app` no cambian.
+- Hecho cuando: `XbtApp.__init__` tiene 10 parámetros (antes 21), y pytest,
+  ruff y `spec_trace` como siempre.
+- Hecho: `test_app_params.py` primero (en rojo: no existía `ClientServices`).
+  `ClientServices` y `READ_ONLY` (el valor por defecto, inmutable: ruff B008)
+  en `ui/app.py`; `view: ClientView` sustituye a `book_levels`, `timeframe`,
+  `fee_discounts`, `inventory_target` y `bot_limits`. `__main__` pasa el
+  `view` del `hello` tal cual. `local_app` traduce los kwargs de antes: los
+  tests que la usan no cambian; solo las tres construcciones directas
+  (`test_attach_ui`, `test_ca15`, `test_ca16`). Pyright: los mismos 10 errores
+  previos en `ui/app.py` y `__main__.py`.

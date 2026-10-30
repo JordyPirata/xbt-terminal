@@ -13,7 +13,8 @@ from xbt_terminal.services.daemon import run_daemon
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.remote import RemoteEngine, probe
-from xbt_terminal.ui.app import XbtApp
+from xbt_terminal.services.wire import ClientView
+from xbt_terminal.ui.app import ClientServices, XbtApp
 from xbt_terminal.ui.screens.confirm import ConfirmScreen
 from xbt_terminal.ui.status import StatusBar
 
@@ -53,13 +54,10 @@ def attached_app(rig, has_bot=True):
     remote = RemoteEngine(rig.socket, has_bot=has_bot, retry_s=0.02)
     return XbtApp(
         hub,
-        book_levels=15,
-        timeframe="1m",
+        view=ClientView(15, "1m", {}, None, None),
         mode="dry-run",
-        account=remote.account,
-        bot=remote.bot,
-        remote=remote,
         engine=Engine(hub, mode="dry-run"),
+        services=ClientServices(account=remote.account, bot=remote.bot, remote=remote),
         clock=rig.clock,
     )
 

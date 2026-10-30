@@ -10,7 +10,8 @@ from xbt_terminal.core.models import D
 from xbt_terminal.services.control import ControlServer
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.remote import RemoteEngine
-from xbt_terminal.ui.app import XbtApp
+from xbt_terminal.services.wire import ClientView
+from xbt_terminal.ui.app import ClientServices, XbtApp
 from xbt_terminal.ui.screens.confirm import ConfirmScreen
 
 from ..services.test_double_orders import Setup
@@ -41,11 +42,13 @@ class DaemonRig:
 
 def client_app(rig) -> XbtApp:
     remote = RemoteEngine(rig.path, has_bot=False, retry_s=0.02)
-    return XbtApp(
-        remote.market, run_hub=False, book_levels=15, timeframe="1m", mode="dry-run",
-        account=remote.account, orders=remote.orders, results=remote.results,
+    services = ClientServices(
+        orders=remote.orders, account=remote.account, results=remote.results,
         deposits=remote.deposits, rebalance=remote.rebalance, remote=remote,
-        engine=Engine(remote.market, mode="dry-run"),
+    )  # fmt: skip
+    return XbtApp(
+        remote.market, view=ClientView(15, "1m", {}, None, None), mode="dry-run",
+        engine=Engine(remote.market, mode="dry-run"), services=services, run_hub=False,
     )  # fmt: skip
 
 

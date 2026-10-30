@@ -27,6 +27,7 @@ Tareas: T-13..T-19, T-25, T-40, T-42, T-45, T-65, T-83
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Protocol
 
@@ -38,7 +39,7 @@ from textual.css.query import NoMatches
 from textual.geometry import Size
 from textual.widgets import Input, Static
 
-from ..core.bot import BotLimits, BotState
+from ..core.bot import BotState
 from ..core.commands import (
     BotCommand,
     CancelAll,
@@ -55,7 +56,7 @@ from ..core.commands import (
     parse,
 )
 from ..core.cross import Quote
-from ..core.inventory import InventoryTarget, inventory
+from ..core.inventory import inventory
 from ..core.models import BASE_LABEL, ConnState, Order, Timeframe, VenueId
 from ..core.notices import Fault, Notice
 from ..core.proposals import (
@@ -84,6 +85,7 @@ from ..services.remote import (
     RemoteRebalance,
     RemoteResults,
 )
+from ..services.wire import ClientView
 from .clipboard import Clipboard
 from .panels import (
     VENUE_NAME,
@@ -128,6 +130,23 @@ class Runner(Protocol):
     def services(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]: ...
     def watchers(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]: ...
     async def aclose(self) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ClientServices:
+    """Las caras del daemon que usa la pantalla (RF-31); en los tests, los servicios
+    de verdad, que tienen la misma cara. Sin ninguna, la pantalla solo mira."""
+
+    orders: RemoteOrders | None = None
+    account: RemoteAccount | None = None
+    bot: RemoteBot | None = None
+    results: RemoteResults | None = None
+    deposits: RemoteDeposits | None = None  # solo venues con keys (RF-28)
+    rebalance: RemoteRebalance | None = None  # comisiones de retiro (RF-29)
+    remote: RemoteEngine | None = None  # conectada al daemon: mira y arma o para el bot
+
+
+READ_ONLY = ClientServices()  # sin caras: la pantalla solo mira
 
 
 class TooSmall(Static):
@@ -187,49 +206,38 @@ class XbtApp(App[None]):
         self,
         hub: RemoteMarket,
         *,
-        book_levels: int,
-        timeframe: Timeframe,
+        view: ClientView,
         mode: str,
+        engine: Runner,
+        services: ClientServices = READ_ONLY,
         can_trade: Mapping[VenueId, bool] | None = None,
-        orders: RemoteOrders | None = None,
-        orders_note: str = "",
-        account: RemoteAccount | None = None,
         run_hub: bool = True,
         clock: Callable[[], int] | None = None,
         startup_warnings: Sequence[str] = (),
-        bot: RemoteBot | None = None,
-        fee_discounts: Mapping[VenueId, Decimal] | None = None,
-        results: RemoteResults | None = None,
-        deposits: RemoteDeposits | None = None,
-        inventory_target: InventoryTarget | None = None,
         clipboard: Clipboard | None = None,
-        rebalance: RemoteRebalance | None = None,
-        bot_limits: BotLimits | None = None,
-        engine: Runner,
-        remote: RemoteEngine | None = None,
     ) -> None:
         super().__init__()
-        # TUI conectada al daemon (RF-31): mira y solo arma o para el bot
-        self.remote = remote
         self.hub = hub
-        self.book_levels = book_levels
-        self.timeframe: Timeframe = timeframe
+        # la config que manda el daemon en `hello` (D-66)
+        self.book_levels = view.book_levels
+        self.timeframe: Timeframe = view.timeframe
+        self.inventory_target = view.inventory  # ratio de inventario (RF-27)
+        self.bot_limits = view.bot_limits  # para las dobles que pagan el reequilibrio
+        # descuento de fee por venue, solo para el panel cruzado (RF-24, D-38)
+        self._fee_discounts = dict(view.fee_discounts)
+        # las caras del daemon (RF-31)
+        self.remote = services.remote
+        self.orders = services.orders
+        self.account = services.account
+        self.bot = services.bot
+        self.results = services.results
+        self.deposits = services.deposits
+        self.rebalance = services.rebalance
         self.mode = mode
         self._run_hub = run_hub
         self.can_trade = dict(can_trade or {})
-        self.orders = orders
-        self._orders_note = orders_note
-        self.account = account
-        self.bot = bot
-        self.results = results
-        self.deposits = deposits  # solo venues con keys; None si no hay ninguno (RF-28)
-        self.inventory_target = inventory_target  # ratio de inventario (RF-27)
-        self.rebalance = rebalance  # comisiones de retiro; None sin keys (RF-29)
-        self.bot_limits = bot_limits  # para las dobles que pagan el reequilibrio
         # copia con wl-copy/xclip/xsel además de OSC 52; None en tests (D-52)
         self.system_clipboard = clipboard
-        # descuento de fee por venue, solo para el panel cruzado (RF-24, D-38)
-        self._fee_discounts = dict(fee_discounts or {})
         self.last_message = ""
         self.last_error = False
         self._clock = clock or hub.clock  # el del hub: ui no importa adapters (D-54)
@@ -257,7 +265,6 @@ class XbtApp(App[None]):
                     yield LegsPanel()
                 yield CommandLine(
                     enabled=self.orders is not None or self.remote is not None,
-                    note=self._orders_note,
                     hint=ATTACHED_HINT if self.remote is not None else None,
                 )
 

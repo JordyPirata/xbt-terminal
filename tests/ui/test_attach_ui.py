@@ -6,7 +6,8 @@ import pytest
 from xbt_terminal.core.bot import BotState
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.remote import RemoteEngine
-from xbt_terminal.ui.app import XbtApp
+from xbt_terminal.services.wire import ClientView
+from xbt_terminal.ui.app import ClientServices, XbtApp
 from xbt_terminal.ui.screens.confirm import ConfirmScreen
 from xbt_terminal.ui.screens.orders import OrdersScreen
 from xbt_terminal.ui.status import StatusBar
@@ -20,20 +21,22 @@ class AttachRig:
         self.daemon = Daemon(tmp_path)
         self.remote = RemoteEngine(self.daemon.path, has_bot=True, retry_s=0.02)
         self.hub = self.remote.market  # el mercado llega del daemon (D-66)
-        self.app = XbtApp(
-            self.hub,
-            run_hub=False,
-            book_levels=15,
-            timeframe="1m",
-            mode="dry-run",
-            account=self.remote.account,
+        services = ClientServices(
             orders=self.remote.orders,
+            account=self.remote.account,
+            bot=self.remote.bot,
             results=self.remote.results,
             deposits=self.remote.deposits,
             rebalance=self.remote.rebalance,
-            bot=self.remote.bot,
             remote=self.remote,
+        )
+        self.app = XbtApp(
+            self.hub,
+            view=ClientView(15, "1m", {}, None, None),
+            mode="dry-run",
             engine=Engine(self.hub, mode="dry-run"),
+            services=services,
+            run_hub=False,
             clock=lambda: NOW,
         )
 

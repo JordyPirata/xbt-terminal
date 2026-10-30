@@ -192,6 +192,8 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 
 ### T-83 Las pantallas modales salen de `ui/app.py` a `ui/screens/` · `done` · RF-06, RF-08, RF-25, RF-28, RF-29, RF-32 · dep T-82 · D-77
 
+### T-84 `XbtApp` con sus parámetros agrupados · `done` · RF-31 · dep T-83 · D-77
+
 ## Correcciones
 
 ### T-43 Errores sin texto · `done` · RF-19, RF-21, RF-11 · dep T-36 · D-51
