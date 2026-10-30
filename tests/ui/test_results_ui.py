@@ -7,7 +7,7 @@ import pytest
 
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.results import ResultsService
-from xbt_terminal.ui.app import ResultsScreen
+from xbt_terminal.ui.screens.results import ResultsScreen
 
 from ..fakes import FakeFeed
 from ..unit.test_results import DAY, T0, plain_double

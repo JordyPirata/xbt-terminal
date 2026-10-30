@@ -107,7 +107,7 @@ class TestClic:
             assert rig.app.query_one(CommandLine).value == "buy nk 3.5000 0.00730100"
 
     async def test_enter_abre_el_dialogo(self, tmp_path):
-        from xbt_terminal.ui.app import ConfirmScreen
+        from xbt_terminal.ui.screens.confirm import ConfirmScreen
 
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:

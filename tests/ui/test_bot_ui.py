@@ -5,8 +5,9 @@ lanzar los suyos."""
 import pytest
 
 from xbt_terminal.adapters.base import VenueError
-from xbt_terminal.ui.app import ConfirmScreen, HelpScreen
 from xbt_terminal.ui.panels import CommandLine
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
+from xbt_terminal.ui.screens.help import HelpScreen
 from xbt_terminal.ui.status import StatusBar
 
 from ..services.test_bot_service import BotRig

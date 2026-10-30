@@ -1048,3 +1048,21 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   Fuera la rama `log.exception` de `ControlServer._guarded`, que no podía
   darse (la lista nunca está vacía). `Runner` sin `Any`. Pyright: los mismos 8
   errores previos en `ui/app.py`, ninguno nuevo.
+
+### T-83 Las pantallas modales salen de `ui/app.py` a `ui/screens/` · `done` · RF-06, RF-08, RF-25, RF-28, RF-29, RF-32 · dep T-82 · D-77
+- Un módulo por pantalla, con sus constantes: `confirm.py` (`ConfirmScreen`,
+  `CONFIRM_LABELS`), `help.py` (`HelpScreen`, `help_text`, `MODE_HELP`),
+  `orders.py` (`OrdersScreen`, `CancelCommand`), `results.py`
+  (`ResultsScreen` y sus nombres, `RESULTS_EVERY_S`), `deposit.py` y
+  `rebalance.py`. El código se mueve sin cambios; `TooSmall` se queda en
+  `app.py` (es un widget de su layout).
+- Sin reexportar desde `ui/app.py`: los tests importan de `ui/screens/...`; en
+  ellos solo cambian los imports y el `monkeypatch` de `RESULTS_EVERY_S`.
+- Hecho cuando: `ui/app.py` solo tiene `XbtApp`, `Runner`, `TooSmall` y sus
+  constantes; `test_layers.py`, pytest, ruff y `spec_trace` como siempre.
+- Hecho: `ui/app.py` de 1620 a 809 líneas. Cuerpos movidos tal cual
+  (comprobado contra `git show HEAD`; solo cambian dos líneas en blanco de
+  `results.py`). Imports de cada módulo recortados con `ruff --fix`. En los
+  tests, 25 líneas de import en 15 ficheros y el `monkeypatch` de
+  `test_ca17.py`. Las referencias a tareas de los docstrings nuevos son solo
+  las comprobables (T-19 órdenes, T-21 ayuda).

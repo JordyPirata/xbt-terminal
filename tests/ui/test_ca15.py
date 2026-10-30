@@ -13,7 +13,8 @@ from xbt_terminal.services.daemon import run_daemon
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.remote import RemoteEngine, probe
-from xbt_terminal.ui.app import ConfirmScreen, XbtApp
+from xbt_terminal.ui.app import XbtApp
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
 from xbt_terminal.ui.status import StatusBar
 
 from ..fakes import FakeFeed

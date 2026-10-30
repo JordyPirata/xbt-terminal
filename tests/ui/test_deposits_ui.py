@@ -7,8 +7,8 @@ import pytest
 from xbt_terminal.adapters.base import VenueError
 from xbt_terminal.services.deposits import DepositService
 from xbt_terminal.services.market import MarketHub
-from xbt_terminal.ui.app import DepositScreen
 from xbt_terminal.ui.qr import qr_lines
+from xbt_terminal.ui.screens.deposit import DepositScreen
 
 from ..fakes import FakeFeed
 from ..services.test_deposits_service import FakeDepositor

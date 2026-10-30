@@ -14,7 +14,6 @@ from xbt_terminal.core.secrets import Redactor
 from xbt_terminal.services.account import AccountService
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.orders import OrderService
-from xbt_terminal.ui.app import ConfirmScreen
 from xbt_terminal.ui.panels import (
     BalancesPanel,
     BookPanel,
@@ -22,6 +21,7 @@ from xbt_terminal.ui.panels import (
     CommandLine,
     LegsPanel,
 )
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
 
 from ..fakes import T0, FakeFeed
 from ..services.test_orders import LIMITS

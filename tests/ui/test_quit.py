@@ -4,7 +4,7 @@ confirmando si quedan órdenes abiertas."""
 import pytest
 
 from xbt_terminal.services.account import AccountService
-from xbt_terminal.ui.app import ConfirmScreen
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
 
 from ..services.test_account import FakePrivate, order
 from ..services.test_exit import slow

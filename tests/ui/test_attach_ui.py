@@ -6,7 +6,9 @@ import pytest
 from xbt_terminal.core.bot import BotState
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.remote import RemoteEngine
-from xbt_terminal.ui.app import ConfirmScreen, OrdersScreen, XbtApp
+from xbt_terminal.ui.app import XbtApp
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
+from xbt_terminal.ui.screens.orders import OrdersScreen
 from xbt_terminal.ui.status import StatusBar
 
 from ..services.test_remote import Daemon
@@ -165,7 +167,7 @@ class TestOpera:
             assert rig.app.last_error and "depósitos" in rig.app.last_message
 
     async def test_resultados_del_daemon(self, tmp_path):
-        from xbt_terminal.ui.app import ResultsScreen
+        from xbt_terminal.ui.screens.results import ResultsScreen
 
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)

@@ -2,8 +2,8 @@
 
 import pytest
 
-from xbt_terminal.ui.app import HelpScreen
 from xbt_terminal.ui.panels import CommandLine
+from xbt_terminal.ui.screens.help import HelpScreen
 
 from .test_double_ui import Rig, until
 

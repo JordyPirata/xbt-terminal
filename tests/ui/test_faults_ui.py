@@ -3,7 +3,7 @@ sale en rojo y queda contado en la barra de estado."""
 
 import pytest
 
-from xbt_terminal.ui.app import ConfirmScreen
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
 from xbt_terminal.ui.status import StatusBar
 
 from ..services.test_faults import Buggy, full_disk

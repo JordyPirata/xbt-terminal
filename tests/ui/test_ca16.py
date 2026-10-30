@@ -10,7 +10,8 @@ from xbt_terminal.core.models import D
 from xbt_terminal.services.control import ControlServer
 from xbt_terminal.services.engine import Engine
 from xbt_terminal.services.remote import RemoteEngine
-from xbt_terminal.ui.app import ConfirmScreen, XbtApp
+from xbt_terminal.ui.app import XbtApp
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
 
 from ..services.test_double_orders import Setup
 from .test_orders_ui import type_command, until

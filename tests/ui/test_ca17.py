@@ -5,9 +5,9 @@ import pytest
 from textual.widgets import DataTable, TabbedContent
 
 from xbt_terminal.core.models import D
-from xbt_terminal.ui import app as app_module
-from xbt_terminal.ui.app import ResultsScreen
 from xbt_terminal.ui.panels import ValueChart
+from xbt_terminal.ui.screens import results as results_module
+from xbt_terminal.ui.screens.results import ResultsScreen
 
 from ..unit.test_results import DAY, T0, plain_double
 from ..unit.test_valuation import EVERY, value_row
@@ -75,7 +75,7 @@ class TestPestanaValor:
 @pytest.mark.spec("RF-32", "RF-25", "CA-17")
 class TestRefresco:
     async def test_una_muestra_nueva_aparece_sin_cerrar(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(app_module, "RESULTS_EVERY_S", 0.05)
+        monkeypatch.setattr(results_module, "RESULTS_EVERY_S", 0.05)
         write(tmp_path, "20261022", [value_row(T0, "1.0")])
         app = make_app(tmp_path)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -87,7 +87,7 @@ class TestRefresco:
             assert screen(app).tab == "value"
 
     async def test_la_seleccion_de_la_tabla_no_se_mueve(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(app_module, "RESULTS_EVERY_S", 0.05)
+        monkeypatch.setattr(results_module, "RESULTS_EVERY_S", 0.05)
         write(tmp_path, "20261022", plain_double("d-1", T0) + plain_double("d-2", T0 + 60_000))
         app = make_app(tmp_path)
         async with app.run_test(size=(160, 45)) as pilot:

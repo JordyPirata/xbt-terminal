@@ -13,8 +13,8 @@ from xbt_terminal.core.models import Balance, BookSnapshot, ConnState, D, Level
 from xbt_terminal.core.secrets import Redactor
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.orders import OrderService
-from xbt_terminal.ui.app import ConfirmScreen
 from xbt_terminal.ui.panels import CommandLine
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
 from xbt_terminal.ui.status import StatusBar
 
 from ..fakes import T0, FakeFeed

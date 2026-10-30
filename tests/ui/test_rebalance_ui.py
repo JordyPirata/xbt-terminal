@@ -10,7 +10,7 @@ from xbt_terminal.core.inventory import InventoryTarget
 from xbt_terminal.core.models import Balance, D
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.rebalance import RebalanceService
-from xbt_terminal.ui.app import RebalanceScreen
+from xbt_terminal.ui.screens.rebalance import RebalanceScreen
 
 from ..fakes import FakeFeed
 from ..services.test_rebalance_service import FakeFees

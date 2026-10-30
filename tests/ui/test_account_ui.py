@@ -5,8 +5,9 @@ import pytest
 
 from xbt_terminal.core.models import Balance, D, OrderRequest
 from xbt_terminal.services.market import MarketHub
-from xbt_terminal.ui.app import ConfirmScreen, OrdersScreen
 from xbt_terminal.ui.panels import BalancesPanel, ChartPanel, CommandLine
+from xbt_terminal.ui.screens.confirm import ConfirmScreen
+from xbt_terminal.ui.screens.orders import OrdersScreen
 
 from ..fakes import FakeFeed
 from .local import local_app
