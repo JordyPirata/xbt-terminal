@@ -153,3 +153,13 @@ Es historia: la spec vigente es la de `requirements.md`.
 > NonKYC el 2026-10-29 (d-9820a4, d-f1fe90, d-6eca2e): su WS siguió conectado
 > pero dejó de mandar cambios del book desde ~17:45 UTC, y el bot disparó contra
 > un bid que ya no existía. La conexión viva deja de bastar como frescura.
+
+> **Cambio v0.29 → v0.30 (D-79): fase 3, comunidad pequeña (Objetivo,
+> §Fuera de alcance, PA-11, PA-12).** Pedido por el usuario: el repo ya es
+> público y quiere que un grupo pequeño de programadores lo mejore y lo amplíe
+> sin publicidad. Se abren, cada uno en su propia versión y con condiciones,
+> pares contra BTC, venues por contrato de adaptador y estrategias por una
+> interfaz común bajo los límites del daemon, y el backtesting como reproducción
+> de books grabados. Se añade la exclusión de telemetría. Los pares contra
+> stablecoins dejan de estar excluidos sin más: entran solo con una propuesta y
+> una PR que cumplan las condiciones de D-79 (`CONTRIBUTING.md`).

@@ -20,7 +20,16 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   `DaemonRefusedError`, `RefusedError`, `AlreadyRunningError`) (T-85).
   `origin` tiene hasta T-79 (`ae81b99`); T-80 a T-85 (6 commits) sin push.
   El servidor sigue en T-78 (`f2cf49a`).
-- Spec en **v0.29** (D-76). **T-78 desplegada** (`f2cf49a`; daemon reiniciado
+- **Spec v0.30 (D-79, 2026-10-31):** fase 3, comunidad pequeña.
+  Abre, cada uno en su versión y con condiciones, pares contra BTC (contra
+  stablecoins, solo con propuesta y PR según `CONTRIBUTING.md`), venues por
+  contrato de adaptador y estrategias por interfaz común; backtesting solo como
+  reproducción de books grabados; sin telemetría. Sin RF nuevos. PA-11 y PA-12
+  nuevas. `CONTRIBUTING.md` (T-86, hecha). Tareas en M18: T-32 (CI), T-87
+  grabar y reproducir books, T-88 contrato de adaptador, T-89 interfaz de
+  estrategia, T-90 backoff y fracción de la profundidad; T-87 a T-90 empiezan
+  por su versión de la spec.
+- Spec anterior: **v0.29** (D-76). **T-78 desplegada** (`f2cf49a`; daemon reiniciado
   el 2026-10-29 20:48:51 UTC, bot `armed` desde las 20:49:03): el daemon contrasta cada `book_check_s` (5 s) el tope
   del book de cada venue con el REST; si no coincide, el book queda en duda
   (bot "book viejo", órdenes `stale_data`), se vuelve a pedir el book y se
@@ -112,6 +121,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
+00. **Fase 3: T-32 (CI)**, `.github/workflows/ci.yml`. Después T-87.
+    Pendiente del usuario: cómo se reporta un fallo de seguridad en
+    `CONTRIBUTING.md` (correo o avisos privados de GitHub).
 0. **Desplegar T-79 a T-85** cuando el usuario quiera (push de los 6 commits y
    los pasos de siempre). No cambia el comportamiento, pero sí código que corre
    en el daemon: el stream WS de NonKYC (`_BookOrder`), la decodificación del
@@ -195,6 +207,8 @@ es la de antes de la migración.
 | --- | --- | --- |
 | PA-09 | ¿Neoxa acepta y devuelve un client_id? Supuesto: no; se reconcilia por lado, precio y cantidad (D-26) | — |
 | PA-10 | ¿NonKYC descuenta la comisión de retiro de lo enviado? Supuesto: sí (RF-29, D-53) | — |
+| PA-11 | ¿Los books grabados del banco de pruebas van en el repo? Supuesto: solo muestras de minutos en `tests/fixtures/` (D-79) | — |
+| PA-12 | ¿La interfaz de estrategia admite órdenes maker? Supuesto: no, solo límite agresiva con cancelación (D-79) | — |
 
 Resueltas: PA-01 → D-08, PA-02 → D-10, PA-03 → D-19, PA-04 → D-42, PA-05 → D-31, PA-06 → D-07, PA-07 → D-06, PA-08 → D-15 (cerrada en D-54).
 

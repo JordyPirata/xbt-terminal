@@ -1,6 +1,6 @@
 # xbt-terminal — Requerimientos MVP
 
-Versión 0.29 · 2026-10-29 · @JordyPirata · Estado: **aprobado para diseño**
+Versión 0.30 · 2026-10-31 · @JordyPirata · Estado: **aprobado para diseño**
 
 > Historial de versiones (qué cambió en cada una y por qué): `specs/archive/changelog.md`.
 
@@ -18,6 +18,14 @@ queda fuera.
 arbitraje taker (RF-18 a RF-23): tomar las dos puntas cuando el cruce entre
 venues deja ganancia neta, con los mismos adaptadores, validaciones y orden
 doble que la operación manual.
+
+**Fase 3 (v0.30, D-79):** el proyecto crece como código abierto en una
+comunidad pequeña. Se pueden añadir pares contra BTC (y, con condiciones,
+contra stablecoins), venues que cumplan el contrato de adaptador (RNF-09) y
+estrategias que propongan órdenes dobles por
+una interfaz común, siempre bajo las validaciones y los límites del daemon
+(RF-10, RF-18, RF-21, RF-22). Cada uno entra en su propia versión, con sus RF y
+CA; una estrategia, además, con su resultado sobre books grabados.
 
 ## Alcance
 
@@ -70,13 +78,19 @@ Cualquier punto de esta lista requiere una nueva versión del documento antes de
 construirse.
 
 - Estrategias automáticas distintas del bot taker de RF-18 a RF-23 (con el
-  filtro de inventario de RF-26): cotización
-  continua o market making, cobertura o reintento automático de piernas, más de
-  una orden doble del bot a la vez.
+  filtro de inventario de RF-26), salvo las que una versión añada por la
+  interfaz de estrategia de la fase 3 (D-79). Siguen fuera para cualquier
+  estrategia: cotización continua o market making (PA-12), cobertura o
+  reintento automático de piernas, más de una orden doble a la vez y saltarse
+  las validaciones de RF-10 o los límites de RF-22.
 - Órdenes market, stop, OCO, IOC/FOK nativas u otros tipos distintos a límite.
   El bot emula la toma de liquidez con límite agresiva y cancelación (RF-20).
-- Otros venues u otros pares. En particular, **cualquier par contra stablecoins
-  (USDT, USDC…)**: ni se opera, ni se guarda saldo, ni se valora en ellas.
+- Otros venues u otros pares, salvo los que una versión añada con las
+  condiciones de la fase 3 (D-79): pares contra BTC y venues que cumplan el
+  contrato de adaptador. Los **pares contra stablecoins (USDT, USDC…)** solo
+  entran con una propuesta y una PR que cumplan las condiciones de D-79
+  (detalladas en `CONTRIBUTING.md`); hasta entonces, ni se opera, ni se guarda
+  saldo, ni se valora en ellas.
 - Depósitos (salvo **ver** las direcciones de depósito, RF-28), historial de
   depósitos, retiros, transferencias o rebalanceo entre venues hechos por la
   terminal (el plan de RF-29 solo calcula y muestra), swaps y coin splitting.
@@ -87,7 +101,10 @@ construirse.
   RF-32, que no ajusta depósitos ni retiros ni atribuye resultados.
 - Órdenes automáticas para alcanzar el ratio de inventario de RF-26: el bot solo
   deja de disparar; comprar o vender para reequilibrar es manual.
-- Indicadores técnicos, dibujo sobre gráficos o backtesting.
+- Indicadores técnicos o dibujo sobre gráficos. Backtesting, solo como la
+  reproducción de books grabados de la fase 3 (D-79).
+- Telemetría o envío de datos fuera de la máquina: ni métricas, ni resultados,
+  ni avisos de uso. Lo que alguien quiera compartir lo exporta a mano.
 - Interfaz web, móvil o multiusuario; operar fondos de terceros. El cliente
   de RF-31 no lo es: habla con el daemon por un socket Unix del mismo usuario
   (en la misma máquina, por SSH o con el socket reenviado por SSH). Siguen
@@ -242,3 +259,5 @@ Al resolverse, la respuesta va a `decisions.md` y aquí se marca como resuelta.
 | PA-08 | ~~¿Qué es "no se llena" para alertar de pierna colgada (RF-07)?~~ **Resuelta: D-15** (cerrada en D-54): cantidades llenas distintas y la pierna de detrás rechazada o cancelada, o el desequilibrio dura más de `hanging_leg_after_s` (30 s) desde que las cantidades dejan de coincidir. | Una pierna llena (total o parcial) y la otra abierta más de `hanging_leg_after_s` (default 30 s) o rechazada. | — |
 | PA-09 | ¿Acepta Neoxa un id de cliente al crear una orden, y lo devuelve en `/exchange/orders`? | No. Una orden incierta en Neoxa se reconcilia por lado, par, precio y cantidad exactos, creada a menos de 60 s de `order_sent` (en los dos sentidos, por el desfase de reloj). Si hay más de una candidata, queda incierta y se avisa. | T-25 |
 | PA-10 | ¿NonKYC descuenta la comisión de retiro de lo enviado (se pide X, llega X − comisión) o la cobra aparte, como Neoxa (D-53)? Se confirma viendo su formulario de retiro. | Descontada: `WithdrawalFee.on_top = False` en NonKYC (RF-29). | — |
+| PA-11 | ¿Los books grabados del banco de pruebas de la fase 3 (D-79) van en el repo? Son datos públicos de mercado, pero ocupan. | En el repo, solo muestras de minutos en `tests/fixtures/`; las grabaciones largas, fuera (descarga aparte). | — |
+| PA-12 | ¿La interfaz de estrategia de la fase 3 (D-79) admite órdenes maker, que se quedan en el book? | No: solo límite agresiva con cancelación, como RF-20. El market making sigue fuera hasta que una versión lo defina. | — |

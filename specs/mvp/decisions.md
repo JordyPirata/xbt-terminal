@@ -88,6 +88,7 @@ dicen en su propia nota.
 | D-76 | 2026-10-29 | El book quieto se contrasta con el REST; la conexión viva ya no basta (requirements v0.29, T-78, corrige la frescura de D-13) |
 | D-77 | 2026-10-29 | Legibilidad por partes, sin cambio de comportamiento; primero `risk.check` y `commands.parse` (T-79) |
 | D-78 | 2026-10-29 | Los fallos se piden al `Engine` (`report_fault`, `fault_count`, `subscribe_faults`), no a su lista (T-82, corrige D-77) |
+| D-79 | 2026-10-31 | Fase 3: comunidad pequeña, pares contra BTC, venues y estrategias por contrato (requirements v0.30) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1921,3 +1922,63 @@ El hub siempre trae un registro, así que la lista nunca está vacía y los
 - `control.py`, `wire.py` y `ui/app.py` usan solo esas tres; `Runner` las
   declara con su tipo en vez de `faults: list[Any]`.
 **Toca:** T-82 (sin cambios en requirements ni design).
+
+## D-79 · 2026-10-31 · Fase 3: comunidad pequeña, pares contra BTC, venues y estrategias por contrato (requirements v0.30)
+**Contexto:** el repo ya es público (AGPL-3.0, D-74). El usuario quiere que lo
+mejore un grupo pequeño de programadores y bitcoiners, sin publicidad, solo de
+boca en boca y por resultados, para que el proyecto se mantenga a largo plazo y
+crezca en pares y algoritmos. §Fuera de alcance excluía justo eso: otros venues
+y pares, y estrategias distintas del bot taker. Más copias del bot reparten las
+mismas oportunidades; el usuario lo acepta porque su ventaja es la liquidez
+propia, no el código.
+**Decisión:**
+- Fase 3 en la misma carpeta de spec, como la fase 2 (D-31). La v0.30 no añade
+  RF: abre el alcance en tres frentes y fija con qué condiciones entra cada
+  cosa. Cada venue, par o estrategia concreta llega en su propia versión, con
+  sus RF, CA y tareas.
+- **Pares:** cualquier par contra BTC. RNF-10 y la tabla de Alcance cambian
+  con la versión que añada el primer par; hasta entonces, la config sigue
+  exigiendo BTCB2/BTC.
+- **Pares contra stablecoins** (decidido por el usuario el mismo día, en vez de
+  excluirlos): se permiten, pero solo con una propuesta (issue) aprobada por el
+  dueño del producto y una PR, por el riesgo de congelamiento del emisor que
+  motivó D-08. La propuesta tiene que decir: qué stablecoin, emisor y red, y si
+  el emisor puede congelar saldos; el tope de saldo en esa stablecoin por venue,
+  expresado en BTC; con qué precio se convierte a BTC, porque nocionales, topes
+  de RF-10 y resultados siguen en BTC; y cómo se apaga por defecto (el par solo
+  se opera con una clave explícita en la config, y la pantalla lo marca). La PR
+  trae la versión nueva de requirements con su D-NN (que cambia RNF-10 y el
+  riesgo de congelamiento de §Supuestos y riesgos), fixtures grabados en real y
+  sus tests. El proceso está en `CONTRIBUTING.md`.
+- **Venues:** un adaptador entra si implementa la interfaz común de RNF-09,
+  documentada como contrato público, y pasa una batería común de tests de
+  contrato con fixtures grabados en real del venue, como NonKYC y Neoxa
+  (design.md §4, `tests/fixtures/`).
+- **Estrategias:** una estrategia es una función pura en `core/`, como la
+  decisión del bot (RNF-22): recibe books, saldos y reloj y propone una orden
+  doble, o ninguna, con su motivo. Lo demás sigue siendo del daemon y vale para
+  todas: arrancar `off` (RF-18), validaciones de RF-10, `halted` ante una
+  anomalía (RF-21) y límites de RF-22. Una sola estrategia armada a la vez y
+  una sola doble suya a la vez. Cobertura y reintento automático de piernas
+  siguen fuera; las órdenes maker, también (PA-12).
+- **Banco de pruebas:** grabar y reproducir books es la puerta de entrada.
+  Ninguna estrategia nueva, ni un cambio de comportamiento en una existente,
+  entra sin su resultado sobre books grabados. El backtesting se abre solo en
+  esa forma. Dónde viven las grabaciones: PA-11.
+- **Nada sale de la máquina:** sin telemetría. Quien quiera enseñar resultados
+  los exporta a mano (la exportación, anonimizada y en sats, será su propio RF).
+- **Sin cambios:** órdenes market, retiros y transferencias, fondos de
+  terceros, multiusuario y control por red siguen fuera.
+- **Mantenimiento** (repo, no spec): la CI de RNF-21 (T-32, que esperaba a que
+  el usuario la pidiera; con esto la pide), `CONTRIBUTING.md` con el ciclo de
+  `specs/README.md`, dos o tres mantenedores con `CODEOWNERS` por capa y
+  versiones etiquetadas. `requirements.md` y §Fuera de alcance los sigue
+  cambiando solo el dueño del producto.
+- **Orden propuesto:** CI y `CONTRIBUTING.md` → grabación y reproducción de
+  books, con una demo en dry-run sin keys → contrato de adaptador y su batería
+  → interfaz de estrategia, con el bot taker como primera estrategia que la usa
+  sin cambiar su comportamiento (oráculo de T-72) → backoff aleatorio tras
+  `bot_miss` y fracción de la profundidad. Aprobado por el usuario el mismo día:
+  T-32 y T-86 a T-90 (M18).
+**Toca:** Objetivo y §Fuera de alcance de requirements.md, PA-11, PA-12, T-32,
+`CONTRIBUTING.md`.

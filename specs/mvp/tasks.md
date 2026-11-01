@@ -79,8 +79,8 @@ Checklist, con tamaños mínimos y resultado anotado en `decisions.md`:
 ### T-32 CI · `todo` · RNF-21
 - `.github/workflows/ci.yml`: `uv sync --frozen`, pytest, ruff y `spec_trace`.
 - Tests: el workflow existe y ejecuta esos cuatro pasos.
-- Aplazada por el usuario: el repo no tiene remoto (D-54). Mientras tanto, los
-  cuatro pasos se corren a mano al cerrar cada tarea.
+- Aplazada por el usuario mientras el repo no tuvo remoto (D-54). Ya lo tiene
+  (GitHub) y D-79 la pide: es la primera tarea de la fase 3 (M18).
 
 ### T-33 Comprobación en real de M6 · `todo` · RNF-12 … RNF-21 · dep T-25 … T-32
 - Live con importe mínimo: cortar la red durante un envío → incierta → reconciliada.
@@ -209,3 +209,53 @@ Se adelanta a T-32 y T-33 a petición del usuario (D-34): depende de M6 hasta T-
 ### T-59 Fee corregida de un fill · `done` · RF-11, RF-25 · dep T-57 · D-64
 ### T-60 Fees en token valoradas en resultados · `done` · RF-24, RF-25 · dep T-59 · D-65
 ### T-74 Salto tras un book quieto · `done` · RF-19, CA-08 · dep T-73 · D-72
+
+## M18 — Fase 3: comunidad (v0.30, D-79)
+
+En el orden de D-79; T-32 (CI) va primero. T-87 a T-90 empiezan por la versión
+de `requirements.md` que las define, con sus RF y CA: hasta que esa versión
+exista, no se construye nada de ellas.
+
+### T-86 `CONTRIBUTING.md` · `done` · D-79
+
+### T-87 Grabar y reproducir books · `todo` · RF nuevo · dep T-32 · D-79, PA-11
+- Spec: RF de grabación (el daemon, si se le pide, apunta books y trades de
+  cada venue en ficheros aparte del journal) y de reproducción (los venues
+  simulados del dry-run leen una grabación), con su CA. Incluye un competidor
+  simulado que se lleva un nivel con cierta probabilidad, para medir
+  `bot_miss`.
+- Demo sin keys: `xbt daemon` en dry-run sobre una grabación de muestra; el
+  README lo explica paso a paso.
+- Informe fijo sobre una grabación: cruces sobre el umbral, disparos, tasa de
+  captura, neta, `bot_miss` y piernas colgadas por cada 100 disparos.
+- Tests: la reproducción da los mismos eventos que la grabación, en orden y con
+  sus tiempos relativos; el informe del bot taker sobre una muestra fija.
+
+### T-88 Contrato de adaptador · `todo` · RNF-09, RF nuevo · dep T-32 · D-79
+- Spec: el contrato de venue como RF, con su CA.
+- `docs/`: la interfaz de `adapters/base.py` (`MarketData`, `Venue` y los
+  opcionales `Depositor`, `WithdrawalFees`, `TokenPricer`) documentada como
+  contrato público.
+- Batería de tests de contrato parametrizada por venue, con los fixtures
+  grabados en real de cada uno.
+- Tests: la batería pasa con NonKYC y Neoxa y falla con un adaptador falso que
+  rompe el contrato.
+
+### T-89 Interfaz de estrategia · `todo` · RF-18 … RF-22, RNF-22, RF nuevo · dep T-87 · D-79, PA-12
+- Spec: RF de la interfaz (entrada: books, saldos y reloj; salida: una
+  propuesta de doble o el motivo de no proponerla) y de la elección de
+  estrategia en la config, con una sola armada a la vez.
+- El bot taker pasa a ser la primera estrategia sin cambiar su comportamiento.
+- Tests: el oráculo de T-72 (`tests/unit/bot_reference.py`) sigue pasando; una
+  estrategia de prueba que propone una doble fuera de RF-10 se rechaza igual
+  que una orden manual, y una que falla deja el bot en `halted`.
+
+### T-90 Backoff tras `bot_miss` y fracción de la profundidad · `todo` · RF-20, RF-22, RF nuevo · dep T-89 · D-79
+- Spec: un cooldown que crece con cada `bot_miss` y baja con cada doble llena,
+  con una espera aleatoria dentro; la cantidad, una fracción de la profundidad
+  dentro de un rango, sin bajar del mínimo del otro venue. Semilla por
+  instalación, apuntada en el journal.
+- La D-NN compara su resultado con el bot actual sobre grabaciones con el
+  competidor simulado de T-87.
+- Tests: con semilla fija, la secuencia de esperas y cantidades es la esperada;
+  la cantidad nunca baja del lote ni del mínimo del otro venue.
