@@ -4,7 +4,7 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-10-30, 02:15 UTC)
+## Estado (2026-11-01, 03:00 UTC)
 
 - **Legibilidad (D-77, D-78), T-79 a T-85 hechas en `main`, sin desplegar.**
   Refactor sin cambio de comportamiento: `risk.check` y `commands.parse`
@@ -18,7 +18,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   `nonkyc._ws_events` con `_BookOrder` y `ws_message`, `remote._handle` con
   tabla de handlers, excepciones con sufijo `Error` (`DaemonGoneError`,
   `DaemonRefusedError`, `RefusedError`, `AlreadyRunningError`) (T-85).
-  `origin` tiene hasta `3039b3f` (T-85); `d722b22` (v0.30) y el de T-32, sin push.
+  `origin` tiene hasta `8eb291d` (T-32), pero ese historial se reescribió en
+  local (autor y firma GPG de esta máquina, sin trailer): `ad4ada3` (v0.30) y
+  `80a7bb0` (T-32), mismo contenido. Falta el `git push --force-with-lease`.
   El servidor sigue en T-78 (`f2cf49a`).
 - **Spec v0.30 (D-79, 2026-10-31):** fase 3, comunidad pequeña.
   Abre, cada uno en su versión y con condiciones, pares contra BTC (contra
@@ -118,15 +120,18 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 - **T-20** `doing`: CA-03 y CA-06 aplazados por el usuario (2026-10-23).
 - **T-33** `todo` (comprobación en real de M6).
 - **CI (T-32):** `.github/workflows/ci.yml` en cada push a `main` y cada PR.
-  Aún sin ver correr en GitHub: hay que mirar la primera ejecución tras el
-  push. Ojo con los tests de reloj real (`test_el_dialogo_no_espera_a_la_red`,
-  `tests/perf/`): en un runner compartido pueden fallar más que en local.
+  Primera ejecución en GitHub en verde (2026-11-01 02:46 UTC, 1 min 22 s,
+  `gh run list`). Ojo con los tests de reloj real
+  (`test_el_dialogo_no_espera_a_la_red`, `tests/perf/`): en un runner
+  compartido pueden fallar más que en local.
 
 ### Siguiente
 
-00. **Fase 3:** push de `d722b22` y T-32 (lo hace el usuario: la sesión no
-    tiene su clave SSH) y mirar la primera ejecución de la CI. Después T-87,
-    que empieza por su versión de la spec.
+00. **Fase 3:** el usuario hace `git push --force-with-lease origin main`
+    (historial reescrito; la sesión no tiene su clave SSH) y, en el servidor,
+    el próximo `git pull --ff-only` fallará si ya tiró `8eb291d`: ahí, `git
+    fetch && git reset --hard origin/main`. Después T-87, que empieza por su
+    versión de la spec.
     Pendiente del usuario: cómo se reporta un fallo de seguridad en
     `CONTRIBUTING.md` (correo o avisos privados de GitHub).
 0. **Desplegar T-79 a T-85** cuando el usuario quiera (push de los 6 commits y
