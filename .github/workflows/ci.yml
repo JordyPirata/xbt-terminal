@@ -1,0 +1,23 @@
+# RNF-21: los mismos pasos que se corren a mano al cerrar una tarea (CLAUDE.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # Python lo fija .python-version; el lockfile, uv.lock (sin tocarlo).
+      - run: uv sync --frozen
+      - run: uv run pytest
+      - run: uv run ruff check .
+      - run: uv run python tools/spec_trace.py

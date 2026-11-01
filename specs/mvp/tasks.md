@@ -76,11 +76,7 @@ Checklist, con tamaños mínimos y resultado anotado en `decisions.md`:
 ### T-30 Rutas, permisos e instancia única · `done` · RNF-17, RNF-18, RNF-20 · dep T-03, T-04
 ### T-31 Log de diagnóstico · `done` · RNF-19 · dep T-30
 
-### T-32 CI · `todo` · RNF-21
-- `.github/workflows/ci.yml`: `uv sync --frozen`, pytest, ruff y `spec_trace`.
-- Tests: el workflow existe y ejecuta esos cuatro pasos.
-- Aplazada por el usuario mientras el repo no tuvo remoto (D-54). Ya lo tiene
-  (GitHub) y D-79 la pide: es la primera tarea de la fase 3 (M18).
+### T-32 CI · `done` · RNF-21 · D-79
 
 ### T-33 Comprobación en real de M6 · `todo` · RNF-12 … RNF-21 · dep T-25 … T-32
 - Live con importe mínimo: cortar la red durante un envío → incierta → reconciliada.

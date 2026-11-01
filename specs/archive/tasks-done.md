@@ -1116,3 +1116,16 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   en src, tests y design.md. `max-complexity = 12` en `[tool.ruff.lint.mccabe]`.
   Pyright: ningún error nuevo (uno de varianza con `fresh` se arregló
   devolviendo `Sequence`).
+
+### T-32 CI · `done` · RNF-21 · D-79
+- `.github/workflows/ci.yml`: `uv sync --frozen`, pytest, ruff y `spec_trace`.
+- Tests: el workflow existe y ejecuta esos cuatro pasos.
+- Aplazada por el usuario mientras el repo no tuvo remoto (D-54); la pide D-79
+  como primera tarea de la fase 3 (M18).
+- Hecho: tests primero (`tests/unit/test_ci.py`, en rojo sin el fichero): los
+  cuatro pasos, en ese orden, y que corre en cada push a `main` y en cada PR.
+  Workflow en `ubuntu-latest` con `actions/checkout@v4` y
+  `astral-sh/setup-uv@v6`; Python lo fija `.python-version`. Permisos de solo
+  lectura y tope de 20 min. `spec_trace` sin `--strict`: los cuatro IDs sin
+  test (RNF-01, CA-01, CA-02, CA-10) se pasaron en real. En local, los cuatro
+  pasos en ~1 min 20 s (1484 tests).

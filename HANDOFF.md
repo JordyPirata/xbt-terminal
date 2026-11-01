@@ -18,14 +18,14 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   `nonkyc._ws_events` con `_BookOrder` y `ws_message`, `remote._handle` con
   tabla de handlers, excepciones con sufijo `Error` (`DaemonGoneError`,
   `DaemonRefusedError`, `RefusedError`, `AlreadyRunningError`) (T-85).
-  `origin` tiene hasta T-79 (`ae81b99`); T-80 a T-85 (6 commits) sin push.
+  `origin` tiene hasta `3039b3f` (T-85); `d722b22` (v0.30) y el de T-32, sin push.
   El servidor sigue en T-78 (`f2cf49a`).
 - **Spec v0.30 (D-79, 2026-10-31):** fase 3, comunidad pequeña.
   Abre, cada uno en su versión y con condiciones, pares contra BTC (contra
   stablecoins, solo con propuesta y PR según `CONTRIBUTING.md`), venues por
   contrato de adaptador y estrategias por interfaz común; backtesting solo como
   reproducción de books grabados; sin telemetría. Sin RF nuevos. PA-11 y PA-12
-  nuevas. `CONTRIBUTING.md` (T-86, hecha). Tareas en M18: T-32 (CI), T-87
+  nuevas. `CONTRIBUTING.md` (T-86, hecha). Tareas en M18: T-32 (CI, hecha), T-87
   grabar y reproducir books, T-88 contrato de adaptador, T-89 interfaz de
   estrategia, T-90 backoff y fracción de la profundidad; T-87 a T-90 empiezan
   por su versión de la spec.
@@ -34,9 +34,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   del book de cada venue con el REST; si no coincide, el book queda en duda
   (bot "book viejo", órdenes `stale_data`), se vuelve a pedir el book y se
   apunta `book_resync`. La conexión viva ya no cuenta como frescura. Hechas
-  T-61 a T-65 y T-67 a T-85. 1482 tests, ruff limpio, `spec_trace` 69/74 (sin
-  test: RNF-01, RNF-21/T-32, CA-01, CA-02 y CA-10, pasados en real: D-20,
-  D-43, D-57).
+  T-61 a T-65, T-67 a T-86 y T-32. 1484 tests, ruff limpio, `spec_trace`
+  70/74 (sin test: RNF-01, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43,
+  D-57).
 - **T-77 desplegada** desde el 2026-10-28 23:55 UTC, con `lead_venue = "nx"`.
 - **2026-10-29, book de NonKYC congelado (D-76):** el WS siguió conectado pero
   sin `updateOrderbook` desde ~17:45 UTC; el bot disparó d-9820a4, d-f1fe90 y
@@ -116,12 +116,17 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   server por SSH, con permiso del usuario.
 - **T-55** `doing`: falta la parte manual de CA-15 en live en el server.
 - **T-20** `doing`: CA-03 y CA-06 aplazados por el usuario (2026-10-23).
-- **T-33** `todo` (comprobación en real de M6) y **T-32** `todo` (CI; ya hay
-  remoto en GitHub, falta que el usuario la pida).
+- **T-33** `todo` (comprobación en real de M6).
+- **CI (T-32):** `.github/workflows/ci.yml` en cada push a `main` y cada PR.
+  Aún sin ver correr en GitHub: hay que mirar la primera ejecución tras el
+  push. Ojo con los tests de reloj real (`test_el_dialogo_no_espera_a_la_red`,
+  `tests/perf/`): en un runner compartido pueden fallar más que en local.
 
 ### Siguiente
 
-00. **Fase 3: T-32 (CI)**, `.github/workflows/ci.yml`. Después T-87.
+00. **Fase 3:** push de `d722b22` y T-32 (lo hace el usuario: la sesión no
+    tiene su clave SSH) y mirar la primera ejecución de la CI. Después T-87,
+    que empieza por su versión de la spec.
     Pendiente del usuario: cómo se reporta un fallo de seguridad en
     `CONTRIBUTING.md` (correo o avisos privados de GitHub).
 0. **Desplegar T-79 a T-85** cuando el usuario quiera (push de los 6 commits y
