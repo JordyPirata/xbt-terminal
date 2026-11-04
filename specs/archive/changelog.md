@@ -163,3 +163,9 @@ Es historia: la spec vigente es la de `requirements.md`.
 > de books grabados. Se añade la exclusión de telemetría. Los pares contra
 > stablecoins dejan de estar excluidos sin más: entran solo con una propuesta y
 > una PR que cumplan las condiciones de D-79 (`CONTRIBUTING.md`).
+
+> **Cambio v0.30 → v0.31 (D-80): banco de pruebas (RF-33, RF-34, RF-35, CA-19,
+> CA-20).** Primer paso de la fase 3 (T-87): `--record` graba books y trades,
+> `--replay` los reproduce en dry-run sin keys, con un competidor simulado, y
+> `xbt report` da el resultado fijo del bot sobre una grabación. Es la puerta de
+> entrada de D-79 para cualquier estrategia nueva.

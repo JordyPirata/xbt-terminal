@@ -98,6 +98,17 @@ class BotConfig:
 
 
 @dataclass(frozen=True)
+class ReplayConfig:
+    """`[replay]`: los venues simulados de una reproducción (RF-34, D-80)."""
+
+    base_balance: Decimal  # BTCB2 en cada venue
+    quote_balance: Decimal  # BTC en cada venue
+    latency_ms: int = 300  # de enviar a llegar al venue: el ack p50 de Neoxa
+    competitor_pct: Decimal = Decimal(0)  # probabilidad de perder cada nivel
+    seed: int = 0
+
+
+@dataclass(frozen=True)
 class AppConfig:
     venues: dict[VenueId, VenueConfig]
     ui: UiConfig
@@ -107,6 +118,7 @@ class AppConfig:
     log: LogConfig = LogConfig()
     bot: BotConfig | None = None  # sin [bot], no hay bot (RF-18)
     inventory: InventoryTarget | None = None  # sin [inventory], sin ratio (RF-26)
+    replay: ReplayConfig | None = None  # solo la lee --replay (RF-34)
 
 
 @dataclass(frozen=True)
@@ -122,8 +134,11 @@ class Settings:
     mode: Mode
     redactor: Redactor
     warnings: tuple[str, ...] = ()  # se muestran en rojo al arrancar
+    replay: bool = False  # venues simulados: se opera sin keys (RF-34)
 
     def can_trade(self, venue: VenueId) -> bool:
+        if self.replay:
+            return True
         return self.mode != "read-only" and venue in self.credentials
 
 
@@ -308,6 +323,7 @@ def load_config(path: Path) -> AppConfig:
 
     bot = _bot(root.section("bot")) if "bot" in root.data else None
     inv = _inventory(root.section("inventory")) if "inventory" in root.data else None
+    replay = _replay(root.section("replay")) if "replay" in root.data else None
 
     if "dryrun" in root.data:
         raise ConfigError(
@@ -325,7 +341,25 @@ def load_config(path: Path) -> AppConfig:
         log=log,
         bot=bot,
         inventory=inv,
+        replay=replay,
     )
+
+
+def _replay(s: _Section) -> ReplayConfig:
+    """`[replay]` (RF-34, D-80): saldos obligatorios; latencia, competidor y
+    semilla, opcionales."""
+    extra: dict[str, Any] = {}
+    if "latency_ms" in s.data:
+        extra["latency_ms"] = s.int("latency_ms", min=0)
+    if "competitor_pct" in s.data:
+        extra["competitor_pct"] = _percent(s, "competitor_pct", positive=False)
+    if "seed" in s.data:
+        extra["seed"] = s.int("seed", min=0)
+    config = ReplayConfig(
+        base_balance=s.decimal("base_balance"), quote_balance=s.decimal("quote_balance"), **extra
+    )
+    s.done()
+    return config
 
 
 def _inventory(s: _Section) -> InventoryTarget:
@@ -439,8 +473,15 @@ def resolve_mode(credentials: Mapping[VenueId, Credentials], live: bool) -> Mode
     return "live" if live else "dry-run"
 
 
-def load_settings(config_path: Path, env_path: Path, live: bool) -> Settings:
+def load_settings(
+    config_path: Path, env_path: Path, live: bool, *, replay: bool = False
+) -> Settings:
+    """Con `replay`, dry-run sobre venues simulados: el `.env` ni se abre (RF-34)."""
     config = load_config(config_path)
+    if replay:
+        if config.replay is None:
+            raise ConfigError("[replay]: hace falta para reproducir una grabación")
+        return Settings(config, {}, "dry-run", Redactor([]), replay=True)
     env = dotenv_values(env_path) if Path(env_path).exists() else {}
     credentials = load_credentials(env)
     mode = resolve_mode(credentials, live)

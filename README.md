@@ -115,6 +115,33 @@ actualizar, copias de seguridad): [`docs/despliegue.md`](docs/despliegue.md).
 Atajos, comandos y ventanas de la pantalla: [`docs/uso.md`](docs/uso.md), o `?`
 dentro de la terminal.
 
+## Probarlo sin keys
+
+Hay una grabación de muestra de books reales. El daemon la reproduce con venues
+simulados: no hay red, ni keys, ni nada llega a un exchange. Desde un clon:
+
+```sh
+uv sync
+uv run xbt daemon --replay tests/fixtures/replay/muestra.jsonl \
+    --config tests/fixtures/replay/config.toml --data-dir /tmp/xbt-demo
+uv run xbt --data-dir /tmp/xbt-demo    # en otra terminal
+```
+
+Dentro, `bot on` y `y` arman el bot, que dispara si la grabación cruza. Al
+acabar, el mercado queda caído: `Ctrl+C` en el daemon. Sin esperar y con un
+resultado que no cambia entre ejecuciones:
+
+```sh
+uv run xbt report --replay tests/fixtures/replay/muestra.jsonl \
+    --config tests/fixtures/replay/config.toml
+```
+
+Para grabar tus propias sesiones, `xbt daemon --record` deja cada una en
+`~/.local/state/xbt/books-*.jsonl`, también sin keys. El informe usa `[replay]`
+de la config: saldos, latencia y un competidor simulado que se lleva niveles.
+Sirve para comparar versiones del bot, no para predecir dinero. Más en
+[`docs/uso.md`](docs/uso.md).
+
 ## Seguridad
 
 - Keys **sin permiso de retiro**, solo en `.env` (`0600`, ignorado por git).

@@ -4,40 +4,38 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-11-01, 03:00 UTC)
+## Estado (2026-11-04)
 
-- **Legibilidad (D-77, D-78), T-79 a T-85 hechas en `main`, sin desplegar.**
-  Refactor sin cambio de comportamiento: `risk.check` y `commands.parse`
-  partidas (T-79); `wire.decode` por familia de tipos, con el decodificador en
-  caché, ~28 % más rápida (T-80); formatos de sats y % en `ui/format.py`
-  (T-81); los fallos se piden al `Engine` con `report_fault`, `fault_count` y
-  `subscribe_faults` (T-82, D-78 corrige a D-77: la lista de registros es
-  real); pantallas modales en `ui/screens/`, `ui/app.py` de 1620 a ~810
-  líneas (T-83); `XbtApp(hub, view=ClientView, services=ClientServices, ...)`,
-  10 parámetros en vez de 21 (T-84); ruff con `C90` (tope 12) y `N`,
-  `nonkyc._ws_events` con `_BookOrder` y `ws_message`, `remote._handle` con
-  tabla de handlers, excepciones con sufijo `Error` (`DaemonGoneError`,
-  `DaemonRefusedError`, `RefusedError`, `AlreadyRunningError`) (T-85).
-  `origin` tiene hasta `8eb291d` (T-32), pero ese historial se reescribió en
-  local (autor y firma GPG de esta máquina, sin trailer): `ad4ada3` (v0.30) y
-  `80a7bb0` (T-32), mismo contenido. Falta el `git push --force-with-lease`.
-  El servidor sigue en T-78 (`f2cf49a`).
+- **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
+  `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
+  con venues simulados (`services/replay.py`) y `[replay]` en la config;
+  `xbt report --replay <fichero>` da el informe fijo en tiempo virtual
+  (`VirtualLoop`). Muestra real de 7 min y config de la demo en
+  `tests/fixtures/replay/` (PA-11: su supuesto). Demo en el README. El `[inventory]`
+  de la demo se quitó: con él, la muestra no dispara.
+- **Servidor:** el usuario dice que ya está resuelto (2026-11-04): historial
+  reescrito de `origin` y despliegue de T-79 a T-85 fuera de la lista. No lo he
+  comprobado por SSH. T-87 aún no está desplegada ni hace falta para el bot.
+- **Neoxa quitó el descuento de fee temporalmente** (dicho por el usuario,
+  2026-11-04): explica los fills al 0.2 % completo. `fee_discount_pct = "50"`
+  sigue en la config y solo infla el neto del panel cruzado.
+- **Legibilidad (D-77, D-78), T-79 a T-85:** refactor sin cambio de
+  comportamiento; detalle en `specs/archive/tasks-done.md`.
 - **Spec v0.30 (D-79, 2026-10-31):** fase 3, comunidad pequeña.
   Abre, cada uno en su versión y con condiciones, pares contra BTC (contra
   stablecoins, solo con propuesta y PR según `CONTRIBUTING.md`), venues por
   contrato de adaptador y estrategias por interfaz común; backtesting solo como
   reproducción de books grabados; sin telemetría. Sin RF nuevos. PA-11 y PA-12
-  nuevas. `CONTRIBUTING.md` (T-86, hecha). Tareas en M18: T-32 (CI, hecha), T-87
-  grabar y reproducir books, T-88 contrato de adaptador, T-89 interfaz de
-  estrategia, T-90 backoff y fracción de la profundidad; T-87 a T-90 empiezan
+  nuevas. `CONTRIBUTING.md` (T-86, hecha). Tareas en M18: T-32 y T-87 hechas, T-88 contrato de adaptador, T-89 interfaz de
+  estrategia, T-90 backoff y fracción de la profundidad; T-88 a T-90 empiezan
   por su versión de la spec.
 - Spec anterior: **v0.29** (D-76). **T-78 desplegada** (`f2cf49a`; daemon reiniciado
   el 2026-10-29 20:48:51 UTC, bot `armed` desde las 20:49:03): el daemon contrasta cada `book_check_s` (5 s) el tope
   del book de cada venue con el REST; si no coincide, el book queda en duda
   (bot "book viejo", órdenes `stale_data`), se vuelve a pedir el book y se
   apunta `book_resync`. La conexión viva ya no cuenta como frescura. Hechas
-  T-61 a T-65, T-67 a T-86 y T-32. 1484 tests, ruff limpio, `spec_trace`
-  70/74 (sin test: RNF-01, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43,
+  T-61 a T-65, T-67 a T-87 y T-32. Más de 1500 tests, ruff limpio, `spec_trace`
+  75/79 (sin test: RNF-01, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43,
   D-57).
 - **T-77 desplegada** desde el 2026-10-28 23:55 UTC, con `lead_venue = "nx"`.
 - **2026-10-29, book de NonKYC congelado (D-76):** el WS siguió conectado pero
@@ -127,18 +125,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-00. **Fase 3:** el usuario hace `git push --force-with-lease origin main`
-    (historial reescrito; la sesión no tiene su clave SSH) y, en el servidor,
-    el próximo `git pull --ff-only` fallará si ya tiró `8eb291d`: ahí, `git
-    fetch && git reset --hard origin/main`. Después T-87, que empieza por su
-    versión de la spec.
-    Pendiente del usuario: cómo se reporta un fallo de seguridad en
-    `CONTRIBUTING.md` (correo o avisos privados de GitHub).
-0. **Desplegar T-79 a T-85** cuando el usuario quiera (push de los 6 commits y
-   los pasos de siempre). No cambia el comportamiento, pero sí código que corre
-   en el daemon: el stream WS de NonKYC (`_BookOrder`), la decodificación del
-   socket y el cliente remoto (el protocolo no cambia). Tras reiniciar, mirar `diag.log` y que el book de NonKYC se mueva y no
-   salgan `book_resync` de más en NonKYC.
+00. **T-88** (contrato de adaptador), que empieza por su versión de la spec; luego
+    T-89 y T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
+    seguridad en `CONTRIBUTING.md`.
 1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
    salen y en qué venue (en Neoxa se espera ~1 cada 3 a 4 min por carreras,
    D-76; muchos más, o en NonKYC con el book bien, sería un falso positivo que
@@ -152,8 +141,8 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
    ha dicho si quiere).
 4. T-66 y T-55 por SSH contra el daemon del servidor (ya con la versión
    nueva), con permiso del usuario.
-5. Decidir `fee_discount_pct` de Neoxa: los fills reales cobran el 0.2 %
-   completo; el 50 % solo infla el neto del panel cruzado (no el del bot).
+5. Cuando Neoxa vuelva a dar el descuento, comprobar los fills; si no vuelve,
+   quitar `fee_discount_pct` de la config de Neoxa en el servidor.
 
 ### Cómo retomar en una sesión nueva
 
@@ -180,6 +169,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   `Esc` antes de `q` para salir. `q` solo desconecta: el daemon sigue.
 - **NonKYC y NKYC:** no se ha comprobado si `/cancelallorders` respeta `symbol`.
   No usar `x` con órdenes de NKYC abiertas.
+- **`VirtualLoop` y `_clock_resolution`:** con la hora epoch, sumar 1 ns a un
+  float no lo mueve: un temporizador que vence justo ahora no se dispara nunca y
+  el bucle gira sin fin. Por eso `CLOCK_RESOLUTION_S` = 1 µs.
 - **Fees:** NonKYC cobra ~0.149 % en NKYC (102 fills desde el 2026-10-25 05:24
   UTC más d-fb32e2). Neoxa cobra el 0.2 % completo en BTC (109 fills y
   d-fb32e2): el `fee_discount_pct = "50"` de la config no se cumple. Los fills

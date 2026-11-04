@@ -89,6 +89,7 @@ dicen en su propia nota.
 | D-77 | 2026-10-29 | Legibilidad por partes, sin cambio de comportamiento; primero `risk.check` y `commands.parse` (T-79) |
 | D-78 | 2026-10-29 | Los fallos se piden al `Engine` (`report_fault`, `fault_count`, `subscribe_faults`), no a su lista (T-82, corrige D-77) |
 | D-79 | 2026-10-31 | Fase 3: comunidad pequeña, pares contra BTC, venues y estrategias por contrato (requirements v0.30) |
+| D-80 | 2026-11-04 | Banco de pruebas: grabación aparte del journal, venues simulados y tiempo virtual (requirements v0.31, T-87) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1982,3 +1983,37 @@ propia, no el código.
   T-32 y T-86 a T-90 (M18).
 **Toca:** Objetivo y §Fuera de alcance de requirements.md, PA-11, PA-12, T-32,
 `CONTRIBUTING.md`.
+
+## D-80 · 2026-11-04 · Banco de pruebas: grabación aparte del journal, venues simulados y tiempo virtual (requirements v0.31, T-87)
+**Contexto:** D-79 exige resultado sobre books grabados para cualquier estrategia
+nueva, y T-87 pide grabar, reproducir con un competidor simulado, una demo sin
+keys y un informe fijo. El dry-run normal no llena órdenes (D-16) y necesita keys.
+**Decisión:**
+- **Formato:** un fichero por arranque, `books-<UTC>.jsonl`, sin rotación: grabar
+  se pide a propósito y un fichero es una grabación. Primera línea
+  `{"format":1}`; cada línea, `{"t", "venue", "kind", "data"}`, con
+  `kind` ∈ market | book | delta | trade | conn y los datos como en el socket
+  (`services/wire.py`). Se graba lo que el hub aplica, no el stream crudo, y así
+  una reproducción ve lo mismo que vio el bot.
+- **Motor sin ramas:** la reproducción es otro par de venues debajo del `Engine`
+  de siempre (`ReplayVenue` y `SimVenue`, en `services/replay.py`). Bot, RiskCheck,
+  journal y resultados no saben que es una reproducción. Lo que no es real se
+  queda en esas dos clases y en la composición de `__main__`.
+- **Casado:** solo al llegar la orden, como taker; lo que no casa no se llena
+  después. Subestima algo la captura en paralelo, pero evita inventar un
+  emparejamiento contra órdenes ajenas que el book L2 no permite ver. El book
+  grabado no se toca, pero lo casado queda gastado hasta que la grabación cambie
+  o quite ese nivel: si no, un cruce largo daría dinero en cada cooldown.
+- **Tiempo virtual en el informe:** un bucle de asyncio cuyo reloj salta al
+  siguiente temporizador (`VirtualLoop`), con el reloj del motor colgado de él.
+  Horas de grabación tardan segundos y el resultado no depende de la carga de la
+  máquina. Sin eso, el "informe fijo" de T-87 no sería fijo.
+- **Latencia y competidor:** `latency_ms` = 300, el ack p50 de Neoxa medido en
+  live. El competidor es por nivel y usa un generador propio por venue, con
+  `seed`. Los dos son supuestos que se calibran comparando con el journal real;
+  el informe no predice dinero, compara versiones del bot.
+- **Rearme en el informe:** la primera pierna colgada dejaría sin medir el resto
+  de la grabación, así que allí se rearma sola. En el daemon, nunca (RF-21).
+- **Dónde viven las grabaciones:** el supuesto de PA-11 (muestras de minutos en
+  `tests/fixtures/`).
+**Toca:** RF-33 a RF-35, CA-19, CA-20, design.md §4, §6.14 y §8, T-87.

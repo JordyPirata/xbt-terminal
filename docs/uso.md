@@ -92,3 +92,28 @@ cuántas dobles la pagan.
 Neoxa cobra la comisión aparte (se pide X, llega X); en NonKYC se supone
 descontada de lo enviado, sin confirmar (PA-10). Solo calcula: la
 transferencia se hace en la web del exchange.
+
+## Banco de pruebas
+
+`xbt daemon --record` graba books, trades y conexión en
+`<datos>/books-<hora UTC>.jsonl`, aparte del journal. Son datos públicos y no
+hacen falta keys.
+
+`xbt daemon --replay <fichero> --data-dir <dir>` reproduce una grabación a
+velocidad real, sin red, sin keys y sin leer `.env`. `--data-dir` es obligatorio
+para no mezclarse con el journal real, y `--live` y `--record` no se admiten.
+La sección `[replay]` de la config da los saldos simulados y cómo casan las
+órdenes:
+
+- `latency_ms`: una orden llega ese tiempo después de enviarse y casa como taker
+  contra el book de ese momento. Lo que no casa queda abierto hasta cancelarlo.
+- `competitor_pct`: probabilidad de que otro se lleve cada nivel entero.
+- `seed`: fija esa secuencia.
+
+Lo casado queda gastado hasta que la grabación cambie o quite ese nivel.
+
+`xbt report --replay <fichero> [--config <ruta>]` corre lo mismo en tiempo
+virtual, con el bot armado desde el principio, y da cruces, disparos, dobles
+llenas, tasa de captura, neta, `bot_miss` y piernas colgadas por cada 100
+disparos. Tras una pierna colgada el bot se rearma solo, únicamente en el
+informe. Misma grabación y misma config, mismo resultado.

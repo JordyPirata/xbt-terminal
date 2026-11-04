@@ -4,8 +4,8 @@ Envuelve el adaptador real: los datos de mercado y los saldos los da él, y las
 órdenes se simulan aquí (D-16). Los saldos son los reales de cada consulta más
 lo simulado: al abrir una orden su importe pasa de `available` a `locked`, y al
 cancelarla vuelve. La terminal no simula fills: las órdenes quedan abiertas
-hasta cancelarlas. `simulate_fill` y los saldos fijos del constructor existen
-solo para los tests.
+hasta cancelarlas. `simulate_fill` y los saldos fijos del constructor son para
+los tests y para `SimVenue`, que reproduce una grabación (RF-34).
 
 Para no esperar a la red al enviar (RNF-11, D-18): el `MarketSpec` sale del hub
 (`spec`) y la comprobación de saldo reutiliza la última lectura real si tiene
@@ -51,7 +51,7 @@ class DryRunVenue:
         spec: Callable[[], MarketSpec | None] | None = None,
         clock: Callable[[], int] = now_ms,
     ) -> None:
-        """`balances`: saldos fijos en lugar de los reales, solo para tests.
+        """`balances`: saldos fijos en lugar de los reales (tests y `SimVenue`).
         `spec`: el MarketSpec ya cargado (el del hub), para no pedirlo por REST."""
         self.inner = inner
         self.id = inner.id
@@ -164,15 +164,19 @@ class DryRunVenue:
         for order in await self.open_orders():
             await self.cancel(order.order_id)
 
-    async def simulate_fill(self, order_id: str, qty: Decimal) -> Order:
-        """Llena `qty` de una orden abierta a su precio límite, con fee taker."""
+    async def simulate_fill(
+        self, order_id: str, qty: Decimal, *, price: Decimal | None = None
+    ) -> Order:
+        """Llena `qty` de una orden abierta con fee taker, a `price` o, sin él, a
+        su precio límite. Al acabar de llenar, lo bloqueado de más vuelve."""
         order = self._orders.get(order_id)
         if order is None or order.is_done:
             raise VenueError(f"dry-run: no hay orden abierta {order_id}")
         if qty <= 0 or qty > order.remaining:
             raise VenueError(f"dry-run: a {order_id} le queda {order.remaining:f}, no {qty:f}")
         spec = await self._market_spec()
-        gross = qty * order.price
+        price = order.price if price is None else price
+        gross = qty * price
         fee = gross * spec.taker_fee
         lock_asset, locked = self._locks[order_id]
         if order.side == "buy":
@@ -189,12 +193,14 @@ class DryRunVenue:
         self._orders[order_id] = updated
         if status == "filled":
             self._locks.pop(order_id)
+            spare = locked - used
+            self._move(lock_asset, available=spare, locked=-spare)
         else:
             self._locks[order_id] = (lock_asset, locked - used)
         self._publish(updated)
         trade_id = f"dry-fill-{next(self._fill_ids)}"
         self._publish(
-            Fill(self.id, trade_id, order_id, order.side, order.price, qty, fee, spec.quote,
+            Fill(self.id, trade_id, order_id, order.side, price, qty, fee, spec.quote,
                  self._clock())
         )  # fmt: skip
         return updated

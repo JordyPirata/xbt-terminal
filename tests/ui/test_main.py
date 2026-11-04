@@ -474,3 +474,67 @@ def test_un_subcomando_desconocido_no_arranca(monkeypatch, capsys):
     with pytest.raises(SystemExit):
         main()
     assert "invalid choice" in capsys.readouterr().err
+
+
+FIXTURE_LINE = '{"format":1}\n'
+
+
+@pytest.mark.spec("RF-34")
+class TestReplayFlags:
+    def argv(self, monkeypatch, *args):
+        monkeypatch.setattr(sys, "argv", ["xbt", *args])
+
+    def test_replay_con_live_no_arranca(self, xdg, served, tmp_path, monkeypatch):
+        self.argv(monkeypatch, "daemon", "--replay", "x", "--live", "--data-dir", "d")
+        with pytest.raises(SystemExit, match="--live"):
+            main()
+        assert "engine" not in served
+
+    def test_replay_con_record_no_arranca(self, xdg, served, monkeypatch):
+        self.argv(monkeypatch, "daemon", "--replay", "x", "--record", "--data-dir", "d")
+        with pytest.raises(SystemExit, match="--record"):
+            main()
+
+    def test_replay_exige_directorio_de_datos(self, xdg, served, monkeypatch):
+        self.argv(monkeypatch, "daemon", "--replay", "x")
+        with pytest.raises(SystemExit, match="--data-dir"):
+            main()
+
+    def test_replay_con_fichero_malo_lo_dice(self, xdg, served, tmp_path, monkeypatch):
+        conf, _ = xdg
+        text = (conf / "config.toml").read_text()
+        (conf / "config.toml").write_text(
+            text + '\n[replay]\nbase_balance = "1"\nquote_balance = "1"\n'
+        )
+        bad = tmp_path / "mala.jsonl"
+        bad.write_text("no\n")
+        self.argv(monkeypatch, "daemon", "--replay", str(bad), "--data-dir", "d")
+        with pytest.raises(SystemExit, match=r"mala\.jsonl"):
+            main()
+
+    def test_replay_sin_seccion_lo_dice(self, xdg, served, tmp_path, monkeypatch):
+        good = tmp_path / "g.jsonl"
+        good.write_text(FIXTURE_LINE)
+        self.argv(monkeypatch, "daemon", "--replay", str(good), "--data-dir", "d")
+        with pytest.raises(SystemExit, match=r"\[replay\]"):
+            main()
+
+    def test_report_sin_replay_lo_dice(self, xdg, monkeypatch):
+        self.argv(monkeypatch, "report")
+        with pytest.raises(SystemExit, match="--replay"):
+            main()
+
+
+@pytest.mark.spec("RF-33")
+def test_daemon_con_record_graba_en_el_directorio_de_datos(xdg, served, monkeypatch):
+    _, data = xdg
+    monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--record"])
+    main()
+    assert len(list(data.glob("books-*.jsonl"))) == 1
+
+
+@pytest.mark.spec("RF-33")
+def test_daemon_sin_record_no_graba(xdg, served):
+    _, data = xdg
+    main()
+    assert not list(data.glob("books-*.jsonl"))

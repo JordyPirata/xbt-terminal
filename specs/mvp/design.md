@@ -726,6 +726,33 @@ Dos formas de arrancar el mismo binario:
   venues, ni keys. `q` desconecta sin confirmación y avisa de que el daemon
   sigue.
 
+### 6.14 Banco de pruebas (RF-33 a RF-35, D-80)
+
+- `services/recording.py`: `Recorder` se suscribe al hub y escribe una línea por
+  evento aplicado (`{"t", "venue", "kind", "data"}`, con `wire.encode`), tras la
+  cabecera `{"format":1}`. `read_recording` lee, `scan_recording` valida el
+  fichero entero al arrancar y da el principio, el final y el `MarketSpec` de
+  cada venue; una línea mala es `RecordingError` con su número.
+- `services/replay.py`:
+  - `Timeline`: el origen de tiempos común a los dos venues (el primer evento
+    sale `offset` = ahora − primer `t` después) y cuántos venues han acabado.
+  - `ReplayVenue` cumple `MarketData`: `market_stream` duerme hasta la hora de
+    cada evento, lo aplica a su `L2Book` y lo emite con los `ts` desplazados;
+    `book_snapshot` da ese book, así que el contraste de RNF-24 coincide. Sin
+    velas ni trades recientes. Al acabar, `ConnState` `down` y se queda quieto.
+  - `SimVenue(DryRunVenue)`: `place_limit` espera `latency_ms`, abre la orden y
+    la llena con `core/replay.py` (`match`) contra el book de su `ReplayVenue`.
+  - `VirtualLoop`: `time()` es virtual y el selector, en vez de esperar, avanza
+    el reloj hasta el siguiente temporizador.
+  - `run_report`: corre los servicios del `Engine` sobre un `VirtualLoop` hasta
+    acabar la grabación y dejar que cierre la última doble.
+- `core/replay.py` (puro): `match` y `summarize`, que saca el informe de las
+  filas del journal; `core/results.compute` recibe `mode` para leer las de
+  dry-run. `CrossingProbe` (en `services/replay.py`) cuenta los cruces con
+  `decide`, con saldo de sobra y sin `max_move_pct`, en cada cambio de book.
+- `Settings.replay` hace que `can_trade` sea cierto sin keys; `build_engine`
+  recibe `clock`, y el `Journal` sale de él, para que todo viva en tiempo virtual.
+
 ## 7. Journal (RF-11)
 
 `<datos>/journal-YYYYMMDD.jsonl` (§8, por defecto `~/.local/state/xbt`), una
@@ -790,6 +817,7 @@ y no coincidiría.
 | — | sí | `dry-run` (por defecto, siempre) |
 | `--live` | sí | `live`, con banner rojo permanente |
 | `--live` | no | error al arrancar |
+| `--replay` | no se leen | `dry-run` sobre venues simulados (RF-34) |
 
 Las keys son por venue (D-04): con keys de un solo venue el modo es dry-run o
 live, pero `Settings.can_trade(venue)` es falso para el otro, que queda en solo

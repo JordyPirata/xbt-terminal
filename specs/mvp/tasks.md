@@ -214,18 +214,7 @@ exista, no se construye nada de ellas.
 
 ### T-86 `CONTRIBUTING.md` · `done` · D-79
 
-### T-87 Grabar y reproducir books · `todo` · RF nuevo · dep T-32 · D-79, PA-11
-- Spec: RF de grabación (el daemon, si se le pide, apunta books y trades de
-  cada venue en ficheros aparte del journal) y de reproducción (los venues
-  simulados del dry-run leen una grabación), con su CA. Incluye un competidor
-  simulado que se lleva un nivel con cierta probabilidad, para medir
-  `bot_miss`.
-- Demo sin keys: `xbt daemon` en dry-run sobre una grabación de muestra; el
-  README lo explica paso a paso.
-- Informe fijo sobre una grabación: cruces sobre el umbral, disparos, tasa de
-  captura, neta, `bot_miss` y piernas colgadas por cada 100 disparos.
-- Tests: la reproducción da los mismos eventos que la grabación, en orden y con
-  sus tiempos relativos; el informe del bot taker sobre una muestra fija.
+### T-87 Grabar y reproducir books · `done` · RF-33, RF-34, RF-35, CA-19, CA-20 · dep T-32 · D-79, D-80, PA-11
 
 ### T-88 Contrato de adaptador · `todo` · RNF-09, RF nuevo · dep T-32 · D-79
 - Spec: el contrato de venue como RF, con su CA.

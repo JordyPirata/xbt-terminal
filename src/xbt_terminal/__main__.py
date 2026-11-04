@@ -1,5 +1,6 @@
-"""Punto de entrada: `xbt daemon [--live] [--config RUTA] [--env RUTA]
-[--data-dir RUTA] [--socket RUTA]` y `xbt [attach] [--data-dir RUTA]
+"""Punto de entrada: `xbt daemon [--live] [--record] [--replay FICHERO]
+[--config RUTA] [--env RUTA] [--data-dir RUTA] [--socket RUTA]`,
+`xbt report --replay FICHERO [--config RUTA]` y `xbt [attach] [--data-dir RUTA]
 [--socket RUTA]`.
 
 `daemon` es el servidor: el único proceso que habla con los venues, tiene las
@@ -8,7 +9,8 @@ subcomando (o con `attach`), la TUI: el cliente de ese daemon por su socket,
 que lo enseña y opera todo a través de él sin leer config ni keys (RF-31,
 D-66). Sin flags, config y `.env` en `~/.config/xbt` y journal y socket en
 `~/.local/state/xbt` (XDG, RNF-20). Un solo daemon por directorio de datos
-(RNF-17)."""
+(RNF-17). `--record` graba el mercado, `--replay` sustituye los venues por una
+grabación y `report` da el resultado del bot sobre ella (RF-33 a RF-35, D-80)."""
 
 from __future__ import annotations
 
@@ -17,18 +19,22 @@ import asyncio
 import logging
 import signal
 import sys
-from collections.abc import Mapping
+import tempfile
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .adapters.base import Depositor, MarketData, TokenPricer, Venue, WithdrawalFees
 from .adapters.dryrun import DryRunVenue
 from .adapters.neoxa import NeoxaVenue
 from .adapters.nonkyc import NonKYCVenue
+from .adapters.streaming import now_ms
 from .config import ConfigError, RateLimitConfig, Settings, VenueConfig, load_settings
 from .core.bot import FeeToken
 from .core.journal import Journal
 from .core.models import VenueId
 from .core.ratelimit import RateLimiter
+from .core.replay import ReplayReport, render
 from .core.secrets import Redactor
 from .diaglog import setup_diagnostics
 from .paths import AlreadyRunningError, InstanceLock, private_dir, resolve_paths
@@ -42,7 +48,23 @@ from .services.faults import Faults
 from .services.market import MarketHub
 from .services.orders import OrderService
 from .services.rebalance import RebalanceService
+from .services.recording import (
+    Recorder,
+    RecordingError,
+    RecordingInfo,
+    recording_path,
+    scan_recording,
+)
 from .services.remote import DaemonGoneError, Hello, RemoteEngine, probe
+from .services.replay import (
+    CrossingProbe,
+    ReplayVenue,
+    SimVenue,
+    Timeline,
+    VirtualLoop,
+    run_report,
+    summarize_journal,
+)
 from .services.results import ResultsService
 from .services.wire import ClientView
 from .ui.app import ClientServices, XbtApp
@@ -86,16 +108,36 @@ def build_venues(settings: Settings) -> dict[VenueId, MarketData]:
     }
 
 
+def replay_venues(
+    recording: Path, info: RecordingInfo, clock: Callable[[], int] = now_ms
+) -> dict[VenueId, MarketData]:
+    """Los venues que salen de una grabación, con un solo origen de tiempos."""
+    timeline = Timeline(info, clock, venues=len(info.specs))
+    return {vid: ReplayVenue(vid, recording, info, timeline, clock) for vid in info.specs}
+
+
 def trading_venues(
-    settings: Settings, venues: dict[VenueId, MarketData], hub: MarketHub
+    settings: Settings,
+    venues: dict[VenueId, MarketData],
+    hub: MarketHub,
+    clock: Callable[[], int] = now_ms,
 ) -> dict[VenueId, Venue]:
     """Venues con los que se opera: los que tienen keys. Dry-run: envueltos en
     `DryRunVenue`, con saldos reales y órdenes simuladas (D-16) y el MarketSpec
-    del hub (D-18). Live: los reales."""
+    del hub (D-18). Live: los reales. Reproducción: `SimVenue` sobre la grabación
+    (RF-34)."""
+    if settings.replay:
+        cfg = settings.config.replay
+        assert cfg is not None  # load_settings no deja llegar aquí sin ella
+        return {
+            vid: SimVenue(v, cfg, clock=clock)
+            for vid, v in venues.items()
+            if isinstance(v, ReplayVenue)
+        }
     tradable = {vid: v for vid, v in venues.items() if settings.can_trade(vid)}
     if settings.mode == "dry-run":
         return {
-            vid: DryRunVenue(v, spec=lambda vid=vid: hub.state[vid].spec)
+            vid: DryRunVenue(v, spec=lambda vid=vid: hub.state[vid].spec, clock=clock)
             for vid, v in tradable.items()
         }
     out: dict[VenueId, Venue] = {}
@@ -156,11 +198,13 @@ def build_engine(
     settings: Settings,
     logs: Path = Path("logs"),
     venues: dict[VenueId, MarketData] | None = None,
+    clock: Callable[[], int] = now_ms,
 ) -> Engine:
     """Órdenes y cuenta comparten venues y journal, y las órdenes validan con lo
     que ya tiene la cuenta (D-18). En dry-run la cuenta lee los `DryRunVenue`
     (saldos reales, órdenes simuladas); en solo lectura no hay nada. Lo usan la
-    terminal y el daemon (D-61)."""
+    terminal y el daemon (D-61). `clock`: el del motor entero; el informe le pasa
+    el tiempo virtual (D-80)."""
     cfg = settings.config
     venues = venues if venues is not None else build_venues(settings)
     orders: OrderService | None = None
@@ -170,27 +214,35 @@ def build_engine(
     if settings.mode == "read-only":
         hub = MarketHub(venues)
     else:
-        journal = Journal(logs, settings.mode, settings.redactor)
-        faults = Faults(journal)  # uno para todos: la barra cuenta los de la sesión
+        journal = Journal(
+            logs, settings.mode, settings.redactor,
+            clock=lambda: datetime.fromtimestamp(clock() / 1000, UTC),
+        )  # fmt: skip
+        # uno para todos: la barra cuenta los de la sesión
+        faults = Faults(journal, clock=clock)
         hub = MarketHub(
-            venues, faults=faults, journal=journal, book_check_s=cfg.risk.book_check_s
-        )
-        trading = trading_venues(settings, venues, hub)
+            venues, faults=faults, journal=journal, book_check_s=cfg.risk.book_check_s,
+            clock=clock,
+        )  # fmt: skip
+        trading = trading_venues(settings, venues, hub, clock)
         every = cfg.polling.balances_every_s
-        account = AccountService(trading, journal=journal, balances_every_s=every, faults=faults)
+        account = AccountService(
+            trading, journal=journal, balances_every_s=every, faults=faults, clock=clock
+        )
         live = settings.mode == "live"  # el desfase de reloj solo bloquea en live (D-30)
         orders = OrderService(
-            hub, trading, journal, cfg.risk, account=account, faults=faults, live=live
-        )
+            hub, trading, journal, cfg.risk, account=account, faults=faults, live=live,
+            clock=clock,
+        )  # fmt: skip
         if cfg.bot is not None:  # fase 2: el bot opera con las mismas piezas (D-36)
             bot = BotService(
                 hub, orders, account, journal, cfg.bot, live=live, faults=faults,
-                target=cfg.inventory, fee_tokens=fee_tokens(cfg.venues),
+                target=cfg.inventory, fee_tokens=fee_tokens(cfg.venues), clock=clock,
             )  # fmt: skip
     return Engine(
         hub, mode=settings.mode, orders=orders, account=account, bot=bot,
         max_clock_skew_s=cfg.risk.max_clock_skew_s, journal=journal,
-        value_every_s=cfg.polling.value_every_s,
+        value_every_s=cfg.polling.value_every_s, clock=clock,
         # lo que el cliente pide por el socket (D-66)
         results=results_service(logs, settings, venues),
         deposits=deposit_service(settings, venues),
@@ -255,10 +307,40 @@ def client(data: Path, socket: Path) -> None:
     print("Cliente desconectado: el daemon sigue en marcha.", file=sys.stderr)
 
 
-async def serve(settings: Settings, data: Path, socket: Path) -> None:
+def replay_report(settings: Settings, recording: Path) -> ReplayReport:
+    """El informe de RF-35: el motor entero sobre la grabación, en tiempo virtual
+    y con un journal que se tira al acabar."""
+    info = scan_recording(recording)
+    bot = settings.config.bot
+    if bot is None:
+        raise ConfigError("[bot]: hace falta para el informe")
+    loop = VirtualLoop(info.first / 1000)
+    try:
+        with tempfile.TemporaryDirectory(prefix="xbt-report-") as tmp:
+            feeds = replay_venues(recording, info, loop.now_ms)
+            engine = build_engine(settings, logs=Path(tmp), venues=feeds, clock=loop.now_ms)
+            probe_ = CrossingProbe(engine.hub, bot.limits, loop.now_ms)
+            timeline = next(v.timeline for v in feeds.values() if isinstance(v, ReplayVenue))
+            loop.run_until_complete(run_report(engine, timeline))
+            return summarize_journal(Path(tmp), probe_.count, info)
+    finally:
+        loop.close()
+
+
+async def serve(
+    settings: Settings,
+    data: Path,
+    socket: Path,
+    *,
+    record: bool = False,
+    venues: dict[VenueId, MarketData] | None = None,
+) -> None:
     """El daemon: SIGTERM y SIGINT lo paran en orden; una línea por stderr al
     quedar listo, para quien lo supervise (D-61)."""
-    engine = build_engine(settings, logs=data)
+    engine = build_engine(settings, logs=data, venues=venues)
+    recorder = None
+    if record:
+        recorder = Recorder(engine.hub, recording_path(data, now_ms()))
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -270,18 +352,47 @@ async def serve(settings: Settings, data: Path, socket: Path) -> None:
     def ready() -> None:
         print(f"xbt daemon en {settings.mode}, datos en {data}", file=sys.stderr)
 
-    await run_daemon(
-        engine, stop, on_ready=ready, socket=socket,
-        book_depth=settings.config.ui.book_levels, view=client_view(settings),
-    )  # fmt: skip
+    try:
+        await run_daemon(
+            engine, stop, on_ready=ready, socket=socket,
+            book_depth=settings.config.ui.book_levels, view=client_view(settings),
+        )  # fmt: skip
+    finally:
+        if recorder is not None:
+            recorder.close()
+
+
+def replay_problem(args: argparse.Namespace) -> str | None:
+    """Qué no se puede combinar con `--replay` (RF-34), o None."""
+    if args.replay is None:
+        return None
+    if args.live:
+        return "--replay no admite --live: una reproducción nunca envía órdenes reales."
+    if args.record:
+        return "--replay no admite --record: la grabación ya existe."
+    if args.data_dir is None:
+        return "--replay necesita --data-dir, para no mezclarse con el journal real."
+    return None
+
+
+def report(args: argparse.Namespace, config: Path, env: Path) -> None:
+    """`xbt report`: el informe de RF-35 por stdout."""
+    if args.replay is None:
+        raise SystemExit("xbt report necesita --replay FICHERO.")
+    try:
+        settings = load_settings(config, env, False, replay=True)
+        print(render(replay_report(settings, Path(args.replay).expanduser())))
+    except (ConfigError, RecordingError) as exc:
+        raise SystemExit(f"No se puede hacer el informe: {exc}") from None
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="xbt", description=__doc__)
     parser.add_argument(
-        "command", nargs="?", choices=("daemon", "attach"),
+        "command", nargs="?", choices=("daemon", "attach", "report"),
         help="daemon: el servidor, sin pantalla y en primer plano (para con SIGTERM); "
-        "sin subcomando o attach: la TUI, cliente del daemon",
+        "sin subcomando o attach: la TUI, cliente del daemon; "
+        "report: resultado del bot sobre una grabación",
     )  # fmt: skip
     parser.add_argument("--config", help="config.toml del daemon (por defecto ~/.config/xbt/)")
     parser.add_argument("--env", help=".env del daemon (por defecto ~/.config/xbt/)")
@@ -290,8 +401,15 @@ def main() -> None:
     )
     parser.add_argument("--live", action="store_true", help="daemon: enviar órdenes reales")
     parser.add_argument("--socket", help="socket de control (por defecto, en el de datos)")
+    parser.add_argument(
+        "--record", action="store_true", help="daemon: graba books y trades en el de datos"
+    )
+    parser.add_argument("--replay", metavar="FICHERO", help="daemon y report: usa una grabación")
     args = parser.parse_args()
     paths = resolve_paths(args.config, args.env, args.data_dir)
+    if args.command == "report":
+        report(args, paths.config, paths.env)
+        return
     socket = Path(args.socket).expanduser().absolute() if args.socket else paths.data / SOCKET_NAME
     if args.command != "daemon":
         if args.live:
@@ -300,15 +418,23 @@ def main() -> None:
             )
         client(paths.data, socket)
         return
+    if problem := replay_problem(args):
+        raise SystemExit(problem)
     if not paths.config.exists():
         raise SystemExit(
             f"No existe {paths.config}: cópialo de config.example.toml y revísalo "
             "(o indica otro con --config)."
         )
+    venues: dict[VenueId, MarketData] | None = None
     try:
-        settings = load_settings(paths.config, paths.env, args.live)
+        settings = load_settings(paths.config, paths.env, args.live, replay=bool(args.replay))
+        if args.replay:
+            recording = Path(args.replay).expanduser().absolute()
+            venues = replay_venues(recording, scan_recording(recording))
     except ConfigError as exc:
         raise SystemExit(f"Configuración inválida: {exc}") from None
+    except RecordingError as exc:
+        raise SystemExit(f"Grabación inválida: {exc}") from None
     if problem := socket_problem(socket):
         raise SystemExit(f"No se puede abrir el socket: {problem}.")
     lock = InstanceLock(paths.data)
@@ -319,7 +445,7 @@ def main() -> None:
     diag = setup_diagnostics(paths.data, settings.redactor, settings.config.log.level)
     logging.getLogger(__name__).info("arranque en %s, datos en %s", settings.mode, paths.data)
     try:
-        asyncio.run(serve(settings, paths.data, socket))
+        asyncio.run(serve(settings, paths.data, socket, record=args.record, venues=venues))
     finally:
         diag.close()
         lock.release()

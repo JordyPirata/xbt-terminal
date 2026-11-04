@@ -198,7 +198,8 @@ def _dec(value: Any) -> Decimal:
 
 
 class _Builder:
-    def __init__(self) -> None:
+    def __init__(self, mode: str = "live") -> None:
+        self.mode = mode
         self.orders: dict[str, _Order] = {}
         self.acks: dict[tuple[str, str], str] = {}
         self.doubles: dict[str, _Double] = {}
@@ -211,7 +212,7 @@ class _Builder:
         self.bad = 0
 
     def feed(self, row: Mapping[str, Any]) -> None:
-        if row.get("mode") != "live":
+        if row.get("mode") != self.mode:
             return
         event, data = row.get("event"), row.get("data") or {}
         handler = getattr(self, f"_on_{event}", None)
@@ -362,16 +363,18 @@ def compute(
     since_ms: int | None = None,
     bad_lines: int = 0,
     prices: Mapping[str, Decimal] | None = None,
+    mode: str = "live",
 ) -> Report:
     """Resultados de las dobles que empezaron desde `since_ms` (todas si None).
 
     Las filas se procesan en el orden del journal; conviene pasar también las
     de antes del rango, para que los fills se asignen igual que en el día entero.
     `prices`: BTC por unidad de los tokens de fee (D-65); sin precio, su fee va
-    aparte y no resta."""
+    aparte y no resta. `mode`: de qué modo son las filas que cuentan; el informe
+    de una reproducción lee las de dry-run (RF-35)."""
     prices = prices or {}
     rows = list(rows)
-    b = _Builder()
+    b = _Builder(mode)
     for row in rows:
         b.feed(row)
     values, bad_values = series(rows, since_ms)

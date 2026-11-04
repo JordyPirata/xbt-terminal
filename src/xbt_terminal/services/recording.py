@@ -1,0 +1,147 @@
+"""Grabación de mercado (RF-33, D-80): lo que el hub aplica, a un fichero propio.
+
+Primera línea `{"format":1}`; las demás, `{"t", "venue", "kind", "data"}`, con la
+hora local de recepción y los datos como en el socket (`wire`). Se graba lo que
+el hub acepta, no el stream crudo: una reproducción ve lo mismo que vio el bot.
+Solo hay datos públicos: el recorder no conoce la cuenta.
+
+Un fallo de escritura para la grabación y se reporta (RNF-14): el mercado sigue.
+
+Spec: RF-33, RF-34, CA-19 · design.md §6.14 · Tarea: T-87
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import IO, Any
+
+from ..adapters.streaming import now_ms
+from ..core.models import BookDelta, BookSnapshot, ConnState, MarketSpec, Trade, VenueId
+from .market import MarketHub
+from .wire import decode, dumps, loads
+
+FORMAT = 1
+VENUE_COUNT = 2  # una grabación trae los dos venues (RNF-09)
+KINDS: dict[str, type] = {
+    "market": MarketSpec,
+    "book": BookSnapshot,
+    "delta": BookDelta,
+    "trade": Trade,
+    "conn": ConnState,
+}
+_KIND_OF = {tp: kind for kind, tp in KINDS.items()}
+
+
+class RecordingError(ValueError):
+    """Grabación que no se puede leer; el mensaje dice fichero y línea."""
+
+
+def recording_path(directory: Path, now: int) -> Path:
+    stamp = datetime.fromtimestamp(now / 1000, UTC).strftime("%Y%m%dT%H%M%SZ")
+    return Path(directory) / f"books-{stamp}.jsonl"
+
+
+def _private(path: str, flags: int) -> int:
+    return os.open(path, flags, 0o600)
+
+
+class Recorder:
+    def __init__(self, hub: MarketHub, path: Path, *, clock: Callable[[], int] = now_ms) -> None:
+        self._hub = hub
+        self._clock = clock
+        self.path = Path(path)
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self._file: IO[bytes] | None = open(self.path, "xb", opener=_private)
+        self._write(dumps({"format": FORMAT}))
+        hub.subscribe(self._on_change)
+        hub.subscribe_events(self._on_event)
+
+    def _on_change(self, venue: VenueId, what: str) -> None:
+        spec = self._hub.state[venue].spec
+        if what == "market" and spec is not None:
+            self._line(venue, spec)
+
+    def _on_event(self, venue: VenueId, event: object) -> None:
+        self._line(venue, event)
+
+    def _line(self, venue: VenueId, event: object) -> None:
+        if self._file is None:
+            return
+        kind = _KIND_OF[type(event)]
+        self._write(dumps({"t": self._clock(), "venue": venue, "kind": kind, "data": event}))
+
+    def _write(self, line: bytes) -> None:
+        assert self._file is not None
+        try:
+            self._file.write(line)
+            self._file.flush()
+        except OSError as exc:
+            self._file = None  # la grabación acaba aquí; el mercado sigue
+            self._hub.faults.report("recording", exc, note="grabación parada")
+
+    def close(self) -> None:
+        file, self._file = self._file, None
+        if file is not None:
+            try:
+                file.close()
+            except OSError as exc:
+                self._hub.faults.report("recording", exc)
+
+
+@dataclass(frozen=True, slots=True)
+class Recorded:
+    t: int
+    venue: VenueId
+    event: Any
+
+
+def _row(path: Path, number: int, raw: bytes) -> Recorded:
+    try:
+        row = loads(raw)
+        tp = KINDS[row["kind"]]
+        return Recorded(int(row["t"]), row["venue"], decode(tp, row["data"]))
+    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
+        raise RecordingError(f"{path}:{number}: línea mala: {exc!r}") from None
+
+
+def read_recording(path: Path) -> Iterator[Recorded]:
+    """Línea a línea: una grabación larga no cabe entera en memoria."""
+    try:
+        with open(path, "rb") as source:
+            first = source.readline()
+            try:
+                version = loads(first).get("format")
+            except ValueError:
+                version = None
+            if version != FORMAT:
+                raise RecordingError(f"{path}: formato de grabación desconocido")
+            for number, raw in enumerate(source, 2):
+                yield _row(path, number, raw)
+    except OSError as exc:
+        raise RecordingError(f"{path}: no se puede leer: {exc}") from None
+
+
+@dataclass(frozen=True, slots=True)
+class RecordingInfo:
+    first: int  # hora del primer evento
+    last: int
+    specs: dict[VenueId, MarketSpec]
+
+
+def scan_recording(path: Path) -> RecordingInfo:
+    """Valida el fichero entero: mejor fallar al arrancar que a mitad."""
+    first = last = None
+    specs: dict[VenueId, MarketSpec] = {}
+    for row in read_recording(path):
+        first = row.t if first is None else first
+        last = row.t
+        if isinstance(row.event, MarketSpec):
+            specs[row.venue] = row.event
+    missing = {"nk", "nx"} - set(specs)
+    if first is None or last is None or len(specs) != VENUE_COUNT:
+        raise RecordingError(f"{path}: falta el mercado de {', '.join(sorted(missing)) or 'nadie'}")
+    return RecordingInfo(first, last, specs)

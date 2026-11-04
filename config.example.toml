@@ -68,5 +68,12 @@ target_base_pct = "25"       # % del valor de cada venue en BTCB2
 band_pct = "10"              # puntos a cada lado (15-35 %); el bot no dispara si
                              # deja un venue fuera y más lejos del objetivo
 
+# [replay]                   # RF-34: solo con --replay y xbt report. Venues simulados
+# base_balance = "2"         # XBT en cada venue
+# quote_balance = "0.05"     # BTC en cada venue
+# latency_ms = 300           # de enviar a llegar al venue (ack p50 de Neoxa)
+# competitor_pct = "0"       # % de que otro se lleve cada nivel antes que tú
+# seed = 0                   # misma semilla, mismo resultado
+
 [log]
 level = "info"               # RNF-19: debug | info | warning | error (diag.log en los datos)

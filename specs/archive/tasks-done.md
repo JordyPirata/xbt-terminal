@@ -1129,3 +1129,16 @@ cerrarla. Es historia; el estado vigente está en `tasks.md`.
   lectura y tope de 20 min. `spec_trace` sin `--strict`: los cuatro IDs sin
   test (RNF-01, CA-01, CA-02, CA-10) se pasaron en real. En local, los cuatro
   pasos en ~1 min 20 s (1484 tests).
+
+### T-87 Grabar y reproducir books · `done` · RF-33, RF-34, RF-35, CA-19, CA-20 · dep T-32 · D-79, D-80, PA-11
+- Spec: RF de grabación (el daemon, si se le pide, apunta books y trades de
+  cada venue en ficheros aparte del journal) y de reproducción (los venues
+  simulados del dry-run leen una grabación), con su CA. Incluye un competidor
+  simulado que se lleva un nivel con cierta probabilidad, para medir
+  `bot_miss`.
+- Demo sin keys: `xbt daemon` en dry-run sobre una grabación de muestra; el
+  README lo explica paso a paso.
+- Informe fijo sobre una grabación: cruces sobre el umbral, disparos, tasa de
+  captura, neta, `bot_miss` y piernas colgadas por cada 100 disparos.
+- Tests: la reproducción da los mismos eventos que la grabación, en orden y con
+  sus tiempos relativos; el informe del bot taker sobre una muestra fija.

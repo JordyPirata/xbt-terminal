@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
+from ..adapters.streaming import now_ms
 from ..core.journal import Journal
 from ..core.models import VenueId
 from ..core.notices import VENUE, Notice
@@ -47,6 +48,7 @@ class Engine:
         deposits: DepositService | None = None,
         rebalance: RebalanceService | None = None,
         value_every_s: int | None = None,
+        clock: Callable[[], int] = now_ms,
     ) -> None:
         self.hub = hub
         # lo que el cliente pide por el socket sin que sea operar (D-66)
@@ -70,7 +72,7 @@ class Engine:
         if value_every_s is not None and account is not None and journal is not None:
             self.values = ValueRecorder(
                 account, hub, journal, every_s=value_every_s,
-                faults=self._main_faults,
+                faults=self._main_faults, clock=clock,
             )  # fmt: skip
         hub.subscribe(self._on_hub)
         if orders is not None and account is not None:
