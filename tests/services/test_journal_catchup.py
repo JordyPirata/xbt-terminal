@@ -1,6 +1,6 @@
-"""Al arrancar, el journal se pone al día con los trades del venue (T-68, D-68):
-una fee que el venue corrigió mientras la terminal estaba parada, o un fill de
-una orden nuestra que pasó entonces, se apuntan; lo ajeno no."""
+"""At startup, the journal catches up with the venue's trades (T-68, D-68): a fee the
+venue corrected while the terminal was stopped, or a fill of an order of ours from
+then, get written; foreign ones do not."""
 
 import pytest
 
@@ -18,7 +18,7 @@ def trade(tid="f-1", oid="o-1", fee="0.00000006", asset="BTC", ts=T0 + 5):
 
 
 def before(rig, *, fee="0.00000006", asset="BTC"):
-    """Lo que dejó la sesión anterior: la orden enviada y su fill, con la fee vieja."""
+    """What the previous session left: the sent order and its fill, with the old fee."""
     rig.journal.write("order_sent", venue="nk", client_id="t-abc123", data={"side": "buy"})
     rig.journal.write(
         "order_ack", venue="nk", client_id="t-abc123", data={"order_id": "o-1", "status": "open"}
@@ -55,7 +55,7 @@ class TestPonerseAlDia:
             await settled(rig)
             before(rig)
             n = len(rig.lines())
-            rig.venue.push(PastFill(trade()), order("o-2"))  # la orden: para saber que pasó
+            rig.venue.push(PastFill(trade()), order("o-2"))  # the order: to know it happened
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
             assert len(rig.lines()) == n
 
@@ -118,4 +118,4 @@ class TestPonerseAlDia:
             assert seen == [PastFill(trade())]
             assert list(rig.account.state["nk"].recent_fills) == []
             orders = OrderService(None, {}, rig.journal, None)  # type: ignore[arg-type]
-            orders.on_private_event("nk", seen[0])  # no peta ni toca nada
+            orders.on_private_event("nk", seen[0])  # does not crash or touch anything

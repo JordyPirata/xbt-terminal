@@ -249,7 +249,7 @@ class TestRebalance:
     ],
 )
 def test_texto_exacto_de_cada_error(text, message):
-    """Fija los mensajes de error (D-77: partir `parse` no los cambia)."""
+    """Pin the error messages (D-77: splitting `parse` changes nothing)."""
     with pytest.raises(CommandError) as exc:
         parse(text)
     assert str(exc.value) == message

@@ -1,4 +1,4 @@
-"""Sección [bot] de config.toml (T-34, RF-18, RF-22, design.md §6.9)."""
+"""[bot] section of config.toml (T-34, RF-18, RF-22, design.md §6.9)."""
 
 from decimal import Decimal
 
@@ -41,10 +41,10 @@ def test_enabled_tiene_que_ser_booleano(tmp_path):
 @pytest.mark.parametrize(
     ("old", "new", "key"),
     [
-        ('min_net_pct = "0.5"', "min_net_pct = 0.5", "min_net_pct"),  # importe como número
-        ('min_net_pct = "0.5"', 'min_net_pct = "0"', "min_net_pct"),  # sin margen, no
+        ('min_net_pct = "0.5"', "min_net_pct = 0.5", "min_net_pct"),  # amount as a number
+        ('min_net_pct = "0.5"', 'min_net_pct = "0"', "min_net_pct"),  # no margin, no
         ('max_slippage_pct = "0.2"', 'max_slippage_pct = "150"', "max_slippage_pct"),
-        ("cooldown_s = 10", "cooldown_s = 1", "cooldown_s"),  # Neoxa: 10 órdenes / 10 s
+        ("cooldown_s = 10", "cooldown_s = 1", "cooldown_s"),  # Neoxa: 10 orders / 10 s
         ("fill_timeout_ms = 3000", "fill_timeout_ms = 50", "fill_timeout_ms"),
         ("max_trades_per_hour = 20", "max_trades_per_hour = 0", "max_trades_per_hour"),
         ('max_daily_btc = "0.01"', 'max_daily_btc = "0"', "max_daily_btc"),
@@ -72,10 +72,10 @@ def test_max_walk_pct_por_venue(tmp_path):
 @pytest.mark.parametrize(
     ("value", "match"),
     [
-        ('{ kraken = "1" }', r"bot\.max_walk_pct\.kraken"),  # venue desconocido
+        ('{ kraken = "1" }', r"bot\.max_walk_pct\.kraken"),  # unknown venue
         ('{ nk = "150" }', r"bot\.max_walk_pct\.nk"),
-        ("{ nk = 1 }", r"bot\.max_walk_pct\.nk"),  # importe como número
-        ('"0.8"', r"bot\.max_walk_pct"),  # sin tabla por venue
+        ("{ nk = 1 }", r"bot\.max_walk_pct\.nk"),  # amount as a number
+        ('"0.8"', r"bot\.max_walk_pct"),  # no per venue table
     ],
 )
 def test_max_walk_pct_invalido(tmp_path, value, match):

@@ -1,9 +1,9 @@
-"""La app con los servicios de verdad en el mismo proceso, para los tests de la
-pantalla. En producción la app es el cliente del daemon (D-66) y no crea su
-`Engine`; aquí se le da uno con las mismas piezas que corre el daemon.
+"""The app with the real services in the same process, for screen tests. In production
+the app is the daemon's client (D-66) and creates no `Engine`; here it gets one with
+the same pieces the daemon runs.
 
-Acepta los parámetros sueltos de antes de T-84 y los agrupa en `view` y
-`services`, así los tests no dependen de cómo los recibe la app."""
+Accepts the loose parameters from before T-84 and groups them into `view` and
+`services`, so tests do not depend on how the app takes them."""
 
 from xbt_terminal.services.engine import RECONCILE_EVERY_S, Engine
 from xbt_terminal.services.wire import ClientView

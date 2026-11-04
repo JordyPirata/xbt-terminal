@@ -1,5 +1,5 @@
-"""Socket de control del daemon (T-52, RF-31, D-61): foto al conectar, estado
-al cambiar, avisos, y solo `bot_on`, `bot_off` y `ping` como órdenes."""
+"""Daemon control socket (T-52, RF-31, D-61): snapshot on connecting, state on change,
+notices, and only `bot_on`, `bot_off` and `ping` as commands."""
 
 import asyncio
 import json
@@ -19,7 +19,7 @@ from .test_uncertain import Rig
 
 
 class FakeBot:
-    """La cara del bot que usan el motor y el socket."""
+    """The bot face used by the engine and the socket."""
 
     summary = "BOT DE ARBITRAJE TAKER"
 
@@ -120,7 +120,7 @@ class TestConectar:
         assert not rig.path.exists()
 
     async def test_un_socket_viejo_se_reemplaza(self, tmp_path, rig):
-        """El daemon tiene el lock: un socket que quede es de uno que murió."""
+        """The daemon holds the lock: a leftover socket belongs to a dead one."""
         await rig.server.aclose()
         rig.path.write_text("viejo")
         await rig.server.start()
@@ -168,7 +168,7 @@ class TestOrdenes:
         assert (await c.until("error"))["error"]
         await c.send({"cmd": "ping"})
         assert (await c.until("pong"))["type"] == "pong"
-        assert rig.journal_dir.glob("journal-*.jsonl")  # nada enviado al venue
+        assert rig.journal_dir.glob("journal-*.jsonl")  # nothing sent to the venue
         assert rig.events() == []
         await c.close()
 
@@ -186,14 +186,14 @@ class TestEventos:
         await c.close()
 
     async def test_el_estado_se_repite_aunque_no_cambie(self, rig):
-        """La barra muestra edades: la foto llega cada `every_s` como mínimo."""
+        """The bar shows ages: the snapshot arrives at least every `every_s`."""
         c = await Client.open(rig.path)
         await c.until("state")
         await c.until("state", timeout=0.5)
         await c.close()
 
     async def test_un_cliente_que_no_lee_se_desconecta(self, tmp_path):
-        """Su buffer se llena, su cola también, y se le cierra; el otro sigue."""
+        """Its buffer fills, so does its queue, and it gets closed; the other goes on."""
         s = Rig(tmp_path)
         engine = Engine(s.hub, mode="dry-run", orders=s.orders, journal=s.journal)
         path = tmp_path / "c.sock"
@@ -235,7 +235,7 @@ async def test_ningun_secreto_sale_por_el_socket(tmp_path):
     server = ControlServer(engine, path, every_s=0.05)
     await server.start()
     c = await Client.open(path)
-    await c.until("state")  # ya está dado de alta
+    await c.until("state")  # already registered
     faults.report("private", RuntimeError(f"401 con key {canary.reveal()}"))
     engine._say(f"aviso con {canary.reveal()}", error=True)
     raw = b""

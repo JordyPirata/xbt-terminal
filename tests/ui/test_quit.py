@@ -1,5 +1,5 @@
-"""Salir de la terminal (T-28, RNF-15, D-29): sin envíos a medias y, en live,
-confirmando si quedan órdenes abiertas."""
+"""Exiting the terminal (T-28, RNF-15, D-29): no half sends and, in live, confirming if
+open orders remain."""
 
 import pytest
 
@@ -13,11 +13,11 @@ from .test_orders_ui import NOW, Rig, ready, until
 
 
 def with_open_orders(rig, mode, n):
-    """La cuenta ve `n` órdenes abiertas en NonKYC; la app, en `mode`."""
+    """The account sees `n` open orders on NonKYC; the app, in `mode`."""
     venue = FakePrivate()
     venue.push(*(order(f"o-{i}") for i in range(n)))
     account = AccountService({"nk": venue}, retry_s=0.01, clock=lambda: NOW)
-    rig.app.account = rig.app.engine.account = account  # el motor la corre (D-61)
+    rig.app.account = rig.app.engine.account = account  # the engine runs it (D-61)
     rig.app.mode = mode
 
 
@@ -28,7 +28,7 @@ async def opened(rig, pilot, n):
 @pytest.mark.spec("RNF-15", "RF-11")
 class TestEnVuelo:
     async def test_un_worker_cancelado_al_salir_no_deja_el_envio_a_medias(self, tmp_path):
-        """Al salir, Textual cancela los workers: el envío sigue y llega al journal."""
+        """On exit, Textual cancels the workers: the send goes on and reaches the journal."""
         rig = Rig(tmp_path)
         slow(rig.venue, "place_limit", delay=0.2)
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -57,7 +57,7 @@ class TestConfirmarAlSalir:
             await until(pilot, lambda: isinstance(rig.app.screen, ConfirmScreen))
             assert "2 órdenes abiertas" in rig.app.screen.summary
             assert "SALIR" in rig.app.screen.text
-            await pilot.press("enter")  # por defecto, no se sale
+            await pilot.press("enter")  # by default, no exit
             await until(pilot, lambda: not isinstance(rig.app.screen, ConfirmScreen))
             assert rig.app.is_running
             await pilot.press("q")
@@ -83,7 +83,7 @@ class TestConfirmarAlSalir:
             await until(pilot, lambda: not rig.app.is_running)
 
     async def test_dry_run_con_ordenes_sale_directo(self, tmp_path):
-        """Simuladas: no quedan en ningún exchange."""
+        """Simulated: they stay on no exchange."""
         rig = Rig(tmp_path)
         with_open_orders(rig, "dry-run", 2)
         async with rig.app.run_test(size=(160, 45)) as pilot:

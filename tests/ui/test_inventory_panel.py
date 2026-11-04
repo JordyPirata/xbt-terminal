@@ -1,4 +1,4 @@
-"""% de BTCB2 por venue y total en el panel de balances (T-41, RF-27, CA-12)."""
+"""BTCB2 % per venue and total in the balance panel (T-41, RF-27, CA-12)."""
 
 import pytest
 

@@ -27,7 +27,7 @@ def example_with(tmp_path: Path, old: str, new: str) -> Path:
 
 def env_file(tmp_path: Path, values: dict[str, str]) -> Path:
     path = write(tmp_path, "".join(f"{k}={v}\n" for k, v in values.items()), ".env")
-    path.chmod(0o600)  # RNF-18: en live no se acepta otro
+    path.chmod(0o600)  # RNF-18: live accepts no other
     return path
 
 
@@ -71,7 +71,7 @@ class TestConfig:
             load_config(p)
 
     def test_porcentaje_como_mucho_100(self, tmp_path):
-        """D-19: el tope por orden es un % del inventario."""
+        """D-19: the per order cap is a % of the inventory."""
         ok = example_with(tmp_path, 'max_order_pct          = "25"', 'max_order_pct = "100"')
         assert load_config(ok).risk.max_order_pct == D("100")
         bad = example_with(tmp_path, 'max_order_pct          = "25"', 'max_order_pct = "100.01"')
@@ -106,7 +106,7 @@ class TestConfig:
     def test_contraste_del_book(self, tmp_path):
         assert load_config(EXAMPLE).risk.book_check_s == 5
         sin = example_with(tmp_path, "book_check_s           = 5", "")
-        assert load_config(sin).risk.book_check_s == 5  # opcional: por defecto, 5 s
+        assert load_config(sin).risk.book_check_s == 5  # optional: 5 s by default
         cero = example_with(tmp_path, "book_check_s           = 5", "book_check_s = 0")
         with pytest.raises(ConfigError, match=r"risk\.book_check_s"):
             load_config(cero)

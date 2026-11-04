@@ -1,5 +1,5 @@
-"""Comisiones de retiro de los adaptadores (T-45, RF-29, D-53). Respuestas con la
-forma de las reales del 2026-10-23, recortadas."""
+"""Withdrawal fees of the adapters (T-45, RF-29, D-53). Responses shaped like the real
+ones of 2026-10-23, trimmed."""
 
 import pytest
 import respx
@@ -55,8 +55,8 @@ class TestNonKYC:
             )
             got = await nonkyc(http, limiter).withdrawal_fee("BTC")
         assert got == WithdrawalFee("nk", "BTC", "BTC-MAIN", D("0.00005"), D("0.00001"), True)
-        assert got.on_top is False  # supuesto: descontada (D-53)
-        assert "X-API-KEY" not in route.calls.last.request.headers  # es público
+        assert got.on_top is False  # assumption: deducted (D-53)
+        assert "X-API-KEY" not in route.calls.last.request.headers  # it is public
         assert limiter.kinds == ["market"]
 
     async def test_btcb2_sin_minimo(self, http):  # noqa: F811
@@ -105,7 +105,7 @@ class TestNeoxa:
         with respx.mock() as mock:
             route = mock.get(f"{NX_URL}/withdrawals/fees").respond(json=nx_fees())
             got = await neoxa(http, limiter).withdrawal_fee(asset)
-        # la comisión va aparte de lo pedido (D-53)
+        # the fee is on top of the amount (D-53)
         assert got == WithdrawalFee("nx", asset, chain, D("0.0001"), D(minimum), True, True)
         assert route.calls.last.request.headers["X-API-Key"] == "fake-key"
         assert limiter.kinds == ["private"]

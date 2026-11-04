@@ -1,4 +1,4 @@
-"""Barra de estado (T-15): conexión y latencia por venue y canal, y modo."""
+"""Status bar (T-15): connection and latency per venue and channel, and mode."""
 
 import asyncio
 from dataclasses import replace
@@ -28,7 +28,7 @@ def text(nk=None, nx=None, mode="read-only", now=NOW):
 
 
 def part(rendered: str, venue: str) -> str:
-    """El trozo de la barra de un venue."""
+    """The bar's piece for a venue."""
     return next(p for p in rendered.split("│") if venue in p)
 
 
@@ -69,7 +69,7 @@ class TestCanalDeMercado:
         assert "sin noticias" not in part(text(nk=link(seen=NOW - 4_000)).plain, "NonKYC")
 
     def test_reconectando_no_avisa_de_silencio(self):
-        """Reconectando no hay latidos (D-11): el aviso solo confundiría."""
+        """Reconnecting has no heartbeats (D-11): the warning would only confuse."""
         old = link(status="reconnecting", latency=None, seen=NOW - STALE_AFTER_MS - 1)
         assert "sin noticias" not in part(text(nk=old).plain, "NonKYC")
 
@@ -84,7 +84,7 @@ class TestCanalPrivado:
         assert "privado sin keys" in part(text(nk=link(trade=False)).plain, "NonKYC")
 
     def test_dry_run_es_simulado(self):
-        """En dry-run las órdenes y saldos son simulados (D-13): no hay canal real."""
+        """In dry-run orders and balances are simulated (D-13): no real channel."""
         assert "privado simulado" in part(text(nk=link(trade=True), mode="dry-run").plain, "NonKYC")
 
     def test_live_aun_sin_canal(self):
@@ -190,7 +190,7 @@ class TestEnPantalla:
             bar = app.query_one(StatusBar)
             self.feeds["nk"].push(ConnState("nk", "market", "ws", "up", 100.0, NOW))
             await until(pilot, lambda: "100 ms" in part(bar.text, "NonKYC"))
-            self.now = NOW + STALE_AFTER_MS + 2_000  # sin latidos nuevos
+            self.now = NOW + STALE_AFTER_MS + 2_000  # no new heartbeats
             await until(pilot, lambda: "sin noticias" in part(bar.text, "NonKYC"))
 
 
@@ -237,7 +237,7 @@ def test_fallos_internos(n, label):
 
 @pytest.mark.spec("RF-14")
 async def test_un_cambio_de_estado_se_pinta_al_llegar(monkeypatch):
-    """Sin esperar al refresco periódico, que aquí se pone en 60 s."""
+    """Without waiting for the periodic refresh, set to 60 s here."""
     from xbt_terminal.ui import app as app_module
 
     monkeypatch.setattr(app_module, "STATUS_EVERY_S", 60.0)
@@ -266,7 +266,7 @@ class TestBot:
         rendered = render_status(self.links(), "live", NOW, bot=status)
         assert f" LIVE · {label} " in rendered.plain and "ÓRDENES REALES" not in rendered.plain
         span = next(s for s in rendered.spans if "LIVE" in rendered.plain[s.start : s.end])
-        assert "on red" in str(span.style)  # sigue siendo el banner rojo de live
+        assert "on red" in str(span.style)  # still the live red banner
 
     def test_parado_en_rojo_tambien_en_dry_run(self):
         rendered = render_status(self.links(), "dry-run", NOW, bot="halted")

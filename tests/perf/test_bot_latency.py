@@ -1,8 +1,8 @@
-"""Latencia del bot (T-72, RNF-23, D-70): la decisión, el top del book y el
-camino de un cambio de book a `prepare_double`, con books profundos.
+"""Bot latency (T-72, RNF-23, D-70): the decision, the book top and the path from a book
+change to `prepare_double`, with deep books.
 
-Los presupuestos de RNF-23 tienen margen amplio para que la suite cargada no
-los rompa; cada test imprime lo medido (verlo con `pytest -s`)."""
+RNF-23 budgets have ample margin so a loaded suite does not break them; each test
+prints what it measured (see it with `pytest -s`)."""
 
 import statistics
 import time
@@ -27,7 +27,7 @@ FIRE_BUDGET_MS = 50.0
 
 
 def median_ms(work, runs: int = 30) -> float:
-    work()  # calentar
+    work()  # warm up
     times = []
     for _ in range(runs):
         t0 = time.perf_counter()
@@ -41,7 +41,7 @@ def side(start: Decimal, n: int, up: bool, qty: str = "10") -> tuple[Level, ...]
 
 
 def deep_views(nx_bid: str, qty: str = "10") -> dict[str, VenueView]:
-    """NonKYC vende desde 0.007 y Neoxa compra desde `nx_bid`, 50 niveles."""
+    """NonKYC sells from 0.007 and Neoxa buys from `nx_bid`, 50 levels."""
     nk_ask, bid = D("0.00700000"), D(nx_bid)
     return {
         "nk": VenueView(
@@ -64,7 +64,7 @@ WALK = BotLimits(
     max_trades_per_hour=20,
     max_daily_btc=D("100"),
     max_consecutive_failures=3,
-    max_walk_pct={"nk": D("1"), "nx": D("1")},  # todos los niveles son referencia
+    max_walk_pct={"nk": D("1"), "nx": D("1")},  # all levels are references
 )
 
 
@@ -75,7 +75,7 @@ class TestDecide:
         [
             ("cruce con walk", "0.00760000", "10", Fire),
             ("sin cruce con walk", "0.00690000", "10", Skip),
-            # todos los pares por encima del umbral y poca profundidad: sin poda posible
+            # all pairs above the threshold and little depth: no pruning possible
             ("todos los pares rinden", "0.00900000", "0.0001", Fire),
         ],
     )
@@ -127,7 +127,7 @@ async def test_de_un_cruce_a_prepare_double(tmp_path):
             await rig.until(lambda i=i: len(sent) > i, timeout=5)
             times.append((sent[i] - t0) * 1000)
             await rig.until(lambda: rig.bot.state.status == "cooldown", timeout=5)
-            rig.clock.now += 60_000  # fin del enfriamiento
+            rig.clock.now += 60_000  # end of the cooldown
         ms = statistics.median(times)
         print(f"\ncruce → prepare_double: mediana {ms:.2f} ms (máx {max(times):.2f})")
         assert ms < FIRE_BUDGET_MS

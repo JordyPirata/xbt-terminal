@@ -1,5 +1,5 @@
-"""DryRunVenue (D-13): órdenes simuladas en memoria con saldos de la config;
-los datos de mercado los da el venue real."""
+"""DryRunVenue (D-13): orders simulated in memory with config balances; the real venue
+gives market data."""
 
 import asyncio
 
@@ -45,7 +45,7 @@ class TestOrdenes:
             "nk", "dry-nk-1", "t-abc123", "buy", D("0.00730000"), D("0.01"), D("0"), "open", 1_000
         )
         bal = await venue.balances()
-        locked = D("0.01") * D("0.00730000") * D("1.002")  # taker 0.2 % del spec
+        locked = D("0.01") * D("0.00730000") * D("1.002")  # spec's 0.2 % taker
         assert bal["BTC"].locked == locked and bal["BTC"].available == D("0.005") - locked
         assert bal["BTCB2"].available == D("0.5")
         assert await venue.open_orders() == [order]
@@ -116,7 +116,7 @@ async def test_el_stream_privado_avisa_de_cada_cambio():
 
 @pytest.mark.spec("RF-13", "RF-09")
 class TestFillSimulado:
-    """Solo para tests (T-18): el dry-run de la terminal no simula fills (D-13)."""
+    """For tests only (T-18): the terminal's dry-run does not simulate fills (D-13)."""
 
     async def test_compra_parcial_y_completa(self):
         venue = make()
@@ -172,7 +172,7 @@ class TestFillSimulado:
 
 
 class RealAccount(FakeFeed):
-    """Venue con saldos 'reales' que el test puede cambiar o hacer fallar."""
+    """Venue with 'real' balances the test can change or make fail."""
 
     def __init__(self):
         super().__init__("nk")
@@ -190,7 +190,7 @@ class RealAccount(FakeFeed):
 
 @pytest.mark.spec("RF-13", "RF-10")
 class TestSaldosReales:
-    """D-16: sin saldos fijos, el dry-run parte de los saldos reales de la cuenta."""
+    """D-16: without fixed balances, dry-run starts from the account's real balances."""
 
     async def test_sin_ordenes_son_los_reales(self):
         inner = RealAccount()
@@ -204,13 +204,14 @@ class TestSaldosReales:
         lock = D("0.01") * D("0.00730000") * D("1.002")
         bal = await venue.balances()
         assert bal["BTC"] == Balance("BTC", D("0.003") - lock, D("0.001") + lock)
-        assert inner.real["BTC"] == Balance("BTC", D("0.003"), D("0.001"))  # lo real no se toca
+        # the real ones are not touched
+        assert inner.real["BTC"] == Balance("BTC", D("0.003"), D("0.001"))
 
     async def test_los_cambios_reales_se_ven(self):
         inner = RealAccount()
         venue = DryRunVenue(inner, clock=lambda: 1)
         await venue.place_limit(req("sell", qty="0.1"))
-        inner.real["BTCB2"] = Balance("BTCB2", D("0.7"))  # p. ej. un depósito
+        inner.real["BTCB2"] = Balance("BTCB2", D("0.7"))  # e.g. a deposit
         bal = await venue.balances()
         assert bal["BTCB2"] == Balance("BTCB2", D("0.6"), D("0.1"))
 
@@ -237,7 +238,7 @@ class TestSaldosReales:
 
 @pytest.mark.spec("RNF-11")
 class TestSinEsperas:
-    """D-18: enviar en dry-run no debe hacer peticiones REST."""
+    """D-18: sending in dry-run must make no REST requests."""
 
     async def test_usa_el_spec_del_hub(self):
         inner = RealAccount()
@@ -263,10 +264,10 @@ class TestSinEsperas:
 
         inner.balances = counted
         venue = DryRunVenue(inner, spec=lambda: spec("nk"), clock=lambda: now["t"])
-        await venue.balances()  # lo que hace AccountService cada ≤ 10 s
+        await venue.balances()  # what AccountService does every ≤ 10 s
         now["t"] += 29_000
         await venue.place_limit(req())
         assert reads == [1_000]
-        now["t"] += 2_000  # 31 s desde la lectura: se vuelve a leer
+        now["t"] += 2_000  # 31 s since the read: read again
         await venue.place_limit(req(cid="t-2"))
         assert reads == [1_000, 32_000]

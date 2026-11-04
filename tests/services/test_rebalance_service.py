@@ -1,5 +1,5 @@
-"""Servicio de comisiones de retiro para el plan de reequilibrio (T-45, RF-29,
-CA-14): una por venue y activo, pedidas en cada carga y con el error aislado."""
+"""Withdrawal fees service for the rebalance plan (T-45, RF-29, CA-14): one per venue
+and asset, asked on each load, with the error isolated."""
 
 import httpx
 import pytest
@@ -37,7 +37,7 @@ class TestCarga:
         nx = FakeFees("nx", fail={"BTCB2": httpx.ConnectTimeout("")})
         got = await RebalanceService({"nk": nk, "nx": nx}).load()
         assert got[("nk", "BTC")] == "NonKYC: HTTP 500"
-        assert got[("nx", "BTCB2")] == "ConnectTimeout"  # nunca vacío (D-51)
+        assert got[("nx", "BTCB2")] == "ConnectTimeout"  # never empty (D-51)
         assert isinstance(got[("nk", "BTCB2")], WithdrawalFee)
 
     async def test_sin_cache(self):

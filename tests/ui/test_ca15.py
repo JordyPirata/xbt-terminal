@@ -1,7 +1,7 @@
-"""CA-15 automático (T-55, RF-30, RF-31, D-61): un daemon en dry-run con
-venues simulados arranca con el bot `off`; una TUI conectada lo arma y se
-cierra; el bot sigue armado y dispara; otra conexión ve lo mismo; una orden
-desde la TUI conectada se rechaza; y la parada deja todo en el journal."""
+"""Automatic CA-15 (T-55, RF-30, RF-31, D-61): a dry-run daemon with simulated venues
+starts with the bot `off`; an attached TUI arms it and closes; the bot stays armed and
+fires; another connection sees the same; an order from the attached TUI is rejected;
+and stopping leaves everything in the journal."""
 
 import asyncio
 from dataclasses import replace
@@ -24,8 +24,8 @@ from .test_orders_ui import type_command, until
 
 
 class DaemonRig(BotRig):
-    """Las piezas de BotRig, pero las corre `run_daemon`, como en el server, y
-    sin enlazar a mano la cuenta con las piernas: eso lo hace el Engine."""
+    """BotRig's pieces, but run by `run_daemon`, as on the server, and without linking
+    account and legs by hand: the Engine does that."""
 
     def __init__(self, tmp_path, **kw):
         super().__init__(tmp_path, wire=False, **kw)
@@ -71,34 +71,34 @@ async def test_el_bot_sigue_armado_y_dispara_tras_cerrar_la_tui(tmp_path):
     async with DaemonRig(tmp_path) as rig:
         hello = await probe(rig.socket)
         assert (hello.mode, hello.has_bot) == ("dry-run", True)
-        assert rig.bot.state.status == "off"  # RF-18: arranca apagado
+        assert rig.bot.state.status == "off"  # RF-18: starts off
 
         app = attached_app(rig)
         async with app.run_test(size=(160, 45)) as pilot:
             await until(pilot, lambda: "⇄ daemon" in bar(app) and app.remote.snapshot)
-            # bot on con la confirmación de siempre
+            # bot on with the usual confirmation
             await type_command(pilot, app, "bot on")
             await until(pilot, lambda: isinstance(app.screen, ConfirmScreen))
             assert "BOT DE ARBITRAJE TAKER" in app.screen.summary
             await pilot.press("y")
             await until(pilot, lambda: rig.bot.state.status == "armed")
             await until(pilot, lambda: "BOT armado" in bar(app))
-            await pilot.press("escape", "q")  # suelta la línea de comandos y sale
+            await pilot.press("escape", "q")  # releases the command line and exits
             await until(pilot, lambda: not app.is_running)
 
-        # la TUI se fue: el daemon sigue igual
+        # the TUI left: the daemon stays the same
         await asyncio.sleep(0.1)
         assert rig.bot.state.status == "armed"
         assert [e["data"]["status"] for e in rig.events("bot_state")] == ["armed"]
-        assert rig.events("order_sent") == []  # nada enviado antes del cruce
+        assert rig.events("order_sent") == []  # nothing sent before the cross
 
-        # y dispara cuando el mercado cruza
+        # and fires when the market crosses
         rig.books()
         await rig.until(lambda: rig.events("bot_fire"))
         await rig.until(lambda: rig.bot.state.status == "cooldown")
         (double,) = rig.orders.doubles.values()
 
-        # otra conexión ve lo mismo que el daemon
+        # another connection sees the same as the daemon
         other = RemoteEngine(rig.socket, has_bot=True, retry_s=0.02)
         task = asyncio.create_task(other.run())
         await rig.until(lambda: other.snapshot is not None and double.id in other.doubles)
@@ -107,7 +107,7 @@ async def test_el_bot_sigue_armado_y_dispara_tras_cerrar_la_tui(tmp_path):
         task.cancel()
         await other.aclose()
 
-    # la parada (lo que hace SIGTERM): bot desarmado, journal y socket cerrados
+    # the stop (what SIGTERM does): bot disarmed, journal and socket closed
     assert rig.daemon.done() and rig.daemon.exception() is None
     assert rig.bot.state.status == "off"
     assert rig.events("bot_state")[-1]["data"]["status"] == "off"
@@ -116,7 +116,7 @@ async def test_el_bot_sigue_armado_y_dispara_tras_cerrar_la_tui(tmp_path):
 
 @pytest.mark.spec("CA-15", "RF-30", "RNF-15")
 async def test_la_parada_espera_a_la_doble_en_vuelo(tmp_path):
-    """SIGTERM con el bot disparando: las piernas terminan y quedan en el journal."""
+    """SIGTERM with the bot firing: the legs finish and stay in the journal."""
     async with DaemonRig(tmp_path) as rig:
         gate = asyncio.Event()
         venue = rig.venues["nx"]
@@ -132,7 +132,7 @@ async def test_la_parada_espera_a_la_doble_en_vuelo(tmp_path):
         await rig.until(lambda: rig.orders.in_flight)
         rig.stop.set()
         await asyncio.sleep(0.05)
-        assert not rig.daemon.done()  # espera a la pierna de Neoxa
+        assert not rig.daemon.done()  # waits for Neoxa's leg
         gate.set()
     sent = rig.events("order_sent")
     assert len(sent) == 2
@@ -142,10 +142,9 @@ async def test_la_parada_espera_a_la_doble_en_vuelo(tmp_path):
 
 @pytest.mark.spec("CA-15", "RF-30", "RF-07", "RF-21")
 async def test_las_piernas_llenas_no_paran_el_bot(tmp_path):
-    """Visto en live el 2026-10-24 (d-68e3ed): con las dos piernas llenas, el
-    daemon no se enteraba de los fills de NonKYC, cancelaba una orden ya llena
-    ("Not found"), paraba el bot por `unsettled` y avisaba de una pierna colgada
-    que no existía."""
+    """Seen live on 2026-10-24 (d-68e3ed): with both legs filled, the daemon missed NonKYC's
+    fills, cancelled an already filled order ("Not found"), stopped the bot with
+    `unsettled` and warned of a hanging leg that did not exist."""
     async with DaemonRig(tmp_path) as rig:
         rig.bot._limits = replace(BOT, fill_timeout_ms=2_000)
         rig.bot.arm()
@@ -158,7 +157,7 @@ async def test_las_piernas_llenas_no_paran_el_bot(tmp_path):
         await rig.until(lambda: rig.bot.state.status == "cooldown")
         (double,) = rig.orders.doubles.values()
         assert {leg.status for leg in double.legs} == {"filled"}
-        rig.clock.now += 60_000  # pasado hanging_leg_after_s
+        rig.clock.now += 60_000  # past hanging_leg_after_s
         rig.engine.check_doubles()
         assert rig.events("cancel_sent") == [] and rig.events("hanging_leg") == []
         assert rig.bot.state.status != "halted"

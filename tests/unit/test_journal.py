@@ -63,7 +63,7 @@ class TestFormato:
         assert data == {"price": "850.00", "qty": "0.0100"}
 
     def test_decimal_sin_notacion_cientifica(self, journal, tmp_path):
-        """Una fee de 6 sats es D("6E-8") al leerla del venue: va como 0.00000006."""
+        """A 6 sat fee is D("6E-8") when read from the venue: goes as 0.00000006."""
         journal.write("fill", venue="nx", data={"fee": D("6E-8"), "qty": D("1.5E+3")})
         assert lines(only_file(tmp_path))[0]["data"] == {"fee": "0.00000006", "qty": "1500"}
 
@@ -79,7 +79,7 @@ class TestFormato:
     def test_tipo_no_serializable(self, journal, tmp_path):
         with pytest.raises(TypeError):
             journal.write("error", data={"x": object()})
-        # el fallo no deja una línea a medias
+        # the failure leaves no half line
         assert not list(tmp_path.glob("journal-*.jsonl")) or lines(only_file(tmp_path)) == []
 
 
@@ -87,7 +87,7 @@ class TestFormato:
 class TestAppendOnly:
     def test_cada_linea_queda_en_disco_al_escribirla(self, journal, tmp_path):
         journal.write("fill", venue="nx", data={"qty": D("0.01")})
-        assert len(lines(only_file(tmp_path))) == 1  # sin close()
+        assert len(lines(only_file(tmp_path))) == 1  # no close()
 
     def test_reabrir_no_trunca(self, tmp_path, clock):
         for _ in range(2):

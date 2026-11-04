@@ -1,4 +1,4 @@
-"""La spec es la fuente de verdad: si su formato se rompe, spec_trace.py deja de ver IDs."""
+"""The spec is the source of truth: if its format breaks, spec_trace.py stops seeing IDs."""
 
 import sys
 from pathlib import Path

@@ -1,6 +1,6 @@
-"""market_stream de Neoxa contra un servidor Socket.IO local que reproduce frames
-reales (tests/fixtures/neoxa/ws_frames.json) y un REST simulado con respx para
-el respaldo. Los tiempos se acortan para que el test dure milisegundos."""
+"""Neoxa's market_stream against a local Socket.IO server replaying real frames
+(tests/fixtures/neoxa/ws_frames.json) and a respx simulated REST for the fallback.
+Times are shortened so the test lasts milliseconds."""
 
 import asyncio
 import json
@@ -18,7 +18,7 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "neoxa"
 FRAMES = json.loads((FIXTURES / "ws_frames.json").read_text(encoding="utf-8"))
 API = REST_URL + "/exchange"
 OPEN_FAST = '0{"sid":"s","upgrades":[],"pingInterval":200,"pingTimeout":200,"maxPayload":1000000}'
-# Formato del trade en vivo según el cliente web de Neoxa (tradeId/time, no trade_id/executed_at)
+# Live trade format per Neoxa's web client (tradeId/time, not trade_id/executed_at)
 LIVE_TRADE = (
     '42/exchange,["exchange:trade",{"pair":"BTCB2_BTC","tradeId":"TRD-LIVE-1","side":"buy",'
     '"quantity":0.5,"price":0.00722875,"total":0.003614375,"time":"2026-10-20T14:30:00.000Z"}]'
@@ -36,7 +36,7 @@ class FreeLimiter:
 
 
 class FakeNeoxa:
-    """Cada conexión ejecuta el guion siguiente de `scripts`."""
+    """Each connection runs the next script of `scripts`."""
 
     def __init__(self, *scripts):
         self.scripts = list(scripts)
@@ -62,8 +62,8 @@ class FakeNeoxa:
         await ws.send("2")
         got.append(await ws.recv())  # pong
         if script == "drop":
-            return  # cierra la conexión
-        await ws.send(LAST_TRADE)  # marca el final del guion
+            return  # closes the connection
+        await ws.send(LAST_TRADE)  # marks the end of the script
         await ws.wait_closed()
 
 
@@ -80,8 +80,8 @@ def rest():
 
 
 async def collect(server: FakeNeoxa, until, timeout: float = 3.0, on_event=None):
-    """Eventos del stream hasta que `until(events)` sea cierto. `on_event(venue,
-    events)`, si se da, se espera tras cada evento."""
+    """Stream events until `until(events)` is true. `on_event(venue, events)`, if given, is
+    awaited after each event."""
     async with serve(server.handler, "127.0.0.1", 0) as srv:
         port = srv.sockets[0].getsockname()[1]
         async with httpx.AsyncClient() as http:
@@ -135,7 +135,7 @@ class TestWebSocket:
         )
 
         books = [e for e in events if isinstance(e, BookSnapshot)]
-        assert len(books) == 1  # el de NEOX_BTC se ignora
+        assert len(books) == 1  # the NEOX_BTC one is ignored
         assert books[0].ts == 1_792_506_600_000 and books[0].seq is None
         assert len(books[0].bids) == 50 and len(books[0].asks) == 50
         assert books[0].bids[0] == Level(D("0.00713454"), D("0.12668383"), amm=True)
@@ -151,23 +151,23 @@ class TestWebSocket:
         assert server.received[0][2] == "3"
 
     async def test_lote_inicial_no_repite_trades_ya_vistos(self, rest):
-        """Tras caer y volver, el lote inicial del WS ya se entregó (WS o REST)."""
+        """After dropping and returning, the initial WS batch was already delivered (WS or REST)."""
         server = FakeNeoxa("drop", "stay")
         events = await collect(server, got_last)
         assert states(events).count(("ws", "up")) == 2
         trades = [e for e in events if isinstance(e, Trade)]
-        assert len(trades) == len(set(trades)) == 22  # 20 del lote + 2 en vivo, sin repetir
+        assert len(trades) == len(set(trades)) == 22  # 20 of the batch + 2 live, no repeats
 
 
 @pytest.mark.spec("RF-01", "RF-14")
 class TestReconexion:
-    """Reglas del supervisor (D-11) con el protocolo real de Neoxa."""
+    """Supervisor rules (D-11) with Neoxa's real protocol."""
 
     async def test_una_caida_reconecta_por_ws(self, rest):
         server = FakeNeoxa("drop", "stay")
         events = await collect(server, lambda evs: states(evs).count(("ws", "up")) == 2)
         assert states(events) == [("ws", "up"), ("ws", "reconnecting"), ("ws", "up")]
-        assert not rest.calls  # un fallo suelto no activa el REST
+        assert not rest.calls  # a single failure does not start REST
 
     async def test_tres_fallos_polling_y_vuelta_al_ws(self, rest):
         server = FakeNeoxa("error", "error", "error", "stay")
@@ -181,7 +181,7 @@ class TestReconexion:
         ]
         i = next(i for i, e in enumerate(events) if isinstance(e, ConnState) and e.source == "rest")
         rest_books = [e for e in events[i:] if isinstance(e, BookSnapshot)]
-        assert rest_books and len(rest_books[0].bids) == 20  # el book REST del fixture
+        assert rest_books and len(rest_books[0].bids) == 20  # the fixture's REST book
 
     async def test_rest_caido_se_reporta(self):
         server = FakeNeoxa("error", "error", "error", "stay")
@@ -192,13 +192,13 @@ class TestReconexion:
         assert ("rest", "up") not in states(events)
 
     async def test_ws_mudo_cuenta_como_caida(self, rest):
-        """Sin frames durante pingInterval + pingTimeout el WS se da por muerto."""
+        """No frames during pingInterval + pingTimeout: the WS is deemed dead."""
         server = FakeNeoxa("silent", "stay")
         events = await collect(server, lambda evs: ("ws", "up") in states(evs))
         assert states(events) == [("ws", "reconnecting"), ("ws", "up")]
 
     async def test_error_del_venue_antes_de_datos(self, rest):
-        """El error llega tras suscribirse y antes del book: es un fallo, sin up."""
+        """The error comes after subscribing and before the book: a failure, no up."""
         server = FakeNeoxa("error", "stay")
         events = await collect(server, lambda evs: ("ws", "up") in states(evs))
         assert states(events) == [("ws", "reconnecting"), ("ws", "up")]
@@ -206,7 +206,7 @@ class TestReconexion:
 
 @pytest.mark.spec("RNF-24")
 async def test_resync_reconecta_y_llega_otro_book(rest):
-    """D-76: cada mensaje de Neoxa es el book entero, así que basta reconectar."""
+    """D-76: each Neoxa message is the whole book, so reconnecting is enough."""
     server = FakeNeoxa("stay", "stay")
     asked = []
 

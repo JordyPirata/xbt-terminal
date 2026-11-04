@@ -1,7 +1,6 @@
-"""REST privado de Neoxa (T-17, D-14) con claves falsas. Fixtures con la forma
-de las respuestas reales grabadas el 2026-10-20 (IDs, usuario e importes
-cambiados); place y cancel salen de los ejemplos de /api-docs, porque no se
-pueden grabar sin enviar una orden real."""
+"""Neoxa private REST (T-17, D-14) with fake keys. Fixtures shaped like the real
+responses recorded on 2026-10-20 (IDs, user and amounts changed); place and cancel
+come from the /api-docs examples, since they cannot be recorded without a real order."""
 
 import asyncio
 import json
@@ -101,7 +100,7 @@ class TestCredenciales:
 
 @pytest.mark.spec("RF-05", "RNF-10")
 async def test_balances_solo_btc_y_btcb2(venue, api, limiter):
-    """`total` de Neoxa no incluye lo comprometido en órdenes (`in_orders`)."""
+    """Neoxa's `total` does not include what is committed in orders (`in_orders`)."""
     bal = await venue.balances()
     assert bal == {
         "BTC": Balance("BTC", D("0.0021"), D("0.00150005")),
@@ -186,7 +185,7 @@ class TestFills:
             "nx", "TRD-TEST0001-00000001", None, "buy", D("0.00725"), D("0.02683261"),
             D("3.9e-07"), "BTC", 1_792_531_543_116,
         )  # fmt: skip
-        assert (fills[1].fee, fills[1].fee_asset) == (D("0"), None)  # AMM: sin fee
+        assert (fills[1].fee, fills[1].fee_asset) == (D("0"), None)  # AMM: no fee
 
     async def test_estado_final_desde_el_historial(self, venue, api):
         final = await venue.fetch_final("ORD-TEST0001-AAAA0001")
@@ -217,7 +216,7 @@ class TestStreamPrivado:
                 await anext(stream)
                 await asyncio.sleep(0.35)
         polls = [c for c in api.calls if c.request.url.path == "/api/exchange/orders"]
-        assert 3 <= len(polls) <= 5  # uno al empezar y uno cada 0.1 s
+        assert 3 <= len(polls) <= 5  # one at start and one every 0.1 s
         assert set(limiter.kinds) == {"private"}
 
     async def test_fill_nuevo_entre_refrescos(self, limiter, api):
@@ -230,14 +229,14 @@ class TestStreamPrivado:
                 new = dict(trades["trades"][0], trade_id="TRD-TEST0099-00000099")
                 trades["trades"].insert(0, new)
                 api.get(f"{API}/trades/my").respond(text=json.dumps(trades))
-                async with asyncio.timeout(1.0):  # los del arranque llegan como PastFill (D-68)
+                async with asyncio.timeout(1.0):  # those at startup arrive as PastFill (D-68)
                     fill = await anext(stream)
                     while not isinstance(fill, Fill):
                         fill = await anext(stream)
         assert fill.trade_id == "TRD-TEST0099-00000099"
 
     async def test_la_orden_enviada_conserva_su_client_id(self, limiter, api):
-        """Neoxa no guarda client_id: el stream lo toma de lo que envió la terminal."""
+        """Neoxa keeps no client_id: the stream takes it from what the terminal sent."""
         placed = json.loads(fixture("order_placed.json"))
         placed["order"]["order_id"] = "ORD-TEST0001-AAAA0001"
         api.post(f"{API}/order").respond(json=placed)

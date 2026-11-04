@@ -1,5 +1,5 @@
-"""Arranque: el daemon (config → venues reales, motor y socket) y el cliente
-(solo el socket del daemon), sin abrir la pantalla ni la red (D-66)."""
+"""Startup: the daemon (config → real venues, engine and socket) and the client (only
+the daemon socket), without opening the screen or the network (D-66)."""
 
 import sys
 from decimal import Decimal
@@ -29,7 +29,7 @@ def env(tmp_path, nk=True, nx=False):
         lines += ["NEOXA_API_KEY=k_CANARIO_nx", "NEOXA_API_SECRET=s_CANARIO_nx"]
     path = tmp_path / ".env"
     path.write_text("\n".join(lines) + "\n")
-    path.chmod(0o600)  # RNF-18: en live no se acepta otro
+    path.chmod(0o600)  # RNF-18: live accepts no other
     return path
 
 
@@ -38,7 +38,7 @@ def engine_for(tmp_path, live=False, env_path=None, conf=EXAMPLE):
     return settings, build_engine(settings, logs=tmp_path / "logs")
 
 
-# -- el motor del daemon ---------------------------------------------------------------
+# -- the daemon's engine ---------------------------------------------------------------
 
 
 @pytest.mark.spec("RNF-09", "RF-13", "RF-30")
@@ -80,7 +80,7 @@ async def test_el_hub_contrasta_el_book_y_lo_apunta(tmp_path):
 
 @pytest.mark.spec("RNF-14")
 async def test_un_registro_de_fallos_para_todos(tmp_path):
-    """Hub, cuenta y órdenes reportan al mismo, con el journal: la barra los cuenta todos."""
+    """Hub, account and orders report to the same one, with the journal: the bar counts all."""
     _, engine = engine_for(tmp_path)
     faults = engine.hub.faults
     assert engine.account.faults is faults and engine.orders.faults is faults
@@ -90,14 +90,14 @@ async def test_un_registro_de_fallos_para_todos(tmp_path):
 
 @pytest.mark.spec("RF-13", "RF-07")
 async def test_dry_run_cuenta_simulada(tmp_path):
-    """Dry-run: saldos reales y órdenes simuladas (D-16); la cuenta lee los mismos
-    DryRunVenue que las órdenes, para seguir las piernas (D-15)."""
+    """Dry-run: real balances and simulated orders (D-16); the account reads the same
+    DryRunVenues as orders, to follow the legs (D-15)."""
     _, engine = engine_for(tmp_path, env_path=env(tmp_path, nx=True))
     sim = engine.orders._venues
     assert all(isinstance(v, DryRunVenue) for v in sim.values()) and set(sim) == {"nk", "nx"}
     assert all(v._fixed is None and v.inner is engine.hub._venues[k] for k, v in sim.items())
     assert engine.account is not None and engine.account._venues == sim
-    assert engine.orders._account is engine.account  # valida con la cuenta (D-18)
+    assert engine.orders._account is engine.account  # validates with the account (D-18)
     engine.hub.state["nk"].spec = "spec-del-hub"
     assert sim["nk"]._spec_source() == "spec-del-hub"
     await engine.hub.aclose()
@@ -116,7 +116,7 @@ async def test_live_opera_con_los_venues_reales(tmp_path):
     _, engine = engine_for(tmp_path, live=True)
     assert engine.mode == "live" and engine.orders is not None
     assert engine.orders.can_trade("nk") and not engine.orders.can_trade("nx")
-    assert engine.orders._venues["nk"] is engine.hub._venues["nk"]  # el real, no simulado
+    assert engine.orders._venues["nk"] is engine.hub._venues["nk"]  # the real one, not simulated
     assert engine.account is not None and list(engine.account.state) == ["nk"]
     assert engine.orders._journal is engine.account._journal
     assert engine.orders._journal.mode == "live"
@@ -139,14 +139,14 @@ async def test_el_bot_comparte_ordenes_cuenta_y_journal(tmp_path):
     assert bot is not None and bot.state.status == "off"
     assert bot._orders is engine.orders and bot._account is engine.account
     assert bot._journal is engine.orders._journal and bot.faults is engine.orders.faults
-    assert bot.refusal() is None  # en dry-run se arma aunque enabled = false
+    assert bot.refusal() is None  # in dry-run it arms even with enabled = false
     await engine.hub.aclose()
 
 
 @pytest.mark.spec("RF-18")
 async def test_bot_en_live(tmp_path):
     _, engine = engine_for(tmp_path, live=True, env_path=env(tmp_path, nx=True))
-    assert engine.bot._live and "enabled" in engine.bot.refusal()  # el ejemplo lo trae apagado
+    assert engine.bot._live and "enabled" in engine.bot.refusal()  # the example has it off
     await engine.hub.aclose()
 
 
@@ -163,7 +163,7 @@ async def test_el_descuento_llega_al_panel_y_no_al_bot(tmp_path):
     )
     settings, engine = engine_for(tmp_path, env_path=env(tmp_path, nx=True), conf=conf)
     assert client_view(settings).fee_discounts == {"nk": 0, "nx": 50}
-    assert not hasattr(engine.bot, "_fee_discounts")  # el bot usa el spec del venue, completo
+    assert not hasattr(engine.bot, "_fee_discounts")  # the bot uses the venue spec, in full
     await engine.hub.aclose()
 
 
@@ -178,7 +178,7 @@ async def test_el_token_de_fee_llega_al_venue_y_al_bot(tmp_path):
     nk = engine.hub._venues["nk"]
     assert isinstance(nk, NonKYCVenue) and nk._balance_assets == ("BTCB2", "BTC", "NKYC")
     assert engine.bot._fee_tokens == {"nk": FeeToken("NKYC", Decimal("1"), Decimal("25"))}
-    assert list(engine.results._pricers) == ["NKYC"]  # resultados valoran su fee (D-65)
+    assert list(engine.results._pricers) == ["NKYC"]  # results value its fee (D-65)
     await engine.hub.aclose()
 
 
@@ -210,8 +210,8 @@ async def test_el_ratio_de_inventario_llega_al_bot_y_al_panel(tmp_path):
 @pytest.mark.spec("RF-28")
 @pytest.mark.parametrize("live", [False, True])
 async def test_depositos_con_los_venues_con_keys(tmp_path, live):
-    """En cualquier modo, solo los venues con keys; los adaptadores reales, no
-    los de dry-run (solo se lee)."""
+    """In any mode, only venues with keys; the real adapters, not the dry-run ones (only
+    read)."""
     _, engine = engine_for(tmp_path, live=live)
     assert engine.deposits is not None and engine.deposits.venues == ("nk",)
     assert isinstance(engine.deposits._venues["nk"], NonKYCVenue)
@@ -221,7 +221,7 @@ async def test_depositos_con_los_venues_con_keys(tmp_path, live):
 @pytest.mark.spec("RF-29")
 @pytest.mark.parametrize("live", [False, True])
 async def test_reequilibrio_con_los_venues_con_keys(tmp_path, live):
-    """Como los depósitos: adaptadores reales de los venues con keys (solo lee)."""
+    """Like deposits: real adapters of venues with keys (read only)."""
     settings, engine = engine_for(tmp_path, live=live)
     assert engine.rebalance is not None and engine.rebalance.venues == ("nk",)
     assert isinstance(engine.rebalance._venues["nk"], NonKYCVenue)
@@ -235,7 +235,7 @@ async def test_reequilibrio_con_los_venues_con_keys(tmp_path, live):
 
 @pytest.fixture
 def xdg(tmp_path, monkeypatch):
-    """Config y .env en el directorio XDG; se arranca desde otro cwd sin flags."""
+    """Config and .env in the XDG directory; starts from another cwd without flags."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     conf = tmp_path / "cfg" / "xbt"
@@ -251,7 +251,7 @@ def xdg(tmp_path, monkeypatch):
 
 @pytest.fixture
 def served(monkeypatch):
-    """Sustituye el bucle del daemon: guarda el motor y comprueba el lock."""
+    """Replace the daemon loop: keep the engine and check the lock."""
     seen = {}
 
     async def fake_run(engine, stop, *, on_ready=None, socket=None, book_depth=None, view=None):
@@ -270,7 +270,7 @@ def test_daemon_corre_el_motor_sin_pantalla(xdg, served, monkeypatch, capsys):
     monkeypatch.setattr(XbtApp, "run", lambda app: pytest.fail("el daemon no abre Textual"))
     main()
     engine = served["engine"]
-    assert engine.mode == "dry-run" and engine.orders is not None  # el .env del XDG
+    assert engine.mode == "dry-run" and engine.orders is not None  # the XDG .env
     assert engine.journal.directory == data
     assert served["socket"] == data / "xbt.sock"
     assert served["book_depth"] == 15
@@ -278,7 +278,7 @@ def test_daemon_corre_el_motor_sin_pantalla(xdg, served, monkeypatch, capsys):
     assert "xbt daemon en dry-run" in capsys.readouterr().err
     assert "starting in dry-run" in (data / "diag.log").read_text()  # RNF-19
     assert not (Path.cwd() / "logs").exists()
-    with InstanceLock(data):  # al salir se suelta
+    with InstanceLock(data):  # released on exit
         pass
 
 
@@ -335,7 +335,7 @@ def test_daemon_avisa_por_stderr(xdg, served, capsys):
 
 @pytest.mark.spec("RF-30", "RF-13")
 def test_daemon_sin_keys_arranca_en_solo_lectura(xdg, served):
-    """Es la única forma que queda de mirar el mercado sin keys (D-66)."""
+    """It is the only way left to watch the market without keys (D-66)."""
     conf, _ = xdg
     (conf / ".env").write_text("")
     main()
@@ -376,16 +376,16 @@ def test_daemon_con_los_flags_de_siempre(xdg, served, monkeypatch, tmp_path):
     assert engine.journal.directory == data and served["socket"] == data / "xbt.sock"
 
 
-# -- xbt (el cliente) -----------------------------------------------------------------
+# -- xbt (the client) -----------------------------------------------------------------
 
 VIEW = ClientView(20, "5m", {"nk": Decimal("0"), "nx": Decimal("50")}, None, None)
 
 
 @pytest.fixture
 def connected(monkeypatch, tmp_path):
-    """Un daemon que contesta en live con bot y su config; `run` guarda la app y
-    mira que el cliente no tome el lock. Construir venues es un fallo: el cliente
-    no habla con los venues (D-66)."""
+    """A daemon answering in live with a bot and its config; `run` keeps the app and checks
+    the client does not take the lock. Building venues is a failure: the client does not
+    talk to venues (D-66)."""
     from xbt_terminal.services.remote import Hello
 
     seen = {}
@@ -396,7 +396,7 @@ def connected(monkeypatch, tmp_path):
 
     def fake_run(app):
         seen["app"] = app
-        InstanceLock(seen["data"]).acquire()  # el cliente no toma el lock (RNF-17)
+        InstanceLock(seen["data"]).acquire()  # the client does not take the lock (RNF-17)
 
     def no_venues(*a, **kw):
         raise AssertionError("el cliente no crea venues")
@@ -405,7 +405,7 @@ def connected(monkeypatch, tmp_path):
     monkeypatch.setattr("xbt_terminal.__main__.build_venues", no_venues)
     monkeypatch.setattr("xbt_terminal.__main__.load_settings", no_venues)
     monkeypatch.setattr(XbtApp, "run", fake_run)
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "sin-config"))  # no hay config.toml
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "sin-config"))  # no config.toml
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     seen["data"] = tmp_path / "state" / "xbt"
     seen["data"].mkdir(parents=True)
@@ -420,11 +420,11 @@ def test_el_cliente_abre_la_tui_del_daemon(connected, monkeypatch, capsys, argv)
     app, data = connected["app"], connected["data"]
     assert connected["probed"] == data / "xbt.sock"
     assert app.remote is not None and app.remote.path == data / "xbt.sock"
-    assert app.mode == "live" and app.bot is app.remote.bot  # el modo del daemon
+    assert app.mode == "live" and app.bot is app.remote.bot  # the daemon's mode
     assert app.account is app.remote.account and app.orders is app.remote.orders
     assert app.results is app.remote.results and app.deposits is app.remote.deposits
     assert app.rebalance is app.remote.rebalance and app.hub is app.remote.market
-    # la config de la pantalla llega del daemon, no de config.toml
+    # the screen config comes from the daemon, not config.toml
     assert (app.book_levels, app.timeframe) == (20, "5m")
     assert app._fee_discounts == {"nk": 0, "nx": 50}
     assert app.system_clipboard is system_copy  # D-52

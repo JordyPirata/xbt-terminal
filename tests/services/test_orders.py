@@ -1,6 +1,6 @@
-"""OrderService en dry-run (T-16, CA-04): validar, confirmar, enviar y dejarlo
-todo en el journal. Book de NonKYC 0.00720000 / 0.00730000 → mid 0.00725;
-saldos simulados 0.005 BTC y 0.5 BTCB2 (valor ≈ 0.008625 BTC < tope 0.01)."""
+"""OrderService in dry-run (T-16, CA-04): validate, confirm, send and leave it all in
+the journal. NonKYC book 0.00720000 / 0.00730000 → mid 0.00725; simulated balances
+0.005 BTC and 0.5 BTCB2 (value ≈ 0.008625 BTC < cap 0.01)."""
 
 import json
 from dataclasses import replace
@@ -33,7 +33,7 @@ LIMITS = RiskLimits(
 class Setup:
     def __init__(self, tmp_path, *, btc="0.005", btcb2="0.5", limits=LIMITS, book_ts=NOW):
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
-        self.hub_now = NOW  # hora local del hub: la de recepción del book (RNF-16)
+        self.hub_now = NOW  # hub local time: the book's arrival time (RNF-16)
         self.hub = MarketHub(feeds, clock=lambda: self.hub_now)
         for vid in feeds:
             self.hub.state[vid].spec = spec(vid)
@@ -45,7 +45,7 @@ class Setup:
         ids = iter(f"t-{i:06d}" for i in range(1, 100))
         self.orders = OrderService(
             self.hub,
-            {"nk": self.venue},  # nx sin keys: solo lectura
+            {"nk": self.venue},  # nx without keys: read only
             self.journal,
             limits,
             clock=lambda: NOW,
@@ -53,7 +53,7 @@ class Setup:
         )
 
     def book(self, venue, bid, ask, ts=NOW, seq=None, received=None):
-        """`ts` es la hora del exchange; se recibe a `received` (por defecto, a `ts`)."""
+        """`ts` is the exchange time; received at `received` (by default, at `ts`)."""
         snap = BookSnapshot(venue, (Level(D(bid), D("1")),), (Level(D(ask), D("1")),), ts, seq)
         self.hub_now = ts if received is None else received
         self.hub.apply(venue, snap)
@@ -82,7 +82,7 @@ class TestOrdenValida:
         assert p.notional == D("0.0000725") and p.fee == D("0.0000725") * D("0.002")
         assert "BUY 0.0100 XBT @ 0.00725000" in p.summary and "0.00007250 BTC" in p.summary
         assert "NonKYC" in p.summary
-        assert s.lines() == []  # nada al journal hasta confirmar
+        assert s.lines() == []  # nothing to the journal until confirmed
 
     async def test_confirmar_envia_y_registra_sent_y_ack(self, tmp_path):
         s = Setup(tmp_path)
@@ -98,10 +98,10 @@ class TestOrdenValida:
         assert ack["data"] == {"order_id": "dry-nk-1", "status": "open"}
 
     async def test_al_confirmar_se_vuelve_a_validar(self, tmp_path):
-        """El mercado puede moverse con el diálogo abierto: fallar cerrado."""
+        """The market may move with the dialog open: fail closed."""
         s = Setup(tmp_path)
         p = await s.orders.prepare(buy())
-        s.book("nk", "0.00800000", "0.00810000")  # el mid se va un 11 %
+        s.book("nk", "0.00800000", "0.00810000")  # the mid moves 11 %
         result = await s.orders.confirm(p)
         assert isinstance(result, Rejected) and "mid_deviation" in result.codes
         assert await s.venue.open_orders() == []
@@ -127,7 +127,7 @@ def codes(result):
 
 @pytest.mark.spec("CA-04", "RF-10", "RF-11")
 class TestRechazos:
-    """Cada regla de RF-10 rechaza en dry-run, queda `reject_local` y no se envía nada."""
+    """Each RF-10 rule rejects in dry-run, leaves `reject_local` and sends nothing."""
 
     async def check(self, s, cmd, code):
         result = await s.orders.prepare(cmd)
@@ -139,13 +139,13 @@ class TestRechazos:
         return result
 
     async def test_order_size(self, tmp_path):
-        """Inventario 0.005 + 0.5 × 0.00725 = 0.008625 BTC; 25 % = 0.00215625."""
+        """Inventory 0.005 + 0.5 × 0.00725 = 0.008625 BTC; 25 % = 0.00215625."""
         s = Setup(tmp_path)
         assert isinstance(await s.orders.prepare(buy(qty="0.2974")), Pending)  # 0.00215615
         await self.check(s, buy(qty="0.2975"), "order_size")  # 0.00215688
 
     async def test_order_size_suma_los_dos_venues(self, tmp_path):
-        """Un venue sin keys no cuenta; con los dos, el tope sube."""
+        """A venue without keys does not count; with both, the cap rises."""
         from xbt_terminal.adapters.dryrun import DryRunVenue
 
         s = Setup(tmp_path)
@@ -155,7 +155,7 @@ class TestRechazos:
         assert isinstance(await s.orders.prepare(buy(qty="0.5")), Pending)  # 0.003625 < 0.0043125
 
     async def test_order_size_sin_mid_del_otro_venue(self, tmp_path):
-        """Sin mid de un venue no hay inventario total: rechazo (fallar cerrado)."""
+        """Without a venue's mid there is no total inventory: reject (fail closed)."""
         from xbt_terminal.adapters.dryrun import DryRunVenue
 
         s = Setup(tmp_path)
@@ -209,7 +209,7 @@ class TestRechazos:
         await self.check(s, buy(), "stale_data")
 
     async def test_mensaje_con_importes_en_btc(self, tmp_path):
-        """Los :.2f heredados de USDT mostraban 0.00 BTC (D-13)."""
+        """The :.2f inherited from USDT showed 0.00 BTC (D-13)."""
         s = Setup(tmp_path, limits=replace(LIMITS, max_order_pct=D("1")))
         result = await s.orders.prepare(buy(qty="0.02"))
         assert "0.00014500" in result.message and "0.00 " not in result.message
@@ -217,23 +217,23 @@ class TestRechazos:
 
 @pytest.mark.spec("RF-10", "CA-04", "RNF-16", "RNF-24", "CA-18")
 class TestFrescura:
-    """Un book quieto solo vale si lo confirma el contraste con el REST (D-76);
-    la conexión viva ya no basta (D-13 corregida)."""
+    """A quiet book only counts if confirmed by the REST check (D-76); a live connection
+    is no longer enough (D-13 corrected)."""
 
     async def test_book_quieto_confirmado_por_el_rest_vale(self, tmp_path):
-        s = Setup(tmp_path, book_ts=NOW - 300_000)  # 5 min sin cambios, como NonKYC
+        s = Setup(tmp_path, book_ts=NOW - 300_000)  # 5 min without changes, like NonKYC
         s.hub.state["nk"].checked_at = NOW - 4_000
         assert isinstance(await s.orders.prepare(buy()), Pending)
 
     async def test_book_quieto_con_latido_reciente_ya_no_vale(self, tmp_path):
-        """Así disparó d-9820a4: WS conectado, sin cambios del book desde hacía 2 h."""
+        """That is how d-9820a4 fired: WS connected, no book changes for 2 h."""
         s = Setup(tmp_path, book_ts=NOW - 300_000)
         s.hub_now = NOW
         s.hub.apply("nk", ConnState("nk", "market", "ws", "up", 150.0, NOW))
         assert "stale_data" in codes(await s.orders.prepare(buy()))
 
     async def test_contraste_viejo_no_vale(self, tmp_path):
-        """Con el REST fallando no hay confirmaciones: a los stale_after_s, viejo."""
+        """With REST failing there are no confirmations: stale at stale_after_s."""
         s = Setup(tmp_path, book_ts=NOW - 300_000)
         s.hub.state["nk"].checked_at = NOW - 16_000
         assert "stale_data" in codes(await s.orders.prepare(buy()))
@@ -241,7 +241,7 @@ class TestFrescura:
     async def test_book_en_duda_no_vale_aunque_sea_reciente(self, tmp_path):
         s = Setup(tmp_path)
         s.hub.state["nk"].checked_at = NOW
-        s.hub.state["nk"].suspect = True  # el último contraste no coincidió
+        s.hub.state["nk"].suspect = True  # the last check did not match
         assert "stale_data" in codes(await s.orders.prepare(buy()))
 
     async def test_book_quieto_sin_estado_no_vale(self, tmp_path):
@@ -251,7 +251,7 @@ class TestFrescura:
 
 @pytest.mark.spec("RF-10", "RF-13")
 class TestCuentaIlegible:
-    """D-16: si no se pueden leer saldos u órdenes al validar, se rechaza (no se lanza)."""
+    """D-16: if balances or orders cannot be read when validating, it rejects (no raise)."""
 
     @pytest.mark.parametrize(
         "exc", [VenueError("NonKYC: HTTP 429: Too many requests"), httpx.ConnectError("sin red")]
@@ -282,7 +282,7 @@ class TestCuentaIlegible:
 
 
 class Counting:
-    """Cuenta las lecturas al venue que hace OrderService."""
+    """Count the venue reads OrderService does."""
 
     def __init__(self, venue):
         self.calls = []
@@ -297,7 +297,7 @@ class Counting:
 
 
 def cached(tmp_path, *, age_ms=0, btc="0.005", orders=()):
-    """Setup con AccountService ya cargado (como tras su primer refresco)."""
+    """Setup with AccountService already loaded (as after its first refresh)."""
     from xbt_terminal.services.account import AccountService
 
     s = Setup(tmp_path)
@@ -318,17 +318,17 @@ def cached(tmp_path, *, age_ms=0, btc="0.005", orders=()):
 
 @pytest.mark.spec("RNF-11", "RF-10")
 class TestValidacionConCache:
-    """D-18: con la cuenta al día no se pregunta al venue al preparar ni al confirmar."""
+    """D-18: with the account current, the venue is not asked on preparing or confirming."""
 
     async def test_cache_fresca_sin_peticiones(self, tmp_path):
         s = cached(tmp_path, age_ms=29_000)
         p = await s.orders.prepare(buy())
         assert isinstance(p, Pending)
-        await s.orders._validate(p.req)  # lo que hace confirm antes de enviar
+        await s.orders._validate(p.req)  # what confirm does before sending
         assert s.counter.calls == []
 
     async def test_la_cache_manda_en_las_reglas(self, tmp_path):
-        s = cached(tmp_path, btc="0.00001")  # el venue tiene 0.005; la cuenta, casi nada
+        s = cached(tmp_path, btc="0.00001")  # the venue has 0.005; the account, almost nothing
         assert "insufficient_balance" in codes(await s.orders.prepare(buy()))
 
     async def test_cache_vieja_pregunta_al_venue(self, tmp_path):
@@ -362,7 +362,7 @@ class TestValidacionConCache:
 
 @pytest.mark.spec("RF-10")
 async def test_saldo_insuficiente_con_8_decimales(tmp_path):
-    """nocional × (1 + fee) sale con muchos decimales; el mensaje los redondea a 8."""
+    """notional × (1 + fee) comes with many decimals; the message rounds to 8."""
     s = Setup(tmp_path, btc="0.00001")
     result = await s.orders.prepare(buy(qty="0.0137", price="0.00725001"))
     msg = next(v.message for v in result.violations if v.code == "insufficient_balance")
@@ -375,7 +375,7 @@ def pct(side, value, price="0.00725000", venue="nk"):
 
 @pytest.mark.spec("RF-17", "RF-10")
 class TestCantidadPorcentual:
-    """D-21. Saldos 0.005 BTC y 0.5 BTCB2; inventario 0.008625 BTC, tope 0.00215625."""
+    """D-21. Balances 0.005 BTC and 0.5 BTCB2; inventory 0.008625 BTC, cap 0.00215625."""
 
     async def test_compra_con_el_25_del_btc(self, tmp_path):
         s = Setup(tmp_path)
@@ -398,7 +398,7 @@ class TestCantidadPorcentual:
 
     async def test_las_reglas_se_aplican_igual(self, tmp_path):
         s = Setup(tmp_path)
-        result = await s.orders.prepare(pct("buy", "50"))  # 0.0025 BTC > tope 0.00215625
+        result = await s.orders.prepare(pct("buy", "50"))  # 0.0025 BTC > cap 0.00215625
         assert "order_size" in codes(result)
         last = s.lines()[-1]
         assert last["event"] == "reject_local" and last["data"]["qty"] == "0.3441"
@@ -436,7 +436,7 @@ class TestCantidadPorcentual:
         assert "venue_error" in codes(await s.orders.prepare(pct("buy", "25")))
 
     async def test_usa_los_saldos_de_la_cuenta(self, tmp_path):
-        s = cached(tmp_path, btc="0.002")  # el venue tiene 0.005; la cuenta, 0.002
+        s = cached(tmp_path, btc="0.002")  # the venue has 0.005; the account, 0.002
         p = await s.orders.prepare(pct("buy", "25"))
         assert isinstance(p, Pending) and p.req.qty == D("0.0688")
         assert s.counter.calls == []

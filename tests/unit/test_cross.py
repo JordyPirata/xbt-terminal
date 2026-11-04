@@ -1,4 +1,4 @@
-"""Precios reales de BTCB2/BTC leídos de las APIs públicas el 2026-10-20:
+"""Real BTCB2/BTC prices read from the public APIs on 2026-10-20:
 
 NonKYC  bid 0.00727748  ask 0.00730299
 Neoxa   bid 0.00735714  ask 0.00742999
@@ -70,8 +70,8 @@ class TestEntreVenues:
     def test_falta_un_lado(self):
         sin_ask_nk = Quote("nk", NK.best_bid, None, taker_fee=NK.taker_fee)
         v = cross(sin_ask_nk, NX)
-        assert v.route("nk", "nx") is None  # sin ask en nk no se puede comprar ahí
-        assert v.route("nx", "nk") is not None  # vender en nk solo necesita su bid
+        assert v.route("nk", "nx") is None  # no ask on nk, so it cannot buy there
+        assert v.route("nx", "nk") is not None  # selling on nk only needs its bid
         assert v.stats["nk"] is None and v.mid_diff is None
 
     def test_mismo_venue_es_error(self):

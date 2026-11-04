@@ -1,8 +1,8 @@
-"""Panel cruzado en pantalla (T-14b). Las cifras esperadas se calcularon a mano
-con Decimal sobre los precios reales de `tests/unit/test_cross.py` (2026-10-20):
+"""Cross panel on screen (T-14b). Expected figures were computed by hand with Decimal
+on the real prices of `tests/unit/test_cross.py` (2026-10-20):
 
 NonKYC  bid 0.00727748  ask 0.00730299
-Neoxa   bid 0.00735714  ask 0.00742999      taker 0.2 % en los dos
+Neoxa   bid 0.00735714  ask 0.00742999      taker 0.2 % on both
 """
 
 import asyncio
@@ -72,8 +72,8 @@ class TestDatosParciales:
         sin_ask_nk = Quote("nk", NK.best_bid, None, taker_fee=NK.taker_fee)
         text = render_cross(sin_ask_nk, NX).plain
         assert "mid —" in line(text, "NonKYC")
-        assert "nk→nx  bruto —" in text  # sin ask en nk no se puede comprar ahí
-        assert "nx→nk  bruto -0.00015251" in text  # vender en nk solo necesita su bid
+        assert "nk→nx  bruto —" in text  # no ask on nk, so it cannot buy there
+        assert "nx→nk  bruto -0.00015251" in text  # selling on nk only needs its bid
 
     def test_ninguno(self):
         text = render_cross(None, None).plain
@@ -101,11 +101,11 @@ class TestEnPantalla:
             feeds["nk"].push(snapshot("nk", "0.00727748", "0.00730299"))
             feeds["nx"].push(snapshot("nx", "0.00735714", "0.00742999"))
             await until(pilot, lambda: "+5415 sats" in panel.text)
-            assert "neto +0.00002483" in panel.text  # fee taker 0.2 % del spec del venue
+            assert "neto +0.00002483" in panel.text  # venue spec's 0.2 % taker fee
             width = panel.content_region.width
             assert all(len(ln) <= width for ln in panel.text.splitlines())
 
-            # desaparece el bid de nx: ya no se puede vender ahí (ruta nk→nx)
+            # nx's bid vanishes: selling there is no longer possible (route nk→nx)
             feeds["nx"].push(BookDelta("nx", (Level(D("0.00735714"), D("0")),), (), T0, 2))
             await until(pilot, lambda: "nk→nx  bruto —" in panel.text)
 
@@ -115,13 +115,13 @@ class TestEnPantalla:
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
             panel = app.query_one(CrossPanel)
-            assert "T-14b" not in panel.text  # el modo vive en la barra de estado (T-15)
+            assert "T-14b" not in panel.text  # the mode lives in the status bar (T-15)
 
 
 @pytest.mark.spec("RF-24", "RF-04")
 async def test_descuento_de_fee_solo_en_el_panel():
-    """Neoxa con fees pagadas en su token (D-38): el panel calcula la neta con la
-    taker al 50 %; el spec del hub, que usan el bot y RiskCheck, no cambia."""
+    """Neoxa with fees paid in its token (D-38): the panel computes the net with the taker
+    at 50 %; the hub's spec, used by bot and RiskCheck, does not change."""
     feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
     hub = MarketHub(feeds, history=50, retry_s=0.01, clock=lambda: T0)
     app = local_app(

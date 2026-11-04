@@ -1,5 +1,5 @@
-"""Casado contra el book grabado y resumen del informe (T-87, RF-34, RF-35): lo
-puro del banco de pruebas."""
+"""Matching against the recorded book and report summary (T-87, RF-34, RF-35): the pure
+part of the test bench."""
 
 from decimal import Decimal
 

@@ -1,5 +1,5 @@
-"""Supervisor de conexión de StreamingVenue (T-12, D-11) con un venue falso sin
-red: cada sesión WS sigue un guion (fallar, entregar datos, caerse o quedarse)."""
+"""StreamingVenue connection supervisor (T-12, D-11) with a network-less fake venue: each
+WS session follows a script (fail, deliver data, drop or stay)."""
 
 import asyncio
 from types import SimpleNamespace
@@ -16,8 +16,8 @@ TRADE = Trade("nk", D("0.0072"), D("0.5"), "buy", 3)
 
 
 class FakeVenue(StreamingVenue):
-    """Guiones por sesión: "fail" (no conecta), "hang" (conecta y nunca da datos)
-    o una lista de eventos, donde "drop" corta la sesión y "wait" la pausa."""
+    """Scripts per session: "fail" (does not connect), "hang" (connects and never gives
+    data) or a list of events, where "drop" cuts the session and "wait" pauses it."""
 
     id = "nk"
     name = "Fake"
@@ -29,7 +29,7 @@ class FakeVenue(StreamingVenue):
             fallback_every_s=0.01,
             backoff_base_s=0.01,
             backoff_max_s=0.08,
-            rng=lambda: 0.5,  # sin jitter: factor 1.0
+            rng=lambda: 0.5,  # no jitter: factor 1.0
             latency_every_s=60.0,
             clock=lambda: 1_000,
         )
@@ -86,7 +86,7 @@ async def run(venue, until, timeout=2.0):
 
 
 async def run_for(venue, seconds):
-    """Todo lo que emite el stream durante `seconds`."""
+    """All the stream emits during `seconds`."""
     events = []
     stream = venue.market_stream()
     try:
@@ -138,7 +138,7 @@ class TestLatencia:
 
     def test_ignora_muestras_no_validas(self):
         m = LatencyMeter()
-        m.add(0)  # websockets da 0.0 antes del primer ping
+        m.add(0)  # websockets gives 0.0 before the first ping
         m.add(-1)
         assert m.ms is None
 
@@ -186,7 +186,7 @@ class TestSupervisor:
         assert REST_BOOK not in events[i:]
 
     async def test_datos_reinician_el_contador(self):
-        """fallo, fallo, sesión con datos que cae, fallo: nunca 3 seguidos."""
+        """failure, failure, session with data that drops, failure: never 3 in a row."""
         venue = FakeVenue("fail", "fail", [WS_BOOK, "drop"], "fail", [WS_BOOK])
         events = await run(venue, lambda evs: count(evs, ("ws", "up")) == 2)
         assert venue.rest_calls == 0
@@ -229,7 +229,7 @@ class TestLatenciaEnElStream:
         assert all(e.latency_ms is None for e in events if isinstance(e, ConnState))
 
     async def test_sin_latido_mientras_reconecta(self):
-        """Reconectando no hay latencia que dar: no se repite el estado."""
+        """Reconnecting there is no latency to give: the state does not repeat."""
         venue = FakeVenue([WS_BOOK, "drop"], "hang", latency_every_s=0.02)
         events = await run_for(venue, 0.15)
         assert states(events) == [("ws", "up"), ("ws", "reconnecting")]
@@ -237,7 +237,7 @@ class TestLatenciaEnElStream:
 
 @pytest.mark.spec("RF-01")
 async def test_error_de_programacion_no_se_traga():
-    """Un bug (no un fallo de red) debe llegar al consumidor, no reintentarse."""
+    """A bug (not a network failure) must reach the consumer, not be retried."""
 
     class Buggy(FakeVenue):
         async def _ws_events(self):

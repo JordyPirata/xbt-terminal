@@ -1,6 +1,6 @@
-"""Plan de reequilibrio (T-45, RF-29, CA-14): una transferencia de BTCB2 o de
-BTC que deja los dos venues con el mismo % de BTCB2, con la comisión descontada
-de lo enviado, su coste y si es viable."""
+"""Rebalance plan (T-45, RF-29, CA-14): a BTCB2 or BTC transfer leaving both venues with
+the same BTCB2 %, with the fee deducted from what is sent, its cost and whether it is
+viable."""
 
 from decimal import Decimal
 
@@ -11,7 +11,7 @@ from xbt_terminal.core.rebalance import Holding, break_even, holdings, plan
 
 SAT = D("0.00000001")
 
-# como el 2026-10-22: NonKYC casi todo en BTCB2, Neoxa casi todo en BTC
+# as on 2026-10-22: NonKYC almost all in BTCB2, Neoxa almost all in BTC
 NK = Holding(btc=D("0.001"), btcb2=D("0.3"), btc_free=D("0.001"), btcb2_free=D("0.3"),
              price=D("0.0055"))  # fmt: skip
 NX = Holding(btc=D("0.004"), btcb2=D("0.01"), btc_free=D("0.004"), btcb2_free=D("0.01"),
@@ -19,7 +19,7 @@ NX = Holding(btc=D("0.004"), btcb2=D("0.01"), btc_free=D("0.004"), btcb2_free=D(
 
 
 def fee(venue, asset, amount, minimum=None, active=True, on_top=None):
-    """Como los venues: Neoxa cobra la comisión aparte; NonKYC, descontada (D-53)."""
+    """Like the venues: Neoxa charges the fee on top; NonKYC, deducted (D-53)."""
     ticker = {"BTC": "BTC-MAIN", "BTCB2": "BTCB2"}[asset] if venue == "nk" else asset.lower()
     on_top = venue == "nx" if on_top is None else on_top
     return WithdrawalFee(
@@ -36,7 +36,7 @@ FEES = {
 
 
 def ratio(btc: Decimal, btcb2: Decimal, price: Decimal) -> Decimal:
-    """Valor en BTCB2 sobre BTC: igual en los dos venues ⇔ mismo %."""
+    """BTCB2 value over BTC: equal on both venues ⇔ same %."""
     return btcb2 * price / btc
 
 
@@ -49,11 +49,11 @@ class TestCantidad:
     def test_btcb2_del_venue_con_mas_porcentaje_iguala_al_satoshi(self):
         t = by_asset(plan({"nk": NK, "nx": NX}, FEES), "BTCB2")
         assert (t.source, t.dest) == ("nk", "nx")
-        # NonKYC: comisión descontada (supuesto), sale lo pedido
+        # NonKYC: fee deducted (assumption), the amount asked leaves
         assert t.fee == D("0.0027") and t.received == t.amount - t.fee and t.debited == t.amount
         assert t.amount == t.amount.quantize(SAT)
 
-        def gap(x):  # nk menos nx tras enviar x: cambia de signo en la cantidad justa
+        def gap(x):  # nk minus nx after sending x: changes sign at the right quantity
             a = ratio(NK.btc, NK.btcb2 - x, NK.price)
             b = ratio(NX.btc, NX.btcb2 + x - t.fee, NX.price)
             return a - b
@@ -64,7 +64,7 @@ class TestCantidad:
     def test_btc_del_venue_con_menos_porcentaje_iguala_al_satoshi(self):
         t = by_asset(plan({"nk": NK, "nx": NX}, FEES), "BTC")
         assert (t.source, t.dest) == ("nx", "nk")
-        # Neoxa: la comisión va aparte, llega lo pedido
+        # Neoxa: the fee is on top, the amount asked arrives
         assert t.received == t.amount and t.debited == t.amount + D("0.0001")
 
         def gap(y):
@@ -73,7 +73,7 @@ class TestCantidad:
             return a - b
 
         assert gap(t.amount) >= 0 > gap(t.amount + SAT)
-        assert abs(t.after["nk"] - t.after["nx"]) < D("0.01")  # 1 sat de BTC pesa más
+        assert abs(t.after["nk"] - t.after["nx"]) < D("0.01")  # 1 sat of BTC weighs more
 
     def test_el_origen_es_el_de_mas_porcentaje_aunque_cambie_el_orden(self):
         p = plan({"nk": NX, "nx": NK}, {(("nx" if v == "nk" else "nk"), a): f
@@ -104,7 +104,7 @@ class TestCoste:
 
     def test_recomienda_la_viable_mas_barata(self):
         p = plan({"nk": NK, "nx": NX}, FEES)
-        assert p.best is by_asset(p, "BTCB2")  # 1 485 sats frente a 10 000
+        assert p.best is by_asset(p, "BTCB2")  # 1 485 sats against 10 000
 
     def test_si_la_barata_no_es_viable_recomienda_la_otra(self):
         fees = {**FEES, ("nk", "BTCB2"): fee("nk", "BTCB2", "0.0027", active=False)}
@@ -112,7 +112,7 @@ class TestCoste:
         assert p.best is by_asset(p, "BTC")
 
     def test_break_even(self):
-        # 0.05 BTCB2 a 0.0055 con un 0.5 %: 0.000001375 BTC por doble
+        # 0.05 BTCB2 at 0.0055 with 0.5 %: 0.000001375 BTC per double
         assert break_even(D("0.00001485"), D("0.05"), D("0.0055"), D("0.5")) == 11
         assert break_even(D("0.000001375"), D("0.05"), D("0.0055"), D("0.5")) == 1
         assert break_even(D("0.0001"), D("0.05"), D("0.0055"), D("0")) is None
@@ -121,7 +121,7 @@ class TestCoste:
 @pytest.mark.spec("RF-29", "CA-14")
 class TestNoViable:
     def test_pasa_del_disponible(self):
-        busy = Holding(NK.btc, NK.btcb2, NK.btc_free, D("0.05"), NK.price)  # resto en órdenes
+        busy = Holding(NK.btc, NK.btcb2, NK.btc_free, D("0.05"), NK.price)  # the rest in orders
         t = by_asset(plan({"nk": busy, "nx": NX}, FEES), "BTCB2")
         assert not t.viable and "disponible" in t.problem and "0.05" in t.problem
 
@@ -131,7 +131,7 @@ class TestNoViable:
         assert not t.viable and "mínimo" in t.problem and "0.01" in t.problem
 
     def test_la_comision_se_come_el_envio(self):
-        # casi iguales: harían falta ~0.00185 BTCB2 y la comisión es 0.0027
+        # nearly equal: ~0.00185 BTCB2 would be needed and the fee is 0.0027
         close = Holding(NK.btc, D("0.299"), NK.btc_free, D("0.299"), NK.price)
         t = by_asset(plan({"nk": NK, "nx": close}, FEES), "BTCB2")
         assert not t.viable and "comisión" in t.problem
@@ -177,8 +177,8 @@ class TestHoldings:
 
 @pytest.mark.spec("RF-29", "CA-14")
 class TestComisionAparte:
-    """Como el 2026-10-23: Neoxa con el BTCB2 y NonKYC sin él. La web de Neoxa
-    pide 0.2, llegan 0.2 y descuenta 0.2001 (D-53)."""
+    """As on 2026-10-23: Neoxa with the BTCB2 and NonKYC without. Neoxa's web asks 0.2, 0.2
+    arrives and 0.2001 is deducted (D-53)."""
 
     NX_FULL = Holding(D("0.00345193"), D("0.33280677"), D("0.00345193"), D("0.33280677"),
                       D("0.004061315"))  # fmt: skip
@@ -188,12 +188,12 @@ class TestComisionAparte:
     def test_btcb2_de_neoxa_llega_lo_pedido_y_sale_con_la_comision(self):
         t = by_asset(plan({"nk": self.NK_EMPTY, "nx": self.NX_FULL}, FEES), "BTCB2")
         assert (t.source, t.dest) == ("nx", "nk")
-        assert t.amount == D("0.14002494")  # el recálculo hecho a mano ese día
+        assert t.amount == D("0.14002494")  # the recomputation done by hand that day
         assert t.received == t.amount and t.debited == t.amount + D("0.0001")
         assert round(t.after["nx"], 2) == round(t.after["nk"], 2) == D("18.48")
 
     def test_el_disponible_cuenta_la_comision(self):
-        # con lo justo para lo pedido pero no para la comisión, no es viable
+        # with just enough for the amount but not the fee, it is not viable
         need = by_asset(plan({"nk": self.NK_EMPTY, "nx": self.NX_FULL}, FEES), "BTCB2").amount
         tight = Holding(self.NX_FULL.btc, self.NX_FULL.btcb2, self.NX_FULL.btc_free, need,
                         self.NX_FULL.price)  # fmt: skip
@@ -204,5 +204,5 @@ class TestComisionAparte:
         fees = {**FEES, ("nk", "BTCB2"): fee("nk", "BTCB2", "0.0027", on_top=True)}
         close = Holding(NK.btc, D("0.299"), NK.btc_free, D("0.299"), NK.price)
         t = by_asset(plan({"nk": NK, "nx": close}, fees), "BTCB2")
-        # la comisión sola ya pasa del medio: ninguna cantidad iguala
+        # the fee alone is past the middle: no amount equalizes
         assert t.amount == 0 and not t.viable and "mayor que lo que hay que mover" in t.problem

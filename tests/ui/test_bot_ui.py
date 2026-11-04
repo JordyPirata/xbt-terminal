@@ -1,6 +1,5 @@
-"""El bot en la pantalla (T-37, RF-18, RF-21, RF-23): comando, confirmación al
-armar, tecla de parada, barra y avisos. Servicios de verdad (BotRig), app sin
-lanzar los suyos."""
+"""The bot on screen (T-37, RF-18, RF-21, RF-23): command, confirmation on arming, stop
+key, bar and notices. Real services (BotRig), app without launching its own."""
 
 import pytest
 
@@ -154,8 +153,8 @@ async def test_la_ayuda_explica_el_bot(tmp_path):
 
 @pytest.mark.spec("RF-18")
 async def test_parar_justo_despues_de_armar_desde_la_linea(tmp_path):
-    """Tras `bot on` + y, el foco vuelve a la línea de comandos, donde la `p` se
-    escribiría como texto: ctrl+b para el bot aunque la línea tenga el foco."""
+    """After `bot on` + y, focus returns to the command line, where `p` would be typed as
+    text: ctrl+b stops the bot even with the line focused."""
     async with BotRig(tmp_path) as rig:
         app = app_for(rig)
         async with app.run_test(size=(160, 45)) as pilot:

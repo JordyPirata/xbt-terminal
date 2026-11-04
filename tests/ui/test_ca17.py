@@ -1,5 +1,5 @@
-"""CA-17 (T-69, RF-32, D-69): pestaña "Valor de la cuenta" en la ventana de
-resultados, con la serie del rango, los huecos sin interpolar y el resumen."""
+"""CA-17 (T-69, RF-32, D-69): "Valor de la cuenta" tab in the results window, with the
+range's series, gaps not interpolated and the summary."""
 
 import pytest
 from textual.widgets import DataTable, TabbedContent
@@ -34,14 +34,14 @@ class TestPestanaValor:
             assert "Valor de la cuenta" in str(s.query_one("#results-title").render())
             await pilot.press("tab")
             await until(pilot, lambda: screen(app).tab == "doubles")
-            assert s.row_count() == 1  # la de dobles, intacta
+            assert s.row_count() == 1  # the doubles one, untouched
 
     async def test_serie_del_rango_con_hueco_y_resumen(self, tmp_path):
         rows = [
-            value_row(T0 - 2 * DAY, "9", nk="9"),  # fuera del día
+            value_row(T0 - 2 * DAY, "9", nk="9"),  # outside the day
             value_row(T0, "1.0", nk="0.6", nx="0.4"),
             value_row(T0 + EVERY, "1.2", nk="0.7", nx="0.5"),
-            value_row(T0 + 5 * EVERY, "0.9", nk="0.5", nx="0.4"),  # tras un hueco
+            value_row(T0 + 5 * EVERY, "0.9", nk="0.5", nx="0.4"),  # after a gap
             value_row(T0 + 6 * EVERY, "1.1", nk="0.6", nx="0.5"),
         ]
         write(tmp_path, "20261020", rows[:1])
@@ -62,7 +62,7 @@ class TestPestanaValor:
             assert "saltos" in text and "no es PnL" in text
             await pilot.press("3")
             await until(pilot, lambda: len(screen(app).report.values) == 5)
-            assert screen(app).tab == "value"  # el rango no cambia de pestaña
+            assert screen(app).tab == "value"  # the range does not change tab
 
     async def test_sin_muestras_lo_dice(self, tmp_path):
         write(tmp_path, "20261022", plain_double("d-1", T0))
@@ -94,12 +94,12 @@ class TestRefresco:
             await pilot.press("r")
             await until(pilot, lambda: isinstance(app.screen, ResultsScreen))
             table = screen(app).query_one(DataTable)
-            await pilot.press("down")  # d-1: la segunda, la más reciente va arriba
+            await pilot.press("down")  # d-1: the second, the most recent is on top
             await until(pilot, lambda: table.cursor_row == 1)
-            # sin cambios: no se redibuja
+            # no changes: no redraw
             await pilot.pause(0.2)
             assert table.cursor_row == 1
-            # una doble nueva arriba: la selección sigue en d-1
+            # a new double on top: the selection stays on d-1
             write(tmp_path, "20261022", plain_double("d-3", T0 + 120_000))
             await until(pilot, lambda: table.row_count == 3)
             row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
@@ -111,8 +111,8 @@ class TestTramo:
     async def test_z_ajusta_al_ultimo_tramo_y_vuelve(self, tmp_path):
         rows = [
             value_row(T0, "1.0", nk="0.6", nx="0.4"),
-            value_row(T0 + EVERY, "0.5", nk="0.1", nx="0.4"),  # transferencia en tránsito
-            value_row(T0 + 2 * EVERY, "1.0", nk="0.1", nx="0.9"),  # llega
+            value_row(T0 + EVERY, "0.5", nk="0.1", nx="0.4"),  # transfer in transit
+            value_row(T0 + 2 * EVERY, "1.0", nk="0.1", nx="0.9"),  # arrives
             value_row(T0 + 3 * EVERY, "1.00001", nk="0.1", nx="0.90001"),
         ]
         write(tmp_path, "20261022", rows)

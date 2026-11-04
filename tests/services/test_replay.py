@@ -1,5 +1,5 @@
-"""Reproducción sobre venues simulados e informe (T-87, RF-34, RF-35, CA-19, CA-20):
-el motor de verdad corre sobre una grabación, en tiempo virtual."""
+"""Replay on simulated venues and report (T-87, RF-34, RF-35, CA-19, CA-20): the real
+engine runs on a recording, in virtual time."""
 
 import asyncio
 import json
@@ -65,9 +65,9 @@ QUIET = {"nk": ("0.0100", "0.0102"), "nx": ("0.0099", "0.0100")}
 
 
 def scenario(path):
-    """Cuatro cruces comprando en Neoxa y vendiendo en NonKYC: uno bueno, uno que
-    desaparece antes de que llegue la orden (`bot_miss`), uno en que cae la otra
-    pierna (colgada) y otro bueno."""
+    """Four crossings buying on Neoxa and selling on NonKYC: a good one, one vanishing
+    before the order arrives (`bot_miss`), one where the other leg falls (hanging) and
+    another good one."""
     rows = ['{"format":1}\n']
     for vid in ("nk", "nx"):
         rows.append(line(T0, vid, "market", spec(vid)))
@@ -79,16 +79,16 @@ def scenario(path):
         rows.append(line(t, vid, "book", snap(vid, bid, ask, t, qty)))
 
     cross, calm = ("0.0095", "0.0096"), QUIET["nx"]
-    at(10, "nx", *cross)  # bueno
+    at(10, "nx", *cross)  # good
     at(11, "nx", *calm)
-    at(12, "nk", *QUIET["nk"], qty="2")  # el bid que se llevó el bot se repone
-    at(30, "nx", *cross)  # se va antes de llegar la orden
+    at(12, "nk", *QUIET["nk"], qty="2")  # the bid the bot took is replenished
+    at(30, "nx", *cross)  # gone before the order arrives
     at(30.1, "nx", *calm)
-    at(40, "nx", *cross)  # llena Neoxa; NonKYC cae antes de llegar la segunda pierna
+    at(40, "nx", *cross)  # fills Neoxa; NonKYC falls before the second leg arrives
     at(40.4, "nk", "0.0090", "0.0102")
     at(41, "nx", *calm)
     at(50, "nk", *QUIET["nk"])
-    at(60, "nx", *cross)  # bueno
+    at(60, "nx", *cross)  # good
     at(61, "nx", *calm)
     rows.append(line(T0 + 90_000, "nx", "trade", Trade("nx", D("0.0100"), D("1"), "buy", T0)))
     path.write_text("".join(rows))
@@ -144,7 +144,7 @@ class TestReproducir:
             ]
             assert got[vid][:-1] == want
             assert got[vid][-1][1].status == "down"
-            assert got[vid][-1][0] == T0 + 90_000  # los dos, al acabar la grabación
+            assert got[vid][-1][0] == T0 + 90_000  # both, when the recording ends
 
     def test_con_otro_origen_los_tiempos_se_desplazan_igual(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
@@ -179,7 +179,7 @@ class TestReproducir:
 
 
 async def sim_on(tmp_path, books, *, competitor="0", latency=0):
-    """Un SimVenue con el book `books` ya cargado."""
+    """A SimVenue with the `books` book already loaded."""
     recording = tmp_path / "r.jsonl"
     rows = ['{"format":1}\n']
     for vid in ("nk", "nx"):
@@ -241,7 +241,7 @@ class TestSimVenue:
 
         first, second = await fills(), await fills()
         assert first == second
-        assert len(set(first)) == 2  # con la mitad de los niveles, unas llenan y otras no
+        assert len(set(first)) == 2  # with half the levels, some fill and others do not
 
     async def test_lo_casado_no_se_vuelve_a_casar(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP)
@@ -309,7 +309,7 @@ class TestInforme:
         assert first.capture_pct == D(50)
         assert first.miss_per_100 == first.hanging_per_100 == D(25)
         assert first.minutes == D("1.5")
-        # 2 dobles de 1 XBT: compra a 0.0096 y venta a 0.0100, con 0.2 % en cada una
+        # 2 doubles of 1 XBT: buy at 0.0096 and sell at 0.0100, 0.2 % on each
         each = D("0.0100") - D("0.0096") - (D("0.0100") + D("0.0096")) * D("0.002")
         assert first.net == 2 * each
         assert sorted(p.name for p in tmp_path.iterdir()) == before
@@ -324,7 +324,7 @@ class TestInforme:
         assert report.misses == report.fires == 4
 
     def test_un_cruce_largo_no_da_dinero_de_mas(self, tmp_path):
-        """El nivel casado queda gastado: disparar otra vez al mismo cruce falla."""
+        """The matched level stays spent: firing again at the same cross fails."""
         recording = tmp_path / "r.jsonl"
         text = scenario(recording).read_text().replace(f'"t":{T0 + 11_000}', f'"t":{T0 + 16_000}')
         recording.write_text(text)
@@ -339,8 +339,8 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "replay"
 
 @pytest.mark.spec("RF-35", "CA-20", "RF-34")
 def test_informe_sobre_la_muestra_real_fija(tmp_path):
-    """7 min de books reales con la config de la demo: dos cruces finos. El primero
-    llena; el segundo cuelga, porque el ask de NonKYC sigue gastado del primero."""
+    """7 min of real books with the demo config: two thin crossings. The first fills; the
+    second hangs, because NonKYC's ask is still spent from the first."""
     settings = load_settings(FIXTURES / "config.toml", tmp_path / "no.env", False, replay=True)
     report = replay_report(settings, FIXTURES / "muestra.jsonl")
     assert (report.crossings, report.fires, report.filled) == (2, 2, 1)

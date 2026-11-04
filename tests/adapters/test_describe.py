@@ -1,6 +1,6 @@
-"""Texto de un error (T-43, D-51): nunca vacío. `ConnectTimeout` y compañía de
-httpx llegan con `str(exc) == ""` y dejaban errores en blanco en la cuenta, el
-journal y el motivo de paro del bot."""
+"""Text of an error (T-43, D-51): never empty. httpx's `ConnectTimeout` and friends come
+with `str(exc) == ""` and left blank errors in the account, the journal and the
+bot's stop reason."""
 
 import httpx
 import pytest

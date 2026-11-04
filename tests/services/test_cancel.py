@@ -1,5 +1,5 @@
-"""Cancelar desde OrderService (T-19, RF-08, CA-05): una orden, las de un venue
-o todas, con plan para confirmar y `cancel_sent`/`cancel_ack` en el journal."""
+"""Cancelling from OrderService (T-19, RF-08, CA-05): one order, a venue's or all, with
+a plan to confirm and `cancel_sent`/`cancel_ack` in the journal."""
 
 from dataclasses import replace
 
@@ -65,7 +65,7 @@ class TestPlan:
         assert "3 órdenes" in plan.summary
 
     async def test_cancelar_todo_avisa_de_las_ordenes_ajenas(self, tmp_path):
-        """cancel_all del venue cancela todas las del par, no solo las de la terminal."""
+        """The venue's cancel_all cancels all of the pair, not only the terminal's."""
         s, _ = await with_orders(tmp_path)
         plan = await s.orders.plan_cancel(CancelAll())
         assert "también las que no se enviaron desde la terminal" in plan.summary
@@ -95,7 +95,7 @@ class TestEjecutar:
         assert sent["client_id"] == "t-a" and ack["data"]["remaining"] == 0
 
     async def test_cancelar_todo_deja_cero_abiertas(self, tmp_path):
-        """CA-05 con dos venues simulados."""
+        """CA-05 with two simulated venues."""
         s, _ = await with_orders(tmp_path)
         result = await s.orders.execute_cancel(await s.orders.plan_cancel(CancelAll()))
         assert result.ok and result.remaining == {"nk": 0, "nx": 0}
@@ -120,7 +120,7 @@ class TestEjecutar:
         s, _ = await with_orders(tmp_path)
 
         async def noop():
-            return None  # el venue responde ok pero no cancela
+            return None  # the venue answers ok but does not cancel
 
         s.venues["nx"].cancel_all = noop
         result = await s.orders.execute_cancel(await s.orders.plan_cancel(CancelAll()))

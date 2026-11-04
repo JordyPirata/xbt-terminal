@@ -1,5 +1,5 @@
-"""Daemon sin pantalla (T-51, RF-30, D-61): corre el motor hasta que le piden
-parar, y al parar desarma el bot y deja los envíos en vuelo en el journal."""
+"""Daemon without a screen (T-51, RF-30, D-61): runs the engine until asked to stop,
+and on stopping disarms the bot and leaves sends in flight in the journal."""
 
 import asyncio
 
@@ -15,7 +15,7 @@ from .test_uncertain import Rig, buy
 
 
 class FakeBot:
-    """Lo que el daemon usa del bot: correr y desarmarse."""
+    """What the daemon uses of the bot: running and disarming."""
 
     def __init__(self):
         self.ran = asyncio.Event()
@@ -61,7 +61,7 @@ class TestCorrer:
         daemon = asyncio.create_task(run_daemon(engine, stop))
         await asyncio.sleep(0)
         engine.check_skew("nk")
-        engine._say("todo bien")  # los que no son error solo van al log
+        engine._say("todo bien")  # non-errors only go to the log
         stop.set()
         await daemon
         (line,) = [ln for ln in s.lines() if ln["event"] == "notice"]
@@ -86,7 +86,7 @@ class TestParar:
         await until(lambda: s.orders.in_flight)
         stop.set()
         await asyncio.sleep(0.01)
-        assert not daemon.done()  # espera al envío
+        assert not daemon.done()  # waits for the send
         gate.set()
         await asyncio.wait_for(daemon, 1)
         await sending
@@ -131,6 +131,6 @@ async def test_abre_el_socket_y_lo_cierra_al_parar(tmp_path):
     assert b'"hello"' in await asyncio.wait_for(reader.readline(), 1)
     stop.set()
     await asyncio.wait_for(daemon, 1)
-    assert await asyncio.wait_for(reader.read(), 1) is not None  # cerrado por el daemon
+    assert await asyncio.wait_for(reader.read(), 1) is not None  # closed by the daemon
     assert not path.exists()
     writer.close()

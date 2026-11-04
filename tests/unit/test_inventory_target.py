@@ -1,5 +1,5 @@
-"""Ratio de inventario por venue (T-41, RF-26, CA-12, D-46): % del valor en
-BTCB2, banda objetivo y veto del bot a las rutas que empeoran un venue."""
+"""Inventory ratio per venue (T-41, RF-26, CA-12, D-46): % of the value in BTCB2, target
+band and the bot's veto of routes worsening a venue."""
 
 from dataclasses import replace
 
@@ -26,15 +26,15 @@ class TestObjetivo:
         assert (t.low, t.high) == (D("0"), D("15"))
 
     def test_empeora_solo_si_queda_fuera_y_mas_lejos(self):
-        assert TARGET.worsens(D("25"), D("40"))  # sale de la banda
-        assert not TARGET.worsens(D("25"), D("34"))  # se aleja, pero sigue dentro
-        assert not TARGET.worsens(D("5"), D("10"))  # fuera, pero se acerca
-        assert TARGET.worsens(D("10"), D("5"))  # fuera y aún más lejos
-        assert TARGET.worsens(D("20"), D("50"))  # cruza al otro lado más lejos
-        assert not TARGET.worsens(D("50"), D("1"))  # cruza al otro lado, más cerca
+        assert TARGET.worsens(D("25"), D("40"))  # leaves the band
+        assert not TARGET.worsens(D("25"), D("34"))  # moves away, but stays inside
+        assert not TARGET.worsens(D("5"), D("10"))  # outside, but gets closer
+        assert TARGET.worsens(D("10"), D("5"))  # outside and even further
+        assert TARGET.worsens(D("20"), D("50"))  # crosses to the other side, further
+        assert not TARGET.worsens(D("50"), D("1"))  # crosses to the other side, closer
 
     def test_porcentaje_de_btcb2(self):
-        # 1 BTC + 100 BTCB2 a 0.01 → 1 de 2 BTC en BTCB2
+        # 1 BTC + 100 BTCB2 at 0.01 → 1 of 2 BTC in BTCB2
         assert base_pct(D("1"), D("100"), D("0.01")) == D("50")
         assert base_pct(D("0"), D("0"), D("0.01")) is None
 
@@ -51,7 +51,7 @@ class TestObjetivo:
 
 
 def totals(views, nk=("1", "50"), nx=("1", "1000"), mids=True):
-    """BTC y BTCB2 totales y mid de cada venue (por defecto NonKYC al ~26 %)."""
+    """Total BTC and BTCB2 and mid of each venue (NonKYC at ~26 % by default)."""
     out = dict(views)
     for vid, (q, b) in (("nk", nk), ("nx", nx)):
         v = out[vid]
@@ -62,32 +62,32 @@ def totals(views, nk=("1", "50"), nx=("1", "1000"), mids=True):
 
 @pytest.mark.spec("RF-26", "CA-12")
 class TestBot:
-    """`crossed()`: comprar 50 BTCB2 en NonKYC a 0.007014 y vender en Neoxa."""
+    """`crossed()`: buy 50 BTCB2 on NonKYC at 0.007014 and sell on Neoxa."""
 
     def test_sin_objetivo_dispara(self):
         assert isinstance(decide(totals(crossed()), ARMED, LIMITS, NOW), Fire)
 
     def test_ruta_que_saca_un_venue_de_la_banda_no_dispara(self):
-        # NonKYC: 50 de 1.35 BTC en BTCB2 (~26 %); tras comprar 50, ~52 %
+        # NonKYC: 50 of 1.35 BTC in BTCB2 (~26 %); after buying 50, ~52 %
         result = decide(totals(crossed()), ARMED, LIMITS, NOW, target=TARGET)
         assert isinstance(result, Skip)
         assert result.reason == "inventory_band"
         assert "nk" in result.detail
 
     def test_ruta_que_acerca_un_venue_que_ya_estaba_fuera_dispara(self):
-        # NonKYC al ~1 % (como el 2026-10-22): comprar lo acerca al 25 %, aunque
-        # siga fuera; Neoxa al ~88 %: vender también lo acerca
+        # NonKYC at ~1 % (as on 2026-10-22): buying brings it closer to 25 %, though still
+        # outside; Neoxa at ~88 %: selling brings it closer too
         views = totals(crossed(), nk=("30", "50"))
         assert isinstance(decide(views, ARMED, LIMITS, NOW, target=TARGET), Fire)
 
     def test_dentro_de_la_banda_dispara(self):
-        # NonKYC 6 BTC + 200 BTCB2 (~19 %) → tras comprar 50, ~23 %
+        # NonKYC 6 BTC + 200 BTCB2 (~19 %) → after buying 50, ~23 %
         views = totals(crossed(), nk=("6", "200"), nx=("4", "200"))
         fire = decide(views, ARMED, LIMITS, NOW, target=TARGET)
         assert isinstance(fire, Fire)
 
     def test_venta_que_vacia_el_otro_venue_tampoco(self):
-        # Neoxa al 25 %; vender 50 de sus 60 BTCB2 lo deja muy por debajo
+        # Neoxa at 25 %; selling 50 of its 60 BTCB2 leaves it far below
         views = totals(crossed(), nk=("6", "200"), nx=("1.3", "60"))
         result = decide(views, ARMED, LIMITS, NOW, target=TARGET)
         assert isinstance(result, Skip) and "nx" in result.detail
@@ -112,8 +112,8 @@ class TestVeto:
         assert veto is not None and "nk" in veto
 
     def test_la_fee_cuenta_en_el_btc(self):
-        # NonKYC: comprar 50 a 0.007 con fee 0.2 % cuesta 0.3507 BTC, no 0.35;
-        # con 0.3507 BTC justos se queda sin BTC (100 % en BTCB2), fuera y peor
+        # NonKYC: buying 50 at 0.007 with 0.2 % fee costs 0.3507 BTC, not 0.35; with exactly
+        # 0.3507 BTC it runs out of BTC (100 % in BTCB2), outside and worse
         views = totals(crossed(), nk=("0.3507", "50"))
         veto = inventory_veto(views["nk"], views["nx"], self.FIRE, TARGET)
         assert veto is not None and "100" in veto

@@ -1,5 +1,5 @@
-"""La app con sus parámetros agrupados (T-84, D-77): la config que manda el
-daemon en `hello` va entera en `view` y sus caras en `services`."""
+"""The app with its parameters grouped (T-84, D-77): the config the daemon sends in
+`hello` goes whole in `view` and its faces in `services`."""
 
 import pytest
 

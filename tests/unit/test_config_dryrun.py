@@ -1,4 +1,4 @@
-"""`[dryrun.balances]` ya no existe: el dry-run usa los saldos reales (D-16)."""
+"""`[dryrun.balances]` is gone: dry-run uses the real balances (D-16)."""
 
 import pytest
 
@@ -39,7 +39,7 @@ class TestReplay:
 
     def test_ni_siquiera_lee_el_env(self, tmp_path):
         env = tmp_path / ".env"
-        env.write_text("NONKYC_API_KEY=solo-una\n")  # leerlo sería un error
+        env.write_text("NONKYC_API_KEY=solo-una\n")  # reading it would be an error
         settings = load_settings(self.write(tmp_path), env, False, replay=True)
         assert settings.credentials == {}
 

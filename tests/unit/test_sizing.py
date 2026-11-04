@@ -1,5 +1,5 @@
-"""Cantidad a partir de un porcentaje del saldo del venue (RF-17, D-21).
-Mercado de prueba de NonKYC: lote 0.0001, fee taker 0.2 %."""
+"""Quantity from a percentage of the venue balance (RF-17, D-21).
+NonKYC test market: lot 0.0001, taker fee 0.2 %."""
 
 import pytest
 
@@ -26,7 +26,7 @@ class TestCompra:
         s = size_from_percent("buy", D("100"), PRICE, BAL, spec("nk"))
         assert s.qty == D("0.6882")
         assert s.qty * PRICE * D("1.002") <= D("0.005")
-        assert (s.qty + D("0.0001")) * PRICE * D("1.002") > D("0.005")  # el máximo
+        assert (s.qty + D("0.0001")) * PRICE * D("1.002") > D("0.005")  # the maximum
 
     def test_lote_fino_de_neoxa(self):
         s = size_from_percent("buy", D("100"), PRICE, BAL, spec("nx"))
@@ -60,6 +60,6 @@ class TestSinSaldo:
         assert size_from_percent("sell", D("100"), PRICE, bal, spec("nk")).qty == 0
 
     def test_cero_conserva_el_exponente_del_lote(self):
-        """Sin -0 ni 0E-8 raros: la cantidad es un múltiplo del lote."""
+        """No odd -0 or 0E-8: the quantity is a multiple of the lot."""
         s = size_from_percent("sell", D("1"), PRICE, {}, spec("nk"))
         assert s.qty % spec("nk").lot_size == 0

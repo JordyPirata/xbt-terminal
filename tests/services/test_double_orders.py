@@ -1,4 +1,4 @@
-"""Orden doble en OrderService (T-18, design.md §6.4) con dos DryRunVenue.
+"""Double order in OrderService (T-18, design.md §6.4) with two DryRunVenues.
 Books: NonKYC 0.00720000 / 0.00730000, Neoxa 0.00722000 / 0.00732000."""
 
 import json
@@ -67,7 +67,7 @@ class Setup:
         return [(ln["event"], ln["venue"]) for ln in self.lines()]
 
     async def feed(self, venue):
-        """Pasa a OrderService lo que el venue simulado ha publicado (como AccountService)."""
+        """Pass OrderService what the simulated venue published (like AccountService)."""
         for order in await self.venues[venue].open_orders():
             self.orders.on_private_event(venue, order)
 
@@ -94,7 +94,7 @@ class TestPreparar:
         assert s.lines() == []
 
     async def test_una_pierna_rechazada_no_envia_ninguna(self, tmp_path):
-        s = Setup(tmp_path, nx_btcb2="0")  # Neoxa sin BTCB2 para vender
+        s = Setup(tmp_path, nx_btcb2="0")  # Neoxa without BTCB2 to sell
         r = await s.orders.prepare_double(dbl())
         assert isinstance(r, DoubleRejected)
         assert "no se envía ninguna pierna" in r.message and "venta en Neoxa" in r.message
@@ -129,7 +129,7 @@ class TestEnviar:
     async def test_al_confirmar_se_revalida_y_si_falla_no_sale_ninguna(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare_double(dbl())
-        s.book("nx", "0.00800000", "0.00810000")  # el mid de Neoxa se va un 10 %
+        s.book("nx", "0.00800000", "0.00810000")  # Neoxa's mid moves 10 %
         r = await s.orders.confirm_double(p)
         assert isinstance(r, DoubleRejected) and "mid_deviation" in r.codes
         assert s.events() == [("reject_local", "nx")]
@@ -168,7 +168,7 @@ class TestPiernaColgada:
         order = await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
         s.orders.on_private_event("nk", order)
         s.now += LIMITS.hanging_leg_after_s * 1000
-        assert s.orders.check_doubles() == []  # el límite exacto aún no
+        assert s.orders.check_doubles() == []  # not yet at the exact limit
         s.now += 1
         assert s.orders.check_doubles() == ["d-000001"]
         (line,) = [ln for ln in s.lines() if ln["event"] == "hanging_leg"]

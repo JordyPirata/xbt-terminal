@@ -1,6 +1,6 @@
-"""Orden doble desde la terminal (T-18): `dbl`, una confirmación con el spread,
-panel de piernas y alerta de pierna colgada. Dos DryRunVenue y AccountService,
-como en dry-run con keys de los dos venues."""
+"""Double order from the terminal (T-18): `dbl`, one confirmation with the spread, legs
+panel and hanging leg alert. Two DryRunVenues and AccountService, as in dry-run with
+keys of both venues."""
 
 import asyncio
 import json
@@ -126,7 +126,7 @@ class TestOrdenDoble:
             await ready(rig, pilot)
             cmd = rig.app.query_one(CommandLine)
             cmd.focus()
-            cmd.value = "dbl 0.6 nk 0.00725000 nx 0.00726000"  # > 25 % del inventario
+            cmd.value = "dbl 0.6 nk 0.00725000 nx 0.00726000"  # > 25 % of the inventory
             await pilot.press("enter")
             await until(pilot, lambda: "no se envía ninguna pierna" in rig.app.last_message)
             assert not isinstance(rig.app.screen, ConfirmScreen)
@@ -140,7 +140,7 @@ class TestPanelDePiernas:
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
             assert not rig.app.query_one(LegsPanel).display
-            assert rig.app.query_one(BalancesPanel).region.width == 160  # todo el ancho
+            assert rig.app.query_one(BalancesPanel).region.width == 160  # full width
 
     async def test_muestra_cada_pierna_y_sigue_cabiendo(self, tmp_path):
         rig = Rig(tmp_path)
@@ -154,11 +154,11 @@ class TestPanelDePiernas:
             assert buy.split()[:2] == ["COMPRA", "NonKYC"] and buy.endswith("abierta 0.0000")
             assert sell.split()[:2] == ["VENTA", "Neoxa"] and sell.endswith("abierta 0.00000000")
             assert "sin cobertura automática" in status
-            assert "dry-" not in panel.text  # el id de orden está en `o` (D-67)
+            assert "dry-" not in panel.text  # the order id is under `o` (D-67)
             assert all(len(ln) <= 62 for ln in panel.text.splitlines())
             region = panel.region
-            assert region.y + region.height <= 45 - 3  # encima de la línea de comandos
-            # al mismo nivel que los balances, a su derecha (D-67)
+            assert region.y + region.height <= 45 - 3  # above the command line
+            # level with the balances, on their right (D-67)
             balances = rig.app.query_one(BalancesPanel).region
             assert (region.y, region.height) == (balances.y, balances.height)
             assert balances.right == region.x and region.right == 160 and region.width == 64

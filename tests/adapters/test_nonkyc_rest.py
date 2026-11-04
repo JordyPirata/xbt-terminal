@@ -1,6 +1,6 @@
-"""REST público de NonKYC contra respuestas reales grabadas el 2026-10-20
-(tests/fixtures/nonkyc/). Precios y cantidades vienen como strings; `minQuote` y
-las velas, como números JSON: todo debe llegar como Decimal exacto."""
+"""NonKYC public REST against real responses recorded on 2026-10-20
+(tests/fixtures/nonkyc/). Prices and quantities come as strings; `minQuote` and
+candles as JSON numbers: everything must arrive as exact Decimal."""
 
 from pathlib import Path
 
@@ -75,9 +75,9 @@ class TestMarket:
         m = await venue.market()
         assert (m.venue, m.symbol, m.base, m.quote) == ("nk", "BTCB2/BTC", "BTCB2", "BTC")
         assert m.tick_size == D("0.00000001") and m.lot_size == D("0.0001")
-        assert m.min_qty == D("0.0001")  # minimumQuantity 0 → el lote
+        assert m.min_qty == D("0.0001")  # minimumQuantity 0 → the lot
         assert m.min_notional == D("0.000012609180967214268")
-        assert (m.maker_fee, m.taker_fee) == (D("0.002"), D("0.002"))  # de la config (PA-04)
+        assert (m.maker_fee, m.taker_fee) == (D("0.002"), D("0.002"))  # from the config (PA-04)
 
     async def test_min_quote_inactivo(self, venue, api):
         api.get(f"{REST_URL}/market/getbysymbol/BTCB2_BTC").respond(
@@ -97,7 +97,7 @@ class TestMarket:
                 await make(limiter, http, "BTCB2/XMR").market()
 
     async def test_venue_devuelve_otro_simbolo(self, venue, api):
-        """Defensa en profundidad (RNF-10): nunca operar un par distinto del pedido."""
+        """Defence in depth (RNF-10): never trade a pair other than asked."""
         api.get(f"{REST_URL}/market/getbysymbol/BTCB2_BTC").respond(
             text=fixture("market.json").replace('"symbol":"BTCB2/BTC"', '"symbol":"BTCB2/USDT"')
         )
@@ -118,8 +118,8 @@ class TestBook:
         snap = await venue.book_snapshot(20)
         params = api.calls.last.request.url.params
         assert (params["symbol"], params["limit"]) == ("BTCB2/BTC", "20")
-        assert (snap.venue, snap.ts) == ("nk", 1792508949688)  # hora del venue
-        assert snap.seq is None  # el sequence REST no es el del WS (D-10)
+        assert (snap.venue, snap.ts) == ("nk", 1792508949688)  # venue time
+        assert snap.seq is None  # the REST sequence is not the WS one (D-10)
         assert len(snap.bids) == 20 and len(snap.asks) == 20
         assert snap.bids[0] == Level(D("0.00721141"), D("0.0014"))
         assert snap.asks[0] == Level(D("0.00724756"), D("0.0014"))
@@ -182,7 +182,7 @@ class TestCandles:
         )
 
     async def test_1m_se_construye_con_trades(self, venue, api):
-        """NonKYC no tiene velas de 1m (D-10): salen de los últimos trades."""
+        """NonKYC has no 1m candles (D-10): they come from the latest trades."""
         candles = await venue.candles("1m", 500)
         assert api.calls.last.request.url.path.endswith("/market/trades")
         assert api.calls.last.request.url.params["limit"] == str(MAX_TRADES)
@@ -199,7 +199,7 @@ class TestCandles:
         assert len(candles) == 3
 
     async def test_1m_con_el_tope_de_trades_descarta_la_primera(self, venue, api):
-        """Con 500 trades la vela más vieja puede estar cortada a medias."""
+        """With 500 trades the oldest candle may be cut in half."""
         trades = [
             {
                 "id": f"t{i}",
@@ -207,7 +207,7 @@ class TestCandles:
                 "type": "buy",
                 "baseVolume": "1",
                 "quoteVolume": "0.0072",
-                "timestamp": NOW - i * 30_000,  # dos por minuto
+                "timestamp": NOW - i * 30_000,  # two per minute
             }
             for i in range(MAX_TRADES)
         ]
@@ -216,7 +216,7 @@ class TestCandles:
         oldest_bucket = (NOW - (MAX_TRADES - 1) * 30_000) // 60_000 * 60_000
         assert candles[0].ts_open == oldest_bucket + 60_000
         assert all(c.volume == D("2") for c in candles[:-1])
-        assert candles[-1].volume == D("1")  # la vela en curso solo tiene el trade de NOW
+        assert candles[-1].volume == D("1")  # the current candle only has NOW's trade
 
 
 @pytest.mark.spec("RF-01")

@@ -1,5 +1,5 @@
-"""Direcciones de depósito de los adaptadores (T-42, RF-28, D-50). Respuestas con
-la forma de las reales del 2026-10-22, con direcciones inventadas."""
+"""Deposit addresses of the adapters (T-42, RF-28, D-50). Responses shaped like the real
+ones of 2026-10-22, with made-up addresses."""
 
 import httpx
 import pytest

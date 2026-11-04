@@ -1,5 +1,5 @@
-"""Cliente del socket del daemon (T-53, RF-31, D-61): la cuenta y el bot del
-daemon con la cara que usa la app, y reconexión si el daemon se va."""
+"""Daemon socket client (T-53, RF-31, D-61): the daemon's account and bot with the face
+the app uses, and reconnection if the daemon leaves."""
 
 import asyncio
 
@@ -111,7 +111,7 @@ class TestEstado:
         assert remote.bot.arm() is None
         await until(lambda: daemon.bot.state.status == "armed")
         await until(lambda: remote.bot.state.status == "armed")
-        assert [s.status for s in states] == ["armed"]  # solo al cambiar
+        assert [s.status for s in states] == ["armed"]  # only on change
         remote.bot.disarm()
         await until(lambda: remote.bot.state.status == "off")
         assert daemon.bot.state.status == "off"
@@ -161,7 +161,7 @@ class TestReconectar:
             await until(lambda: remote.connected)
             await d.server.aclose()
             await until(lambda: not remote.connected)
-            remote.bot.arm()  # sin conexión: no peta, avisa
+            remote.bot.arm()  # no connection: does not crash, warns
             await d.server.start()
             await until(lambda: remote.connected and links[-1] is True)
             assert links[:3] == [True, False, True]
@@ -178,7 +178,7 @@ class TestReconectar:
 
 @pytest.mark.spec("RF-31")
 class TestMensajesDelDaemon:
-    """`_handle` reparte cada tipo de mensaje (T-85); sin conexión, solo avisos."""
+    """`_handle` dispatches each message type (T-85); no connection, only notices."""
 
     def heard(self, tmp_path):
         remote = RemoteEngine(tmp_path / "x.sock", has_bot=False)

@@ -1,5 +1,5 @@
-"""Paneles de cuenta (T-19): balances e inventario neto, órdenes abiertas y
-cancelar una, por venue o todas, siempre con confirmación (RF-05, RF-08, CA-05)."""
+"""Account panels (T-19): balances and net inventory, open orders and cancelling one, by
+venue or all, always with confirmation (RF-05, RF-08, CA-05)."""
 
 import pytest
 
@@ -40,15 +40,15 @@ class TestBalances:
             panel = rig.app.query_one(BalancesPanel)
             await until(pilot, lambda: "Neoxa" in panel.text and "valor" in panel.text)
             nk = next(ln for ln in panel.text.splitlines() if "NonKYC" in ln)
-            assert "BTC 0.00500000 · XBT 0.50000000 ·" in nk  # nada en órdenes (D-67)
-            # 0.005 + 0.5 × 0.00725 (mid de NonKYC)
+            assert "BTC 0.00500000 · XBT 0.50000000 ·" in nk  # nothing in orders (D-67)
+            # 0.005 + 0.5 × 0.00725 (NonKYC mid)
             assert "valor 0.00862500 BTC" in nk
             title = panel.border_title or ""
             assert "BTC 0.01000000" in title and "XBT 1.00000000" in title
-            assert "valor 0.01726000 BTC" in title  # + 0.005 + 0.5 × 0.00727 en Neoxa
+            assert "valor 0.01726000 BTC" in title  # + 0.005 + 0.5 × 0.00727 on Neoxa
 
     async def test_saldo_con_mas_decimales_que_el_lote(self, tmp_path):
-        """NonKYC opera BTCB2 con 4 decimales, pero el saldo real puede tener 8."""
+        """NonKYC trades BTCB2 with 4 decimals, but the real balance may have 8."""
         rig = Rig(tmp_path)
         rig.venues["nk"]._fixed["BTCB2"] = Balance("BTCB2", D("0.09040708"))
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -66,7 +66,7 @@ class TestBalances:
             await until(pilot, lambda: "XBT 0.30000000 + 0.20000000" in panel.text, timeout=3)
 
     async def test_un_fill_refresca_enseguida(self, tmp_path):
-        """RF-05: tras un fill no se espera al refresco de 10 s."""
+        """RF-05: after a fill there is no waiting for the 10 s refresh."""
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -75,7 +75,7 @@ class TestBalances:
             order = await place(rig, "nk", qty="0.01")
             await rig.venues["nk"].simulate_fill(order.order_id, D("0.01"))
             await until(pilot, lambda: "XBT 0.51000000 ·" in panel.text, timeout=1.5)
-            assert "+ 0.00000000" not in panel.text  # sin órdenes, no sale (D-67)
+            assert "+ 0.00000000" not in panel.text  # no orders, not shown (D-67)
 
     async def test_solo_lectura_sin_panel(self, tmp_path):
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
@@ -216,7 +216,7 @@ async def test_d_empieza_una_orden_doble(tmp_path):
 
 @pytest.mark.spec("RF-06", "RF-08")
 async def test_las_teclas_entre_corchetes_se_ven(tmp_path):
-    """Sin markup=False, Rich se come "[y]" y el diálogo no dice cómo confirmar."""
+    """Without markup=False, Rich eats "[y]" and the dialog does not say how to confirm."""
     from textual.widgets import Static
 
     rig = Rig(tmp_path)
@@ -241,8 +241,8 @@ async def test_las_teclas_entre_corchetes_se_ven(tmp_path):
     "text", ["login rechazado [1002]", "campo [red] fin", "suelto [/bold] fin"]
 )
 async def test_un_mensaje_con_corchetes_se_ve_tal_cual(tmp_path, text):
-    """Los errores del venue pueden traer corchetes: con markup, "[red]" desaparece
-    y "[/bold]" lanza MarkupError al pintar el aviso."""
+    """Venue errors may bring brackets: with markup, "[red]" vanishes and "[/bold]" raises
+    MarkupError when drawing the notice."""
     from textual.content import Content
 
     rig = Rig(tmp_path)
@@ -250,6 +250,6 @@ async def test_un_mensaje_con_corchetes_se_ve_tal_cual(tmp_path, text):
         rig.app.say(text, error=True)
         await pilot.pause()
         (note,) = list(rig.app._notifications)
-        # lo mismo que hace Toast.render
+        # the same as Toast.render does
         shown = Content.from_markup(note.message) if note.markup else Content(note.message)
         assert shown.plain == text

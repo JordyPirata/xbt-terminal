@@ -1,5 +1,5 @@
-"""Órdenes desde la terminal en dry-run (T-16): comando, diálogo con nocional,
-confirmar o cancelar, y mensajes."""
+"""Orders from the terminal in dry-run (T-16): command, dialog with notional, confirm or
+cancel, and messages."""
 
 import asyncio
 import json
@@ -158,7 +158,7 @@ class TestOtrosComandos:
             await until(pilot, lambda: cmd.has_focus and cmd.value == prefix)
 
     async def test_teclear_tras_el_atajo_no_borra_el_prefijo(self, tmp_path):
-        """select_on_focus de Textual sustituía "buy " por la primera tecla (D-18)."""
+        """Textual's select_on_focus replaced "buy " with the first key (D-18)."""
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.press("b")
@@ -200,7 +200,7 @@ class TestSoloLectura:
 
 @pytest.mark.spec("RF-03")
 async def test_al_arrancar_los_atajos_funcionan_en_dry_run(tmp_path):
-    """La línea de comandos no debe quedarse el foco al arrancar."""
+    """The command line must not keep focus at startup."""
     rig = Rig(tmp_path)
     async with rig.app.run_test(size=(160, 45)) as pilot:
         await pilot.pause()
@@ -211,14 +211,14 @@ async def test_al_arrancar_los_atajos_funcionan_en_dry_run(tmp_path):
 
 @pytest.mark.spec("RNF-11")
 async def test_el_dialogo_no_espera_a_la_red(tmp_path):
-    """D-18: con la cuenta al día, de Enter al diálogo sin peticiones lentas."""
+    """D-18: with the account current, from Enter to dialog without slow requests."""
     import time
 
     from xbt_terminal.services.account import AccountService
 
     rig = Rig(tmp_path)
     account = AccountService({"nk": rig.venue}, retry_s=0.01, clock=lambda: NOW)
-    rig.app.account = rig.app.engine.account = account  # el motor la corre (D-61)
+    rig.app.account = rig.app.engine.account = account  # the engine runs it (D-61)
     rig.app.orders._account = account
     async with rig.app.run_test(size=(160, 45)) as pilot:
         await ready(rig, pilot)
@@ -228,7 +228,7 @@ async def test_el_dialogo_no_espera_a_la_red(tmp_path):
             await asyncio.sleep(1.0)
             return {}
 
-        rig.venue.balances = slow  # si se consultara, tardaría 1 s
+        rig.venue.balances = slow  # if queried, it would take 1 s
         rig.venue.open_orders = slow
         start = time.perf_counter()
         await type_command(pilot, rig.app, "buy nk 0.01 0.00725000")
@@ -237,7 +237,7 @@ async def test_el_dialogo_no_espera_a_la_red(tmp_path):
 
 
 def lose_reply(venue, *, create=True):
-    """El siguiente envío pierde la respuesta (RNF-12); con `create`, la orden existe."""
+    """The next send loses its response (RNF-12); with `create`, the order exists."""
     real = venue.place_limit
 
     async def lost(req):

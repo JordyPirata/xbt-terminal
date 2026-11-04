@@ -1,4 +1,4 @@
-"""Log de diagnóstico (T-31, RNF-19): rotativo, redactado y nunca en la pantalla."""
+"""Diagnostic log (T-31, RNF-19): rotating, redacted and never on screen."""
 
 import logging
 import stat
@@ -32,7 +32,7 @@ def test_la_key_no_llega_al_log(diag):
     text = diag.read_text()
     assert CANARY not in text
     assert "auth=***" in text and "firma con ***" in text
-    assert "Traceback" in text  # el traceback va, redactado
+    assert "Traceback" in text  # the traceback is there, redacted
 
 
 @pytest.mark.spec("RNF-19")
@@ -40,7 +40,7 @@ def test_formato_con_hora_nivel_y_modulo(diag):
     log.warning("ws caído")
     (line,) = diag.read_text().splitlines()
     assert "WARNING" in line and "xbt_terminal.prueba" in line and line.endswith("ws caído")
-    assert line[:4].isdigit()  # empieza por la fecha
+    assert line[:4].isdigit()  # starts with the date
 
 
 @pytest.mark.spec("RNF-19", "RNF-18")
@@ -65,7 +65,7 @@ def test_nada_en_la_pantalla(diag, capfd):
 
 @pytest.mark.spec("RNF-19")
 def test_sin_configurar_tampoco_escribe_en_la_pantalla(capfd):
-    """Sin handler, logging usaría `lastResort` y escribiría en stderr encima de la TUI."""
+    """Without a handler, logging would use `lastResort` and write to stderr over the TUI."""
     log.error("nadie configuró el log")
     out, err = capfd.readouterr()
     assert out == "" and err == ""

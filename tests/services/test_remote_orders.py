@@ -1,5 +1,5 @@
-"""Órdenes por el socket del daemon (T-63, RF-31, D-66): el cliente prepara y
-confirma por referencia; el daemon valida (RF-10), envía y lo apunta."""
+"""Orders over the daemon socket (T-63, RF-31, D-66): the client prepares and confirms
+by reference; the daemon validates (RF-10), sends and notes it."""
 
 import asyncio
 
@@ -89,7 +89,7 @@ class TestOrdenSimple:
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             rejected = await remote.orders.prepare(buy(qty="100"))
             assert isinstance(rejected, Rejected) and rejected.codes
-            assert events(d.s.lines()) == ["reject_local"]  # lo apunta el daemon
+            assert events(d.s.lines()) == ["reject_local"]  # noted by the daemon
 
     async def test_la_propuesta_vale_una_sola_vez(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
@@ -150,7 +150,7 @@ class TestOrdenDoble:
             await until(lambda: "d-000001" in seen)
 
     async def test_rechazada_por_el_daemon(self, tmp_path):
-        async with Daemon(tmp_path) as d, Linked(d) as remote:  # nx sin keys
+        async with Daemon(tmp_path) as d, Linked(d) as remote:  # nx without keys
             cmd = DoubleOrder(D("0.01"), "nk", D("0.00730000"), "nx", D("0.00722000"))
             rejected = await remote.orders.prepare_double(cmd)
             assert isinstance(rejected, DoubleRejected) and rejected.codes

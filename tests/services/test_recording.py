@@ -1,5 +1,5 @@
-"""Grabación de mercado (T-87, RF-33, CA-19): lo que el hub aplica va a un fichero
-aparte del journal; un fallo de escritura no para nada."""
+"""Market recording (T-87, RF-33, CA-19): what the hub applies goes to a file apart from
+the journal; a write failure stops nothing."""
 
 import stat
 
@@ -62,7 +62,7 @@ class TestGrabar:
     def test_un_trade_descartado_por_el_hub_no_se_graba(self, tmp_path):
         hub = hub_with("nk")
         rec, path = recorder(tmp_path, hub)
-        hub.apply("nk", Trade("nk", D("0.0073"), D("1"), "buy", T0))  # mercado sin cargar
+        hub.apply("nk", Trade("nk", D("0.0073"), D("1"), "buy", T0))  # market not loaded
         rec.close()
         assert list(read_recording(path)) == []
 

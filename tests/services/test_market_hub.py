@@ -1,4 +1,4 @@
-"""MarketHub: histórico REST + stream de cada venue → book, velas y estado."""
+"""MarketHub: REST history + each venue's stream → book, candles and state."""
 
 import asyncio
 
@@ -9,11 +9,11 @@ from xbt_terminal.services.market import MarketHub
 
 from ..fakes import T0, FakeFeed, book
 
-NOW = T0 + 5 * 3_600_000  # tras el histórico de 1h del venue falso
+NOW = T0 + 5 * 3_600_000  # after the fake venue's 1h history
 
 
 class Hub:
-    """Arranca un MarketHub con venues falsos y deja esperar a condiciones."""
+    """Start a MarketHub with fake venues and let it wait for conditions."""
 
     def __init__(self, **feeds):
         self.feeds = feeds or {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
@@ -67,7 +67,7 @@ class TestArranque:
             await h.until(lambda: h.hub.state["nk"].ready)
             assert feeds["nk"].calls.count("market") == 3
             assert ("nk", "conn") in h.changes
-            assert h.hub.state["nk"].error is None  # se limpia al recuperarse
+            assert h.hub.state["nk"].error is None  # cleared on recovery
 
     async def test_estado_down_mientras_no_arranca(self):
         feeds = {"nk": FakeFeed("nk", fail_market=10**6), "nx": FakeFeed("nx")}
@@ -88,7 +88,7 @@ class TestBook:
             h.feeds["nk"].push(BookDelta("nk", (Level(D("0.00725000"), D("4")),), (), T0, 2))
             await h.until(lambda: h.hub.state["nk"].book.best_bid == D("0.00725000"))
             assert ("nk", "book") in h.changes
-            assert h.hub.state["nx"].book.best_bid is None  # cada venue el suyo
+            assert h.hub.state["nx"].book.best_bid is None  # each venue its own
 
 
 @pytest.mark.spec("RF-03")
@@ -102,7 +102,7 @@ class TestVelas:
                 assert builder.candles[-1].close == D("0.0080")
 
     async def test_trades_anteriores_a_la_carga_no_cuentan_dos_veces(self):
-        """El lote inicial del WS trae trades que ya están en el histórico REST."""
+        """The initial WS batch brings trades already in the REST history."""
         async with Hub() as h:
             await h.until(lambda: h.hub.state["nx"].ready)
             before = h.hub.state["nx"].candles["1h"].candles

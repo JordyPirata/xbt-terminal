@@ -1,5 +1,5 @@
-"""Servicio de direcciones de depósito (T-42, RF-28, CA-13): una fila por venue y
-activo, pedidas en cada carga y con el error de un venue aislado."""
+"""Deposit addresses service (T-42, RF-28, CA-13): one row per venue and asset, asked on
+each load, with a venue's error isolated."""
 
 import httpx
 import pytest

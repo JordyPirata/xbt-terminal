@@ -1,6 +1,6 @@
-"""Motor sin UI (T-50, RF-30, D-61): los bucles que antes vivían en la app
-(piernas colgadas, reconciliación de inciertas, desfase de reloj y drenaje al
-cerrar) corren en `Engine` y salen como `Notice`."""
+"""UI-less engine (T-50, RF-30, D-61): the loops that used to live in the app (hanging
+legs, reconciliation, clock skew and draining on close) run in `Engine` and come out
+as `Notice`."""
 
 import asyncio
 
@@ -52,7 +52,7 @@ class TestPiernaColgada:
 
 @pytest.mark.spec("RNF-14", "RF-30")
 class TestFallos:
-    """Con registros distintos en órdenes y hub (D-78), el motor los junta."""
+    """With distinct registries in orders and hub (D-78), the engine joins them."""
 
     def test_cada_servicio_trae_el_suyo(self, tmp_path):
         s = double.Setup(tmp_path)

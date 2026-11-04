@@ -1,9 +1,9 @@
-"""Privado de NonKYC (T-17, D-14) con claves falsas.
+"""NonKYC private (T-17, D-14) with fake keys.
 
-Balances y mensajes del WS privado tienen la forma de lo grabado con las keys
-reales el 2026-10-20 (importes cambiados). Órdenes y trades propios salen del
-esquema de la OpenAPI v1.3.0: la cuenta no tenía órdenes en NonKYC ese día y no
-se envían órdenes reales para grabarlas."""
+Balances and private WS messages are shaped like what was recorded with the real keys
+on 2026-10-20 (amounts changed). Own orders and trades come from the OpenAPI v1.3.0
+schema: the account had no orders on NonKYC that day and no real orders are sent to
+record them."""
 
 import asyncio
 import hashlib
@@ -105,7 +105,7 @@ def req(side="buy", qty="0.0100", price="0.00725000"):
 @pytest.mark.spec("RF-12")
 class TestFirma:
     def test_vector_conocido(self):
-        """Ejemplo de la OpenAPI (POST /cancelorder) con claves y nonce fijos."""
+        """OpenAPI example (POST /cancelorder) with fixed keys and nonce."""
         url = "https://api.nonkyc.io/api/v2/cancelorder"
         got = sign(KEY, SECRET, url, '{"id":"5845454765457"}', "1792530500000")
         assert got == "373c92f4e4fba2fe45d7074fd515b7df3bc3ba7c5eb55d7fe1d827e16ba7b52d"
@@ -146,7 +146,7 @@ class TestFirma:
         for _ in range(3):
             await venue.balances()
         nonces = [int(c.request.headers["X-API-NONCE"]) for c in api.calls]
-        assert nonces == [NOW, NOW + 1, NOW + 2]  # mismo reloj: se fuerza a crecer
+        assert nonces == [NOW, NOW + 1, NOW + 2]  # same clock: forced to grow
 
     async def test_sin_keys_no_se_llama_al_venue(self, limiter, api):
         async with httpx.AsyncClient() as http:
@@ -166,7 +166,7 @@ class TestFirma:
 
 @pytest.mark.spec("RF-05", "RNF-10")
 async def test_balances_solo_btc_y_btcb2(venue, api, limiter):
-    """`held` es lo bloqueado en órdenes; `pending` son depósitos sin confirmar."""
+    """`held` is what is locked in orders; `pending` are unconfirmed deposits."""
     assert await venue.balances() == {
         "BTC": Balance("BTC", D("0.00210000"), D("0.00150005")),
         "BTCB2": Balance("BTCB2", D("0.25000000"), D("0.10000000")),
@@ -195,8 +195,8 @@ class TestOrdenes:
         assert (await venue.open_orders())[0].status == "partial"
 
     async def test_activas_sin_las_ya_terminadas(self, venue, api):
-        """T-48 (D-59): `status=active` también trae órdenes ya canceladas (visto en
-        real el 2026-10-23, minutos después de cancelarlas). Forma real de esa orden."""
+        """T-48 (D-59): `status=active` also brings already cancelled orders (seen for real on
+        2026-10-23, minutes after cancelling). Real shape of that order."""
         cancelled = {
             "id": "6adb8a5b528f6c5d9013e239", "symbol": "BTCB2/BTC", "side": "BUY",
             "price": "0.0043", "quantity": "0.005", "executedQuantity": "0",
@@ -214,8 +214,8 @@ class TestOrdenes:
         ]  # fmt: skip
 
     async def test_activa_segun_el_venue_aunque_diga_inactiva(self, venue, api):
-        """Manda `status`, no `isActive`: una `Active` con `isActive` falso sigue abierta
-        (ante la duda, cuenta como abierta para `self_cross` y el recuento)."""
+        """`status` rules, not `isActive`: an `Active` with false `isActive` stays open (when in
+        doubt, it counts as open for `self_cross` and the count)."""
         raw = json.loads(fixture("orders_active.json"))
         raw[0]["isActive"] = False
         api.get(f"{REST_URL}/account/orders").respond(json=raw)
@@ -230,8 +230,8 @@ class TestOrdenes:
 
     @pytest.mark.parametrize("raw,side", [("BUY", "buy"), ("Sell", "sell"), ("buy", "buy")])
     def test_lado_sin_distinguir_mayusculas(self, raw, side):
-        """D-22: `account/orders` dice "BUY" y `getorder` "buy"; antes "BUY" tiraba
-        cada lectura de órdenes abiertas y la orden real no salía en la terminal."""
+        """D-22: `account/orders` says "BUY" and `getorder` "buy"; "BUY" used to kill each read
+        of open orders and the real order did not show in the terminal."""
         order = json.loads(fixture("orders_active.json"))[0] | {"side": raw}
         assert parse_order(order, NOW).side == side
         trade = json.loads(fixture("trades_my.json"))[0] | {"side": raw}
@@ -266,8 +266,8 @@ class TestOrdenes:
         assert limiter.kinds == ["cancel"]
 
     async def test_cancelar_todas_del_par(self, venue, api, limiter):
-        """T-47 (D-58): la API pide `symbol` y `side`; sin `side` respondía HTTP 200
-        con `400 Bad Request` (visto en real el 2026-10-23). `all` es del OpenAPI."""
+        """T-47 (D-58): the API asks `symbol` and `side`; without `side` it answered HTTP 200
+        with `400 Bad Request` (seen for real on 2026-10-23). `all` comes from the OpenAPI."""
         await venue.cancel_all()
         sent = api.calls.last.request
         assert sent.url.path == "/api/v2/cancelallorders"
@@ -302,7 +302,7 @@ async def test_fills_con_su_orden(venue, api):
 
 
 class FakePrivateWS:
-    """Servidor WS: comprueba el login y responde como el de NonKYC."""
+    """WS server: checks the login and answers like NonKYC's."""
 
     def __init__(self, login_ok=True):
         self.login_ok = login_ok
@@ -349,7 +349,7 @@ class TestStreamPrivado:
                 venue = make(http, limiter, ws_url=f"ws://127.0.0.1:{port}", private_safety_s=60)
                 async with aclosing(venue.private_stream()) as stream:
                     state = await next_state(stream)
-                    if state.source == "rest":  # el primer refresco puede ganar al login
+                    if state.source == "rest":  # the first refresh may beat the login
                         state = await next_state(stream)
                     assert (state.channel, state.source, state.status) == ("private", "ws", "up")
                     before = polls(api)
@@ -379,7 +379,7 @@ class TestStreamPrivado:
                         pass
                     await asyncio.sleep(0.05)
                     before = polls(api)
-                    await asyncio.sleep(0.3)  # sin WS serían ~15 refrescos
+                    await asyncio.sleep(0.3)  # without WS it would be ~15 refreshes
                     assert polls(api) == before
 
     async def test_login_rechazado_sigue_por_polling(self, limiter, api):
@@ -406,8 +406,8 @@ class TestStreamPrivado:
 
 @pytest.mark.spec("RNF-12")
 class TestEnvioIncierto:
-    """D-26: la orden pudo crearse y no se sabe → UncertainError; si seguro que no,
-    VenueError o el error de conexión tal cual."""
+    """D-26: the order may have been created and it is unknown → UncertainError; if surely
+    not, VenueError or the connection error as is."""
 
     @pytest.mark.parametrize(
         "exc", [httpx.ReadTimeout("t"), httpx.RemoteProtocolError("x"), httpx.ReadError("r")]
@@ -469,7 +469,7 @@ class TestOrdenesRecientes:
         assert limiter.kinds == ["private", "private"]
 
     async def test_las_de_trades_recientes_se_piden_por_id(self, venue, api, limiter):
-        """Una orden llena del todo al instante no está entre las activas."""
+        """An order filled entirely at once is not among the active ones."""
         done = json.loads(fixture("order_cancelled.json")) | {
             "id": "6a00000000000000000000ff",
             "userProvidedId": "t-zzz999",
@@ -483,13 +483,13 @@ class TestOrdenesRecientes:
             "t-zzz999",
             "filled",
         )
-        assert len(orders) == 3  # el trade de la orden activa no repite la consulta
+        assert len(orders) == 3  # the active order's trade does not repeat the query
         assert api.calls.last.request.url.path.endswith("/getorder/6a00000000000000000000ff")
         assert limiter.kinds == ["private"] * 3
 
 
-# Formas reales de NKYC/BTC (2026-10-25): NonKYC ignora `symbol` en
-# `/account/trades` y `/account/orders` y devuelve todos los mercados (D-63).
+# Real NKYC/BTC shapes (2026-10-25): NonKYC ignores `symbol` in `/account/trades` and
+# `/account/orders` and returns all markets (D-63).
 OTHER_TRADE = {
     "id": "6b00000000000000000000aa",
     "market": {"id": "6436ac93847698141b52f210", "symbol": "NKYC/BTC"},
@@ -521,7 +521,7 @@ OTHER_ORDER = {
 
 @pytest.fixture
 def mixed(api):
-    """Las respuestas del par con un trade y una orden de NKYC/BTC delante."""
+    """The pair's responses with an NKYC/BTC trade and order in front."""
     trades = json.loads(fixture("trades_my.json"))
     orders = json.loads(fixture("orders_active.json"))
     api.get(f"{REST_URL}/account/trades").respond(json=[OTHER_TRADE, *trades])
@@ -545,7 +545,7 @@ class TestOtrosMercados:
         ]
 
     async def test_sin_symbol_en_la_fila_cuenta_como_del_par(self, venue, api):
-        """Solo se descarta lo que dice ser de otro mercado."""
+        """Only what claims to be from another market is dropped."""
         bare = {k: v for k, v in json.loads(fixture("trades_my.json"))[0].items() if k != "market"}
         api.get(f"{REST_URL}/account/trades").respond(json=[bare])
         assert [f.trade_id for f in await venue.fetch_fills()] == [bare["id"]]
@@ -589,7 +589,7 @@ class TestTokenDeFee:
         assert set(await venue.balances()) == {"BTC", "BTCB2"}
 
     async def test_la_fee_en_token_lleva_su_ticker(self, token_venue, api):
-        """`alternateFeeAsset` es el `assetid` de `/balances`, no el ticker."""
+        """`alternateFeeAsset` is the `/balances` `assetid`, not the ticker."""
         mine = OTHER_TRADE | {"market": {"id": "x", "symbol": "BTCB2/BTC"}}
         api.get(f"{REST_URL}/account/trades").respond(json=[mine])
         await token_venue.balances()
@@ -603,7 +603,7 @@ class TestTokenDeFee:
         assert fill.fee_asset == "64369c724f86081e9d3f7fc9"
 
 
-# `/market/getbysymbol/NKYC_BTC` real (2026-10-25), recortado
+# real `/market/getbysymbol/NKYC_BTC` (2026-10-25), trimmed
 NKYC_MARKET = {
     "symbol": "NKYC/BTC",
     "lastPrice": "0.00013089",

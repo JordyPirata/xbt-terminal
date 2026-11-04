@@ -1,5 +1,5 @@
-"""Ventana de resultados (T-40, RF-25): tecla `r`, comando `results`, rangos,
-refresco con cada fill y cierre."""
+"""Results window (T-40, RF-25): `r` key, `results` command, ranges, refresh with each
+fill and closing."""
 
 import json
 
@@ -71,7 +71,7 @@ class TestPantalla:
     async def test_comando_con_rango(self, tmp_path):
         write(tmp_path, "20261020", plain_double("d-0", T0 - 2 * DAY))
         rig = Rig(tmp_path / "rig", results=ResultsService(tmp_path, clock=lambda: T0))
-        app = rig.app  # en dry-run: en solo lectura la línea de comandos está apagada
+        app = rig.app  # in dry-run: in read-only the command line is off
         async with app.run_test(size=(160, 45)) as pilot:
             await type_command(pilot, app, "results 7d")
             await until(pilot, lambda: isinstance(app.screen, ResultsScreen))
@@ -79,7 +79,7 @@ class TestPantalla:
             assert len(screen(app).report.doubles) == 1
 
     async def test_tabla_con_colgada_y_sin_dobles(self, tmp_path):
-        rows = plain_double("d-1", T0)[:3]  # venta sin llenar
+        rows = plain_double("d-1", T0)[:3]  # sell unfilled
         write(tmp_path, "20261022", rows)
         app = make_app(tmp_path)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -125,7 +125,7 @@ def test_el_resumen_avisa_de_las_fees_en_token(tmp_path):
 
 @pytest.mark.spec("RF-24", "RF-25")
 async def test_al_abrir_pide_el_precio_y_resta_la_fee(tmp_path):
-    """D-65: 0.0025 NKYC a 0.0001 BTC = 25 sats menos que los 200 sin la fee."""
+    """D-65: 0.0025 NKYC at 0.0001 BTC = 25 sats less than the 200 without the fee."""
     from xbt_terminal.core.models import D
 
     from ..unit.test_results import fill

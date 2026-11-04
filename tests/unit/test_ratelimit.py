@@ -1,6 +1,6 @@
-"""Límites de Neoxa con el 20 % de margen: 480/60 s general, 8 órdenes y 16
-cancelaciones por 10 s. Reloj falso: el test avanza el tiempo y llama a
-dispatch(), que es lo que en producción hace el temporizador del limitador.
+"""Neoxa limits with the 20 % margin: 480/60 s general, 8 orders and 16 cancels per
+10 s. Fake clock: the test advances time and calls dispatch(), which is what the
+limiter's timer does in production.
 """
 
 import asyncio
@@ -65,7 +65,7 @@ class TestVentanas:
         clock.t += 30
         await burst(neoxa, "market", 240)
         task = await pending(neoxa, "market")
-        clock.t += 30.1  # caducan solo las 240 primeras
+        clock.t += 30.1  # only the first 240 expire
         neoxa.dispatch()
         await settle()
         assert task.done()
@@ -92,7 +92,7 @@ class TestVentanas:
     async def test_orden_bloqueada_no_frena_el_polling(self, neoxa):
         await burst(neoxa, "order", 8)
         order = await pending(neoxa, "order")
-        await burst(neoxa, "market", 1)  # pasa aunque haya una orden en cola
+        await burst(neoxa, "market", 1)  # passes even with an order queued
         assert not order.done()
 
     async def test_venue_sin_ventanas_de_ordenes(self, clock):
@@ -113,13 +113,13 @@ class TestPrioridad:
         order = await pending(neoxa, "order")
         cancel = await pending(neoxa, "cancel")
 
-        clock.t += 59.5  # caducan solo las 2 primeras: 2 huecos
+        clock.t += 59.5  # only the first 2 expire: 2 free slots
         neoxa.dispatch()
         await settle()
         assert cancel.done() and order.done()
         assert not private.done() and not market.done()
 
-        clock.t += 1  # caduca el resto
+        clock.t += 1  # the rest expires
         neoxa.dispatch()
         await settle()
         assert private.done() and market.done()
@@ -128,7 +128,7 @@ class TestPrioridad:
         await burst(neoxa, "market", 480)
         first = await pending(neoxa, "market")
         second = await pending(neoxa, "market")
-        neoxa._windows["general"].stamps.popleft()  # libera exactamente un hueco
+        neoxa._windows["general"].stamps.popleft()  # frees exactly one slot
         neoxa.dispatch()
         await settle()
         assert first.done() and not second.done()
@@ -152,5 +152,5 @@ async def test_tipo_desconocido(neoxa):
 async def test_temporizador_real_despierta_la_cola():
     lim = RateLimiter(general=(2, 0.05))
     await burst(lim, "market", 2)
-    await asyncio.wait_for(lim.acquire("market"), 1)  # sin dispatch() manual
+    await asyncio.wait_for(lim.acquire("market"), 1)  # no manual dispatch()
     lim.close()

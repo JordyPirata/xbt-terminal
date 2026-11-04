@@ -1,6 +1,6 @@
-"""AccountService (T-17, design.md §6.5): stream privado de cada venue →
-estado del canal, órdenes abiertas, fills al journal y balances refrescados
-cada `balances_every_s` y tras cada fill."""
+"""AccountService (T-17, design.md §6.5): each venue's private stream → channel
+state, open orders, fills to the journal and balances refreshed every
+`balances_every_s` and after each fill."""
 
 import asyncio
 import json
@@ -26,7 +26,7 @@ def fill(tid="f-1", oid="o-1"):
 
 
 class FakePrivate:
-    """Venue privado falso: el test empuja eventos y cuenta las peticiones de saldo."""
+    """Fake private venue: the test pushes events and counts balance requests."""
 
     id = "nk"
 
@@ -55,7 +55,7 @@ class FakePrivate:
             raise self.fail_stream
         while True:
             event = await self.queue.get()
-            if isinstance(event, Exception):  # cortar un stream ya abierto
+            if isinstance(event, Exception):  # cut a stream already open
                 raise event
             yield event
 
@@ -120,7 +120,7 @@ async def test_ordenes_abiertas_y_terminadas(tmp_path):
 async def test_un_fill_va_al_journal_y_refresca_balances(tmp_path):
     async with Rig(tmp_path) as rig:
         st = rig.account.state["nk"]
-        await until(lambda: st.balances is not None)  # carga inicial
+        await until(lambda: st.balances is not None)  # initial load
         assert rig.venue.balance_calls == 1
         rig.venue.push(order("o-1"), fill())
         await until(lambda: rig.venue.balance_calls == 2)
@@ -160,16 +160,16 @@ async def test_un_fallo_de_saldos_conserva_los_anteriores(tmp_path):
 
 @pytest.mark.spec("RF-13")
 async def test_sin_keys_no_reintenta_en_bucle(tmp_path):
-    """ReadOnlyError no es un fallo pasajero: se anota y no se reintenta."""
+    """ReadOnlyError is not transient: noted and not retried."""
     async with Rig(tmp_path, fail_stream=ReadOnlyError("NonKYC: sin keys")) as rig:
         await until(lambda: rig.venue.stream_calls == 1)
-        await asyncio.sleep(0.05)  # retry_s es 0.01: habría reintentado varias veces
+        await asyncio.sleep(0.05)  # retry_s is 0.01: it would have retried several times
         assert rig.venue.stream_calls == 1
 
 
 @pytest.mark.spec("RF-09")
 async def test_fill_sin_orden_conocida_va_sin_client_id(tmp_path):
-    """Neoxa no dice la orden de un fill (D-14)."""
+    """Neoxa does not say a fill's order (D-14)."""
     async with Rig(tmp_path) as rig:
         rig.venue.push(Fill("nk", "f-9", None, "sell", D("0.0073"), D("0.01"), D("0"), None, T0))
         await until(lambda: rig.lines())
@@ -189,7 +189,7 @@ async def test_reenvia_cada_evento_a_quien_lo_pida(tmp_path):
 
 @pytest.mark.spec("RF-05")
 async def test_una_orden_propia_tambien_refresca_balances(tmp_path):
-    """Abrir o cancelar mueve saldo entre disponible y bloqueado."""
+    """Opening or cancelling moves balance between available and locked."""
     async with Rig(tmp_path) as rig:
         st = rig.account.state["nk"]
         await until(lambda: st.balances is not None)
@@ -205,7 +205,7 @@ def errors(rig):
 
 @pytest.mark.spec("RF-11", "RF-08")
 async def test_un_error_del_canal_privado_va_al_journal_una_vez(tmp_path):
-    """D-22: el "BUY" de NonKYC tiraba el stream cada pocos segundos y no quedaba rastro."""
+    """D-22: NonKYC's "BUY" dropped the stream every few seconds and left no trace."""
     async with Rig(
         tmp_path, fail_stream=VenueError("NonKYC: lado de trade desconocido 'BUY'")
     ) as rig:
@@ -226,7 +226,7 @@ async def test_un_error_de_balances_va_al_journal_una_vez_por_racha(tmp_path):
         rig.venue.fail_balances = False
         ok = rig.venue.balance_calls
         await until(lambda: rig.venue.balance_calls >= ok + 2)
-        rig.venue.fail_balances = True  # una racha nueva se vuelve a anotar
+        rig.venue.fail_balances = True  # a new streak is noted again
         await until(lambda: len(errors(rig)) == 2)
 
 
@@ -235,9 +235,9 @@ async def test_el_mismo_error_tras_recuperarse_se_vuelve_a_anotar(tmp_path):
     async with Rig(tmp_path) as rig:
         rig.venue.push(VenueError("caído"))
         await until(lambda: len(errors(rig)) == 1)
-        rig.venue.push(VenueError("caído"))  # misma racha: no se repite
+        rig.venue.push(VenueError("caído"))  # same streak: not repeated
         await until(lambda: rig.venue.stream_calls >= 3)
-        rig.venue.push(order("a"))  # llegan órdenes: el canal funciona
+        rig.venue.push(order("a"))  # orders arrive: the channel works
         await until(lambda: "a" in rig.account.state["nk"].orders)
         rig.venue.push(VenueError("caído"))
         await until(lambda: len(errors(rig)) == 2)
@@ -245,8 +245,8 @@ async def test_el_mismo_error_tras_recuperarse_se_vuelve_a_anotar(tmp_path):
 
 @pytest.mark.spec("RF-05")
 async def test_el_intervalo_no_suma_lo_que_tarda_la_lectura(tmp_path):
-    """CA-01 vio saldos de 10.4 s con un refresco de 10 s: se esperaba 10 s después
-    de terminar cada lectura (~0.4 s). Las lecturas deben empezar cada 10 s."""
+    """CA-01 saw balances 10.4 s old with a 10 s refresh: it waited 10 s after each read
+    ended (~0.4 s). Reads must start every 10 s."""
     import time
     from itertools import pairwise
 
@@ -261,13 +261,13 @@ async def test_el_intervalo_no_suma_lo_que_tarda_la_lectura(tmp_path):
         rig.venue.balances = slow_balances
         await until(lambda: len(starts) >= 4, timeout=2.0)
     gaps = [b - a for a, b in pairwise(starts)]
-    assert all(g < 0.24 for g in gaps[1:]), gaps  # 0.2 de intervalo, no 0.26
+    assert all(g < 0.24 for g in gaps[1:]), gaps  # 0.2 interval, not 0.26
 
 
 @pytest.mark.spec("RF-11", "RF-19")
 async def test_un_error_sin_texto_guarda_su_tipo(tmp_path):
-    """D-51: ConnectTimeout llega con texto vacío; la cuenta lo dejaba en "" y el
-    bot lo tomaba por "sin error"."""
+    """D-51: ConnectTimeout comes with empty text; the account left it as "" and the bot
+    took it for "no error"."""
     async with Rig(tmp_path, every=0.01) as rig:
         rig.venue.fail_balances = httpx.ConnectTimeout("")
         await until(lambda: rig.account.state["nk"].error is not None)

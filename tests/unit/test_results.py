@@ -1,9 +1,9 @@
-"""Resultado realizado de las órdenes dobles a partir del journal (T-40, RF-25,
-CA-11, design.md §6.10, D-44, D-45).
+"""Realized result of double orders from the journal (T-40, RF-25, CA-11,
+design.md §6.10, D-44, D-45).
 
-Journal sintético: `order_sent` con el `double` de cada pierna, `order_ack`
-con su `order_id`, `fill` (con `client_id`, con solo `order_id` o sin ninguno,
-como los de Neoxa), `bot_fire` y `hanging_leg`."""
+Synthetic journal: `order_sent` with each leg's `double`, `order_ack` with its
+`order_id`, `fill` (with `client_id`, only `order_id` or neither, like Neoxa's),
+`bot_fire` and `hanging_leg`."""
 
 import json
 from datetime import UTC, datetime
@@ -49,7 +49,7 @@ def fire(double, net_pct, at=T0):
 
 
 def plain_double(double="d-1", at=T0, qty="0.01", buy="0.0050", sell="0.0052"):
-    """Compra en nx y venta en nk, las dos llenas, fee 0."""
+    """Buy on nx and sell on nk, both filled, fee 0."""
     b, s = f"t-{double}-b", f"t-{double}-s"
     return [
         sent(b, "nx", "buy", qty, buy, double, at),
@@ -129,7 +129,7 @@ class TestResultado:
         (d,) = compute(rows).doubles
         assert d.status == "closed"
         assert d.matched == D("0.03")
-        assert d.mismatch == D("0.02")  # compra de más
+        assert d.mismatch == D("0.02")  # overbought
         assert d.result == D("0.03") * D("0.0002")
 
     def test_porcentaje_real_sobre_lo_pagado(self):
@@ -160,7 +160,7 @@ class TestEstados:
         assert compute(rows).doubles[0].status == "closed"
 
     def test_pierna_sin_fills(self):
-        rows = plain_double()[:3]  # la venta no se llenó
+        rows = plain_double()[:3]  # the sell did not fill
         rep = compute(rows)
         assert rep.doubles[0].status == "no_fills"
         assert rep.doubles[0].result is None
@@ -198,7 +198,7 @@ class TestOrigen:
 
 @pytest.mark.spec("RF-25", "CA-11")
 class TestAsignacion:
-    """Los fills de Neoxa no traen `order_id` ni `client_id` (D-45)."""
+    """Neoxa fills bring neither `order_id` nor `client_id` (D-45)."""
 
     def test_fill_por_order_id_via_order_ack(self):
         rows = plain_double()
@@ -214,7 +214,7 @@ class TestAsignacion:
 
     def test_precio_fuera_del_limite_no_se_asigna(self):
         rows = plain_double()
-        rows[2] = fill("nx", "buy", "0.01", "0.0051")  # compra por encima del límite
+        rows[2] = fill("nx", "buy", "0.01", "0.0051")  # buy above the limit
         rep = compute(rows)
         assert rep.doubles[0].status == "no_fills"
         assert rep.summary.unassigned == 1
@@ -226,14 +226,14 @@ class TestAsignacion:
 
     def test_no_pasa_de_la_cantidad_de_la_orden(self):
         rows = plain_double()
-        rows.insert(3, fill("nx", "buy", "0.01", "0.0050", at=T0 + 1500))  # una de más
+        rows.insert(3, fill("nx", "buy", "0.01", "0.0050", at=T0 + 1500))  # one extra
         rep = compute(rows)
         assert rep.doubles[0].buy_filled == D("0.01")
         assert rep.summary.unassigned == 1
 
     def test_dos_candidatas_va_a_la_enviada_justo_antes(self):
         rows = [
-            # una compra manual en Neoxa que lleva horas abierta al mismo límite
+            # a manual buy on Neoxa open for hours at the same limit
             row("order_sent", T0 - 3 * 3600_000, "nx", "t-m", side="buy", qty="1", price="0.0050"),
             *plain_double(),
         ]
@@ -291,12 +291,12 @@ class TestResumenYRango:
 
     def test_doble_que_cruza_medianoche_es_del_dia_en_que_empezo(self):
         midnight = T0 - 12 * 3600_000
-        rows = plain_double("d-1", midnight - 500)  # fills tras medianoche
+        rows = plain_double("d-1", midnight - 500)  # fills after midnight
         assert compute(rows, since_ms=midnight).doubles == ()
         assert compute(rows, since_ms=midnight - DAY).doubles[0].status == "closed"
 
     def test_rangos(self):
-        start = T0 - 12 * 3600_000  # medianoche UTC del día de T0
+        start = T0 - 12 * 3600_000  # UTC midnight of T0's day
         assert range_start("dia", T0) == start
         assert range_start("7d", T0) == start - 6 * DAY
         assert range_start("todo", T0) is None
@@ -324,7 +324,7 @@ def fill_fee(venue, tid, fee, asset, oid=None, cid=None, at=T0 + 60_000):
 
 @pytest.mark.spec("RF-11", "RF-25")
 class TestFeeCorregida:
-    """d-2e18a2 (D-64): NonKYC rehizo en NKYC la fee de los dos fills de la compra."""
+    """d-2e18a2 (D-64): NonKYC redid in NKYC the fee of both buy fills."""
 
     def rows(self):
         return [
@@ -373,7 +373,7 @@ class TestFeeCorregida:
 
 @pytest.mark.spec("RF-24", "RF-25")
 class TestFeeEnTokenValorada:
-    """D-65: la fee en NKYC de d-2e18a2, valorada al mid de NKYC/BTC, resta."""
+    """D-65: d-2e18a2's NKYC fee, valued at the NKYC/BTC mid, subtracts."""
 
     PRICE = D("0.00013089")
     NKYC = D("0.0001784605")
@@ -392,13 +392,13 @@ class TestFeeEnTokenValorada:
         (d,) = rep.doubles
         assert d.token_fees == self.NKYC * self.PRICE
         assert d.result == self.SOLD - self.PAID - self.NKYC * self.PRICE
-        assert d.other_fees == (("NKYC", self.NKYC),)  # la cantidad se sigue mostrando
+        assert d.other_fees == (("NKYC", self.NKYC),)  # the quantity is still shown
         assert rep.summary.total == d.result
-        assert rep.summary.other_fees == ()  # nada sin valorar
+        assert rep.summary.other_fees == ()  # nothing unvalued
         assert rep.summary.prices == (("NKYC", self.PRICE),)
 
     def test_pagar_en_nkyc_sale_mejor_que_en_btc(self):
-        """La fee de 0.2 % en BTC (antes de la corrección) frente a 0.15 % en NKYC."""
+        """The 0.2 % fee in BTC (before the correction) against 0.15 % in NKYC."""
         (in_btc,) = compute(TestFeeCorregida().rows()).doubles
         (in_nkyc,) = compute(self.rows(), prices={"NKYC": self.PRICE}).doubles
         assert in_nkyc.result > in_btc.result

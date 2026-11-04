@@ -1,4 +1,4 @@
-"""Aviso de reloj desfasado al cargar cada venue (T-29, RNF-16, D-30)."""
+"""Skewed clock warning on loading each venue (T-29, RNF-16, D-30)."""
 
 import pytest
 
@@ -17,13 +17,13 @@ class TestAvisoDeDesfase:
             assert "en live no se podría operar" in msg and "NTP" in msg
             await ready(rig, pilot)
             rig.app.say("otra cosa")
-            rig.hub._notify("nk", "market")  # otra carga: no se repite
+            rig.hub._notify("nk", "market")  # another load: not repeated
             await pilot.pause(0.05)
             assert rig.app.last_message == "otra cosa"
 
     async def test_live_dice_que_no_se_envian_ordenes(self, tmp_path):
         rig = Rig(tmp_path, max_clock_skew_s=5)
-        rig.app.mode = rig.app.engine.mode = "live"  # el aviso sale del motor (D-61)
+        rig.app.mode = rig.app.engine.mode = "live"  # the warning comes from the engine (D-61)
         rig.feeds["nk"].clock_skew_ms = 9_000
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await until(pilot, lambda: "reloj" in rig.app.last_message)

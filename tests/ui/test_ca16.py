@@ -1,6 +1,6 @@
-"""CA-16 (T-65, RF-31, D-66): con venues simulados y un daemon en dry-run, la TUI
-cliente coloca y confirma una orden simple y una doble y cancela; otro cliente
-ve lo mismo; al cerrar la TUI las órdenes siguen en el daemon."""
+"""CA-16 (T-65, RF-31, D-66): with simulated venues and a dry-run daemon, the client TUI
+places and confirms a simple and a double order and cancels; another client sees the
+same; on closing the TUI the orders stay in the daemon."""
 
 import asyncio
 
@@ -19,7 +19,7 @@ from .test_orders_ui import type_command, until
 
 
 class DaemonRig:
-    """Dos DryRunVenue (NonKYC con BTC, Neoxa con BTCB2) detrás del socket."""
+    """Two DryRunVenues (NonKYC with BTC, Neoxa with BTCB2) behind the socket."""
 
     def __init__(self, tmp_path):
         self.s = Setup(tmp_path)
@@ -63,17 +63,17 @@ async def test_opera_por_el_socket_y_al_cerrar_las_ordenes_siguen(tmp_path):
         app = client_app(rig)
         async with app.run_test(size=(160, 45)) as pilot:
             await until(pilot, lambda: app.remote.connected and app.hub.state["nk"].book.valid)
-            # simple: compra en NonKYC por debajo del book, queda abierta
+            # simple: buy on NonKYC below the book, stays open
             await type_command(pilot, app, "buy nk 0.01 0.00710000")
             await confirm(pilot, app)
             await until(pilot, lambda: app.last_message.startswith("enviada"))
-            # doble: compra en NonKYC y venta en Neoxa, cruzando los dos books
+            # double: buy on NonKYC and sell on Neoxa, crossing both books
             await type_command(pilot, app, "dbl 0.01 nk 0.00730000 nx 0.00722000")
             await confirm(pilot, app)
             await until(pilot, lambda: "orden doble d-000001 enviada" in app.last_message)
-            assert "d-000001" in rig.s.orders.doubles  # la lleva el daemon
+            assert "d-000001" in rig.s.orders.doubles  # kept by the daemon
 
-            # otro cliente ve las mismas órdenes y piernas
+            # another client sees the same orders and legs
             other = RemoteEngine(rig.path, has_bot=False, retry_s=0.02)
             task = asyncio.create_task(other.run())
             await until(pilot, lambda: other.snapshot is not None and "d-000001" in other.doubles)
@@ -81,15 +81,15 @@ async def test_opera_por_el_socket_y_al_cerrar_las_ordenes_siguen(tmp_path):
             task.cancel()
             await other.aclose()
 
-            await pilot.press("escape", "q")  # suelta la línea de comandos y sale
+            await pilot.press("escape", "q")  # releases the command line and exits
             await until(pilot, lambda: not app.is_running)
 
-        # la TUI se fue: la orden simple sigue abierta en el daemon
+        # the TUI left: the simple order stays open in the daemon
         await asyncio.sleep(0.05)
         open_now = await rig.open_orders()
         assert D("0.00710000") in {o.price for o in open_now["nk"]}
         events = [ln["event"] for ln in rig.s.lines()]
-        assert events.count("order_sent") == 3  # la simple y las dos piernas
+        assert events.count("order_sent") == 3  # the simple one and both legs
 
 
 @pytest.mark.spec("CA-16", "RF-31", "RF-08")

@@ -1,7 +1,6 @@
-"""La decisión del bot no cambia al bajar su complejidad (T-72, D-70): `decide`
-de `core/bot.py` y el oráculo congelado (`bot_reference.py`) dan el mismo
-`Fire` o `Skip`, `detail` incluido, en miles de casos aleatorios con semilla
-fija."""
+"""The bot's decision does not change when lowering its complexity (T-72, D-70):
+`core/bot.py`'s `decide` and the frozen oracle (`bot_reference.py`) give the same
+`Fire` or `Skip`, `detail` included, over thousands of random cases with a fixed seed."""
 
 import random
 from dataclasses import replace
@@ -39,7 +38,7 @@ def _spec(rnd: random.Random, venue: str) -> MarketSpec:
 
 
 def _levels(rnd: random.Random, start: Decimal, n: int, up: bool) -> tuple[Level, ...]:
-    """`n` niveles distintos desde `start`, hacia arriba (asks) o abajo (bids)."""
+    """`n` distinct levels from `start`, up (asks) or down (bids)."""
     out, price = [], start
     for _ in range(n):
         if price <= 0:
@@ -72,7 +71,7 @@ def _view(rnd: random.Random, venue: str, mid: Decimal) -> VenueView:
 def _case(seed: int):
     rnd = random.Random(seed)
     base = Decimal("0.00450000")
-    # con el signo del hueco cruzan en un sentido, en el otro o en ninguno
+    # the gap's sign makes them cross one way, the other or neither
     gap = TICK * rnd.choice([-30000, -10000, -3000, -500, 0, 60, 900, 3000, 10000, 30000])
     views = {"nk": _view(rnd, "nk", base), "nx": _view(rnd, "nx", base + gap)}
     walk = {
@@ -108,12 +107,12 @@ def test_misma_decision_que_el_oraculo(chunk):
         want = ref.decide(views, state, limits, NOW, target)
         assert got == want, f"semilla {seed}"
         fires += type(got).__name__ == "Fire"
-    assert fires > 0  # los casos también disparan, no solo descartan
+    assert fires > 0  # cases fire too, they do not only skip
 
 
 @pytest.mark.spec("RF-19", "RF-20", "RNF-22")
 def test_book_desordenado_misma_decision():
-    """Sin orden no hay monotonía: se prueban todos los pares, como antes."""
+    """Unsorted, no monotonicity: all pairs are tried, as before."""
     state = arm(BotState())
     for seed in range(600):
         views, limits, target = _case(seed)

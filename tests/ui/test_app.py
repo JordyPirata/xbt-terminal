@@ -1,5 +1,5 @@
-"""App Textual en solo lectura (T-13) con venues falsos: layout, books, velas,
-aviso de tamaño y latencia de pintado del book."""
+"""Read-only Textual app (T-13) with fake venues: layout, books, candles, size warning
+and book drawing latency."""
 
 import asyncio
 import itertools
@@ -69,7 +69,7 @@ class TestLayout:
             book_ = app.query_one("#book-nk").region
             info = app.query_one(CrossPanel).region
             assert chart.y < book_.y < info.y
-            assert info.width >= 158  # ocupa las dos columnas
+            assert info.width >= 158  # takes both columns
 
     @pytest.mark.parametrize("size", [(159, 45), (160, 44), (100, 30)])
     async def test_por_debajo_del_minimo_aviso(self, size):
@@ -100,7 +100,7 @@ class TestBook:
             text = panel.text
             assert "0.00730000" in text and "0.00730100" in text
             assert "0.00719900" in text
-            assert "3.0000" in text  # acumulado de bids: 1 + 2 (4 decimales en nk)
+            assert "3.0000" in text  # bid cumulative: 1 + 2 (4 decimals on nk)
             assert "spread 0.00010000" in text and "10000 sats" in text
 
     async def test_niveles_amm_marcados(self):
@@ -129,9 +129,9 @@ class TestBook:
             feeds["nk"].push(book("nk", "0.00720000", "0.00730000", seq=1))
             panel = app.query_one("#book-nk", BookPanel)
             await until(pilot, lambda: "0.00720000" in panel.text)
-            feeds["nk"].push(BookDelta("nk", (), (), T0, 5))  # hueco de sequence
+            feeds["nk"].push(BookDelta("nk", (), (), T0, 5))  # sequence gap
             await until(pilot, lambda: "esperando snapshot" in panel.text)
-            assert "0.00720000" not in panel.text  # nada de precios viejos
+            assert "0.00720000" not in panel.text  # no old prices
 
     async def test_sin_datos_todavia(self):
         app, _ = make_app()
@@ -211,7 +211,7 @@ async def test_las_filas_del_book_caben_sin_partirse():
     [("1m", "%H:%M"), ("5m", "%H:%M"), ("1h", "%d %H:%M"), ("4h", "%d %H:%M"), ("1d", "%m-%d")],
 )
 def test_formato_del_eje_por_timeframe(tf, fmt):
-    """En 4h la hora sola se repite cada día, y en 1d no dice nada: se añade la fecha."""
+    """In 4h the hour alone repeats daily, and in 1d it says nothing: the date is added."""
     from xbt_terminal.ui.panels import axis_format
 
     assert axis_format(tf) == fmt
@@ -221,16 +221,16 @@ def test_formato_del_eje_por_timeframe(tf, fmt):
 @pytest.mark.parametrize(
     "count,canvas,expected",
     [
-        (70, 85, (70, 1)),  # más columnas que velas: una por vela, sin huecos sueltos
-        (300, 85, (85, 1)),  # más velas que columnas: solo las que caben
-        (40, 85, (40, 2)),  # pocas velas: dos columnas cada una
+        (70, 85, (70, 1)),  # more columns than candles: one per candle, no stray gaps
+        (300, 85, (85, 1)),  # more candles than columns: only those that fit
+        (40, 85, (40, 2)),  # few candles: two columns each
         (20, 85, (20, 4)),
-        (1, 85, (1, 4)),  # el paso tiene tope: una vela sola no ocupa todo
+        (1, 85, (1, 4)),  # the step has a cap: a lone candle does not take everything
         (10, 0, (0, 1)),
     ],
 )
 def test_reparto_de_columnas(count, canvas, expected):
-    """D-24: cada vela recibe un número entero de columnas, igual para todas."""
+    """D-24: each candle gets a whole number of columns, the same for all."""
     from xbt_terminal.ui.panels import candle_layout
 
     assert candle_layout(count, canvas) == expected
@@ -238,8 +238,8 @@ def test_reparto_de_columnas(count, canvas, expected):
 
 @pytest.mark.spec("RF-03")
 def test_eje_y_se_ajusta_a_los_cuerpos_no_a_las_mechas():
-    """D-67: una mecha suelta no aplasta las velas; el eje Y va de los cuerpos y
-    la mecha que se sale queda cortada en el borde."""
+    """D-67: a stray wick does not crush the candles; the Y axis follows the bodies and the
+    wick sticking out is cut at the border."""
     from xbt_terminal.core.models import Candle
 
     candles = (
@@ -249,7 +249,7 @@ def test_eje_y_se_ajusta_a_los_cuerpos_no_a_las_mechas():
     assert ChartPanel._range(candles) == (10.0, 12.0)
     chart = ChartPanel("nk")
     chart.candles = candles
-    chart._draw(80)  # la mecha fuera de rango no rompe el dibujo
+    chart._draw(80)  # the out of range wick does not break drawing
 
 
 def _candle_columns(chart: ChartPanel) -> tuple[list[int], int]:
@@ -263,8 +263,8 @@ def _candle_columns(chart: ChartPanel) -> tuple[list[int], int]:
 @pytest.mark.spec("RF-03")
 @pytest.mark.parametrize("key", ["1", "5"])
 async def test_velas_sin_huecos_sueltos(key):
-    """D-24: las velas van a paso fijo y la última pegada al borde derecho; antes
-    plotext repartía N velas en M columnas y dejaba columnas vacías al azar."""
+    """D-24: candles go at a fixed step with the last against the right border; plotext used
+    to spread N candles over M columns leaving random empty columns."""
     app, _ = make_app()
     async with app.run_test(size=SIZE) as pilot:
         await pilot.press(key)

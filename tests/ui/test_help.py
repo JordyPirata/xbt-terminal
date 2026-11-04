@@ -1,4 +1,4 @@
-"""Ayuda dentro de la app (T-21, RF-15): `?` o `help`."""
+"""Help inside the app (T-21, RF-15): `?` or `help`."""
 
 import pytest
 
@@ -33,7 +33,7 @@ class TestAyuda:
             await pilot.press("question_mark")
             await until(pilot, lambda: isinstance(rig.app.screen, HelpScreen))
             text = rig.app.screen.text
-            assert "DRY-RUN" in text  # el modo actual, explicado
+            assert "DRY-RUN" in text  # the current mode, explained
             for needle in (
                 "buy nk 0.01 0.00725000",
                 "dbl 0.01 nk 0.00725000 nx 0.00730000",

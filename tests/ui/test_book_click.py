@@ -1,10 +1,10 @@
-"""Clic en el book (T-21, RF-16, D-18): con la línea vacía se escribe la orden
-entera, compra (clic en ventas) o venta (clic en compras), con el precio y la
-cantidad del nivel, o la acumulada si el clic es en esa columna; con texto,
-solo se inserta el precio en el cursor.
+"""Click on the book (T-21, RF-16, D-18): with an empty line the whole order is written,
+a buy (click on asks) or a sell (click on bids), with the level's price and quantity,
+or the cumulative one if the click is on that column; with text, only the price is
+inserted at the cursor.
 
-Books de FakeFeed: compras 0.00720000 × 1 y 0.00719900 × 2 (acumulado 1 y 3);
-ventas 0.00730000 × 0.5 y 0.00730100 × 3 (acumulado 0.5 y 3.5)."""
+FakeFeed books: bids 0.00720000 × 1 and 0.00719900 × 2 (cumulative 1 and 3); asks
+0.00730000 × 0.5 and 0.00730100 × 3 (cumulative 0.5 and 3.5)."""
 
 import pytest
 
@@ -16,14 +16,14 @@ from ..fakes import FakeFeed, book
 from .local import local_app
 from .test_double_ui import Rig, until
 
-# columnas de contenido: compras = acumulado 0-11, cantidad 12-23, precio 24-34;
-# ventas = precio 40-50, cantidad 51-62, acumulado 63-74
-BID_X, ASK_X = 30, 45  # columna de precio de cada lado
+# content columns: bids = cumulative 0-11, quantity 12-23, price 24-34; asks = price
+# 40-50, quantity 51-62, cumulative 63-74
+BID_X, ASK_X = 30, 45  # price column of each side
 BID_CUM_X, ASK_CUM_X = 5, 65
 
 
 async def ready(rig, pilot):
-    """Books de FakeFeed con dos niveles por lado y spec cargado."""
+    """FakeFeed books with two levels per side and the spec loaded."""
     for vid in ("nk", "nx"):
         rig.feeds[vid].push(
             ConnState(vid, "market", "ws", "up", 100.0, rig.now),
@@ -36,7 +36,7 @@ async def ready(rig, pilot):
 
 
 async def click(pilot, venue, x, y):
-    """(x, y) en coordenadas de contenido; +1 por el borde del panel."""
+    """(x, y) in content coordinates; +1 for the panel border."""
     await pilot.click(f"#book-{venue}", offset=(x + 1, y + 1))
     await pilot.pause()
 
@@ -47,28 +47,28 @@ class TestNivelBajoElRaton:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             panel = await ready(rig, pilot)
-            assert panel.level_at(BID_X, 0) is None  # cabecera
+            assert panel.level_at(BID_X, 0) is None  # header
             assert panel.level_at(BID_X, 1) == ("bid", D("0.00720000"), D("1"))
             assert panel.level_at(BID_X, 2) == ("bid", D("0.00719900"), D("2"))
             assert panel.level_at(ASK_X, 1) == ("ask", D("0.00730000"), D("0.5"))
             assert panel.level_at(ASK_X, 2) == ("ask", D("0.00730100"), D("3"))
-            for x in (37, 38, 39):  # separador " │ "
+            for x in (37, 38, 39):  # separator " │ "
                 assert panel.level_at(x, 1) is None, x
             assert panel.level_at(36, 1) is not None and panel.level_at(40, 1) is not None
-            assert panel.level_at(BID_X, 3) is None  # nivel vacío
-            assert panel.level_at(BID_X, 16) is None  # línea de resumen
+            assert panel.level_at(BID_X, 3) is None  # empty level
+            assert panel.level_at(BID_X, 16) is None  # summary line
 
     async def test_columna_de_acumulado_da_el_acumulado(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             panel = await ready(rig, pilot)
             assert panel.level_at(BID_CUM_X, 2) == ("bid", D("0.00719900"), D("3"))
-            assert panel.level_at(11, 2)[2] == D("3")  # último carácter del acumulado
-            assert panel.level_at(12, 2)[2] == D("2")  # ya es la cantidad
+            assert panel.level_at(11, 2)[2] == D("3")  # last character of the cumulative
+            assert panel.level_at(12, 2)[2] == D("2")  # already the quantity
             assert panel.level_at(ASK_CUM_X, 2) == ("ask", D("0.00730100"), D("3.5"))
-            assert panel.level_at(62, 2)[2] == D("3")  # cantidad
-            assert panel.level_at(63, 2)[2] == D("3.5")  # acumulado
-            assert panel.level_at(76, 2)[2] == D("3.5")  # marca AMM: cuenta como acumulado
+            assert panel.level_at(62, 2)[2] == D("3")  # quantity
+            assert panel.level_at(63, 2)[2] == D("3.5")  # cumulative
+            assert panel.level_at(76, 2)[2] == D("3.5")  # AMM mark: counts as cumulative
 
     async def test_sin_book_no_hay_nivel(self, tmp_path):
         rig = Rig(tmp_path)
@@ -127,8 +127,8 @@ class TestClic:
             assert "BUY 0.0100 XBT @ 0.00730000 en NonKYC" in rig.app.screen.summary
 
     async def test_una_cantidad_por_encima_del_tope_no_se_recorta(self, tmp_path):
-        """Acumulado 3.5 × 0.007301 ≈ 0.0256 BTC > 25 % del inventario (≈ 0.0043):
-        lo dice RiskCheck, no se cambia a escondidas."""
+        """Cumulative 3.5 × 0.007301 ≈ 0.0256 BTC > 25 % of the inventory (≈ 0.0043): RiskCheck
+        says so, it is not changed behind your back."""
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -168,7 +168,7 @@ class TestClic:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            await click(pilot, "nk", BID_X, 0)  # cabecera
+            await click(pilot, "nk", BID_X, 0)  # header
             assert rig.app.query_one(CommandLine).value == ""
 
 
@@ -189,7 +189,7 @@ async def test_en_solo_lectura_solo_copia(monkeypatch):
 
 @pytest.mark.spec("RF-16", "RF-28")
 async def test_el_clic_copia_tambien_con_el_sistema(monkeypatch):
-    """D-52: OSC 52 no llega en GNOME Terminal; el precio va también por xclip."""
+    """D-52: OSC 52 does not reach GNOME Terminal; the price also goes through xclip."""
     copied: list[str] = []
 
     async def clipboard(text):

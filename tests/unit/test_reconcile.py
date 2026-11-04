@@ -1,4 +1,4 @@
-"""Candidatas para un envío incierto (T-25, RNF-12, PA-09, D-26)."""
+"""Candidates for an uncertain send (T-25, RNF-12, PA-09, D-26)."""
 
 import pytest
 
@@ -57,6 +57,6 @@ class TestSinClientId:
         assert candidates(REQ, [a, b], SENT, frozenset(), by_client_id=False) == [a, b]
 
     def test_la_misma_orden_dos_veces_cuenta_una(self):
-        """Activas e historial pueden traer la misma: vale la última de la lista."""
+        """Active and history may bring the same one: the last of the list counts."""
         a, a_later = order("a"), order("a", status="filled", ts=SENT + 1)
         assert candidates(REQ, [a, a_later], SENT, frozenset(), by_client_id=False) == [a_later]

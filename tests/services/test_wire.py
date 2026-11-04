@@ -1,5 +1,5 @@
-"""Modelos ↔ JSON para el socket del daemon (T-52, RF-31, D-61): `Decimal` como
-texto, sin `float` en dinero y de vuelta al mismo objeto."""
+"""Models ↔ JSON for the daemon socket (T-52, RF-31, D-61): `Decimal` as text, no
+`float` in money, and back to the same object."""
 
 import dataclasses
 import json
@@ -71,7 +71,7 @@ class TestLineas:
         with pytest.raises(ValueError):
             loads(b"no es json\n")
         with pytest.raises(ValueError):
-            loads(b"[1, 2]\n")  # un mensaje es siempre un objeto
+            loads(b"[1, 2]\n")  # a message is always an object
 
     def test_un_float_en_dinero_no_pasa(self):
         with pytest.raises((TypeError, ValueError)):
@@ -80,7 +80,7 @@ class TestLineas:
 
 @dataclasses.dataclass
 class Sample:
-    """Dataclass de prueba: valor por defecto, deque con `maxlen` y campo sin init."""
+    """Test dataclass: default value, deque with `maxlen` and a non-init field."""
 
     a: int
     b: str = "x"
@@ -90,7 +90,7 @@ class Sample:
 
 @pytest.mark.spec("RF-31", "RNF-07")
 class TestCadaTipo:
-    """Fija qué devuelve `decode` con cada familia de tipos (D-77: partirla no lo cambia)."""
+    """Pin what `decode` returns with each type family (D-77: splitting it changes nothing)."""
 
     @pytest.mark.parametrize(
         ("tp", "data", "expected"),
@@ -125,7 +125,7 @@ class TestCadaTipo:
     def test_dataclass(self):
         assert decode(Sample, {"a": 1}) == Sample(1)
         got = decode(Sample, {"a": 1, "c": [1, 2, 3], "d": 9, "z": 0})
-        # conserva el maxlen del campo; ignora claves de más y campos sin init
+        # keeps the field's maxlen; ignores extra keys and non-init fields
         assert got.c == deque([2, 3]) and got.c.maxlen == 2 and got.d == 7
 
     @pytest.mark.parametrize(

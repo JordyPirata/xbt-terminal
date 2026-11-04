@@ -1,5 +1,5 @@
-"""Salida segura en OrderService (T-28, RNF-15, D-29): lo que ya salió hacia el
-venue termina y queda en el journal aunque quien lo esperaba se cancele."""
+"""Safe exit in OrderService (T-28, RNF-15, D-29): what already left for the venue
+finishes and lands in the journal even if its waiter is cancelled."""
 
 import asyncio
 
@@ -34,7 +34,7 @@ class TestEnVuelo:
         while events(s) != ["order_sent"]:
             await asyncio.sleep(0.001)
         assert s.orders.in_flight == 1
-        task.cancel()  # como al cerrar la app con el envío en vuelo
+        task.cancel()  # as when closing the app with a send in flight
         await asyncio.gather(task, return_exceptions=True)
         await s.orders.drain()
         assert events(s) == ["order_sent", "order_ack"]

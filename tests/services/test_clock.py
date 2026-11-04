@@ -1,8 +1,8 @@
-"""Reloj local y desfase con el venue (T-29, RNF-16, D-30).
+"""Local clock and skew with the venue (T-29, RNF-16, D-30).
 
-La frescura del book se mide con la hora local de recepción, no con la del
-exchange. En live, un venue con el reloj desfasado más de `max_clock_skew_s`, o
-sin desfase medido, no recibe órdenes; en dry-run se valida igual."""
+Book freshness uses the local arrival time, not the exchange's. In live, a venue
+skewed more than `max_clock_skew_s`, or with no measured skew, gets no orders; in
+dry-run it validates the same."""
 
 from dataclasses import replace
 
@@ -14,7 +14,7 @@ from .test_orders import LIMITS, NOW, Setup, buy, codes
 
 
 def live(s, skew_ms, *, limits=LIMITS):
-    """El OrderService de `s`, en live, con el desfase de NonKYC medido en `skew_ms`."""
+    """The OrderService of `s`, in live, with NonKYC's skew measured at `skew_ms`."""
     s.hub._venues["nk"].clock_skew_ms = skew_ms
     return OrderService(s.hub, {"nk": s.venue}, s.journal, limits, clock=lambda: NOW, live=True)
 
@@ -53,7 +53,7 @@ class TestDesfaseEnLive:
         assert "6 s" in result.message and "NTP" in result.message
 
     async def test_sin_medir_se_rechaza(self, tmp_path):
-        """Ante la duda, no se envía: sin cabecera Date no se sabe."""
+        """When in doubt, do not send: without a Date header it is unknown."""
         s = Setup(tmp_path)
         result = await live(s, None).prepare(buy())
         assert "clock_skew" in codes(result) and "sin medir" in result.message
@@ -70,6 +70,6 @@ class TestDesfaseEnLive:
 
     def test_el_hub_da_el_desfase_del_adaptador(self, tmp_path):
         s = Setup(tmp_path)
-        assert s.hub.clock_skew_ms("nk") is None  # el venue falso no lo mide
+        assert s.hub.clock_skew_ms("nk") is None  # the fake venue does not measure it
         s.hub._venues["nk"].clock_skew_ms = 1_500
         assert s.hub.clock_skew_ms("nk") == 1_500

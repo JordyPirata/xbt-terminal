@@ -4,7 +4,7 @@ from xbt_terminal.core.candles import TIMEFRAME_MS, CandleBuilder
 from xbt_terminal.core.models import Candle, D, Trade
 
 MIN = 60_000
-T0 = 1_759_996_800_000  # múltiplo exacto de 1 h
+T0 = 1_759_996_800_000  # exact multiple of 1 h
 
 
 def trade(ts: int, price: str, qty: str = "0.1") -> Trade:
@@ -55,7 +55,7 @@ class TestTradesEnVivo:
         "tf,step", [("5m", 5 * MIN), ("1h", 60 * MIN), ("4h", 240 * MIN), ("1d", 1440 * MIN)]
     )
     def test_otros_timeframes(self, tf, step):
-        start = T0 - T0 % step  # 4h y 1d empiezan en múltiplos exactos (00:00 UTC)
+        start = T0 - T0 % step  # 4h and 1d start at exact multiples (00:00 UTC)
         b = CandleBuilder(tf)
         b.on_trade(trade(start + step - 1, "1000"))
         b.on_trade(trade(start + step, "1001"))

@@ -44,7 +44,7 @@ def test_sin_xdg_cuelga_de_home(tmp_path):
 
 @pytest.mark.spec("RNF-20")
 def test_xdg_relativo_se_ignora(tmp_path):
-    """La especificación XDG pide ignorar rutas relativas: dependerían del cwd."""
+    """The XDG spec asks to ignore relative paths: they would depend on the cwd."""
     paths = resolve_paths(environ={"HOME": str(tmp_path), "XDG_STATE_HOME": "rel/state"})
     assert paths.data == tmp_path / ".local" / "state" / "xbt"
 
@@ -67,7 +67,7 @@ def test_directorio_de_datos_0700(tmp_path):
     private_dir(data)
     assert mode_of(data) == 0o700
     data.chmod(0o755)
-    private_dir(data)  # uno ya creado con más permisos se cierra
+    private_dir(data)  # one created with wider permissions gets tightened
     assert mode_of(data) == 0o700
 
 
@@ -80,7 +80,7 @@ def test_segunda_instancia_rechazada(tmp_path):
     assert str(tmp_path) in str(exc.value)
     first.release()
     again = InstanceLock(tmp_path)
-    again.acquire()  # al soltarla, otra puede arrancar
+    again.acquire()  # once released, another can start
     again.release()
 
 

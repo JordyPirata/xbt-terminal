@@ -1,6 +1,6 @@
-"""Mercado de referencia: mid 1000 (999/1001), tick 0.01, lote 0.0001.
-Saldos: 300 USDT + 0.1 BTCB2 → valor custodiado 400 USDT, tope 500.
-Inventario total de los dos venues 400; tope por orden 15 % → 60 (D-19).
+"""Reference market: mid 1000 (999/1001), tick 0.01, lot 0.0001.
+Balances: 300 USDT + 0.1 BTCB2 → custodied value 400 USDT, cap 500.
+Total inventory of both venues 400; per order cap 15 % → 60 (D-19).
 """
 
 from dataclasses import replace
@@ -68,7 +68,7 @@ class TestCadaRegla:
         assert codes(req("sell")) == []
 
     def test_order_size(self):
-        """15 % de 400 = 60: el límite exacto se permite."""
+        """15 % of 400 = 60: the exact limit is allowed."""
         assert codes(req(qty="0.06", price="1000")) == []
         assert codes(
             req(qty="0.05", price="1200.01"), limits=replace(LIMITS, max_mid_deviation_pct=D("50"))
@@ -81,14 +81,14 @@ class TestCadaRegla:
         assert codes(req(qty="0.06", price="1000"), ctx(inventory_value=D("800"))) == []
 
     def test_sin_inventario_calculable_se_rechaza(self):
-        """Fallar cerrado: sin saldos o sin mid de un venue no hay tope que aplicar."""
+        """Fail closed: without balances or a venue's mid there is no cap to apply."""
         assert codes(req(), ctx(inventory_value=None)) == ["order_size"]
 
     def test_inventario_cero(self):
         assert codes(req(), ctx(inventory_value=D("0"))) == ["order_size"]
 
     def test_mid_deviation(self):
-        assert codes(req(price="950")) == []  # justo el 5 %: se permite
+        assert codes(req(price="950")) == []  # exactly 5 %: allowed
         assert codes(req(price="949.99")) == ["mid_deviation"]
         assert codes(req("sell", price="1050.01")) == ["mid_deviation"]
 
@@ -156,7 +156,7 @@ class TestCruceDeOrdenPropia:
 
 @pytest.mark.spec("RF-10", "CA-04")
 class TestExposicionPorVenue:
-    """PA-06 (a): valor custodiado tras la orden = USDT + BTCB2 × mid."""
+    """PA-06 (a): custodied value after the order = USDT + BTCB2 × mid."""
 
     def test_ya_por_encima_del_tope(self):
         rico = {"USDT": Balance("USDT", D("450")), "BTCB2": Balance("BTCB2", D("0.06"))}
@@ -170,7 +170,7 @@ class TestExposicionPorVenue:
         assert codes(req(), ctx(balances=bal)) == ["venue_exposure"]
 
     def test_se_evalua_despues_de_la_orden(self):
-        # antes: 499 USDT; comprar 0.05 a 950 (mid 1000) suma 0.05 × 50 = 2.5 → 501.5
+        # before: 499 USDT; buying 0.05 at 950 (mid 1000) adds 0.05 × 50 = 2.5 → 501.5
         bal = {"USDT": Balance("USDT", D("399")), "BTCB2": Balance("BTCB2", D("0.1"))}
         assert codes(req(qty="0.05", price="950"), ctx(balances=bal)) == ["venue_exposure"]
         assert codes(req("sell", qty="0.05", price="950"), ctx(balances=bal)) == []
@@ -224,7 +224,7 @@ def test_peticion_de_otro_venue_es_error_de_programacion():
 
 @pytest.mark.spec("RF-10", "CA-04")
 class TestOrdenYTextoDeLasViolaciones:
-    """Fija el orden y el texto de cada violación (D-77: partir `check` no los cambia)."""
+    """Pin the order and text of each violation (D-77: splitting `check` changes nothing)."""
 
     def test_compra_con_casi_todo_mal(self):
         poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
@@ -266,7 +266,7 @@ class TestOrdenYTextoDeLasViolaciones:
         ]
 
     def test_sin_mid_ni_inventario(self):
-        """Sin mid no se mira ni la desviación ni la exposición."""
+        """Without a mid neither deviation nor exposure is looked at."""
         rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
         context = ctx(best_ask=None, inventory_value=None, balances=rico)
         got = check(req("buy", qty="0.01"), context, LIMITS)

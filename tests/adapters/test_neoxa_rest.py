@@ -1,6 +1,6 @@
-"""REST público de Neoxa contra respuestas reales grabadas el 2026-10-20
-(tests/fixtures/neoxa/). Neoxa devuelve floats en JSON: todo debe llegar como el
-Decimal exacto del texto, nunca pasando por float."""
+"""Neoxa public REST against real responses recorded on 2026-10-20
+(tests/fixtures/neoxa/). Neoxa returns JSON floats: everything must arrive as the
+exact Decimal of the text, never through float."""
 
 from decimal import Decimal
 from pathlib import Path
@@ -75,7 +75,7 @@ class TestMarket:
                 await NeoxaVenue("BTCB2_XMR", limiter, http=http).market()
 
     async def test_venue_con_quote_distinto_del_simbolo(self, limiter, api):
-        """Defensa en profundidad (RNF-10): el símbolo dice BTC, el venue debe decir BTC."""
+        """Defence in depth (RNF-10): the symbol says BTC, the venue must say BTC."""
         bad = fixture("pairs.json").replace('"quoteToken":"BTC"', '"quoteToken":"USDT"')
         api.get(f"{API}/pairs").respond(text=bad)
         async with httpx.AsyncClient(base_url=REST_URL) as http:

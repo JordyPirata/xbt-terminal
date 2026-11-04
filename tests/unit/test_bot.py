@@ -1,4 +1,4 @@
-"""Decisión pura del bot y su máquina de estados (T-35, RF-19, RF-20, RF-22, RNF-22)."""
+"""The bot's pure decision and its state machine (T-35, RF-19, RF-20, RF-22, RNF-22)."""
 
 from dataclasses import replace
 
@@ -54,7 +54,7 @@ def view(venue, bids=(), asks=(), quote="1", base="1000", blocked=None):
 
 
 def crossed(nk=None, nx=None):
-    """Comprar en NonKYC a 0.00700000 y vender en Neoxa a 0.00720000."""
+    """Buy on NonKYC at 0.00700000 and sell on Neoxa at 0.00720000."""
     nk_asks = [("0.00700000", "50"), ("0.00702000", "100")]
     nx_bids = [("0.00720000", "80"), ("0.00718000", "100")]
     views = {
@@ -74,9 +74,9 @@ class TestDisparo:
         fire = decide(crossed(), ARMED, LIMITS, NOW)
         assert isinstance(fire, Fire)
         assert (fire.buy_venue, fire.sell_venue) == ("nk", "nx")
-        # límites agresivas: 0.007 × 1.002 hacia arriba, 0.0072 × 0.998 hacia abajo
+        # aggressive limits: 0.007 × 1.002 up, 0.0072 × 0.998 down
         assert fire.buy_price == D("0.00701400") and fire.sell_price == D("0.00718560")
-        # profundidad hasta esos precios: 50 en NonKYC, 80 en Neoxa
+        # depth up to those prices: 50 on NonKYC, 80 on Neoxa
         assert fire.qty == D("50.0000")
         unit = D("0.00718560") * D("0.998") - D("0.00701400") * D("1.002")
         assert fire.net == unit * 50
@@ -88,7 +88,7 @@ class TestDisparo:
         assert "2.04" in skip.detail
 
     def test_la_neta_usa_los_precios_limite_no_el_mejor_precio(self):
-        # con el mejor precio la neta es 2.45 %, con un 1 % de slippage por lado < 0.5 %
+        # at the best price the net is 2.45 %, with 1 % slippage per side < 0.5 %
         skip = decide(crossed(), ARMED, replace(LIMITS, max_slippage_pct=D("1")), NOW)
         assert isinstance(skip, Skip) and skip.reason == "below_threshold"
 
@@ -98,7 +98,7 @@ class TestDisparo:
             nx={"bids": (Level(D("0.00720001"), D("80")),)},
         )
         fire = decide(views, ARMED, LIMITS, NOW)
-        # 0.00701401002 → arriba; 0.00718560998 → abajo
+        # 0.00701401002 → up; 0.00718560998 → down
         assert fire.buy_price == D("0.00701402") and fire.sell_price == D("0.00718560")
 
     def test_sentido_contrario(self):
@@ -121,10 +121,10 @@ class TestCantidad:
     @pytest.mark.parametrize(
         ("change", "qty"),
         [
-            ({"nx": {"bids": (Level(D("0.00720000"), D("10")),)}}, "10.0000"),  # profundidad venta
-            # 0.1 BTC / (0.007014 × 1.002) = 14.22873… al lote de NonKYC
+            ({"nx": {"bids": (Level(D("0.00720000"), D("10")),)}}, "10.0000"),  # sell depth
+            # 0.1 BTC / (0.007014 × 1.002) = 14.22873… at NonKYC's lot
             ({"nk": {"quote_available": D("0.1")}}, "14.2287"),
-            ({"nx": {"base_available": D("7.5")}}, "7.5000"),  # BTCB2 en el venue de venta
+            ({"nx": {"base_available": D("7.5")}}, "7.5000"),  # BTCB2 on the sell venue
         ],
     )
     def test_el_minimo_de_cada_termino(self, change, qty):
@@ -135,7 +135,7 @@ class TestCantidad:
 
     def test_lo_que_queda_del_tope_diario(self):
         state = replace(ARMED, day=NOW // DAY_MS, day_btc=D("0.9"))
-        # 0.1 BTC de compra / 0.007014 = 14.257… → 14.2571
+        # 0.1 BTC buy / 0.007014 = 14.257… → 14.2571
         assert decide(crossed(), state, LIMITS, NOW).qty == D("14.2571")
 
     def test_sin_saldo_no_dispara(self):
@@ -176,7 +176,7 @@ class TestNoDispara:
     def test_tope_por_hora(self):
         recent = tuple(NOW - 60_000 * i for i in range(1, 21))
         assert decide(crossed(), replace(ARMED, fired_at=recent), LIMITS, NOW).reason == "hour_cap"
-        old = (*recent[:-1], NOW - HOUR_MS)  # uno ya tiene una hora
+        old = (*recent[:-1], NOW - HOUR_MS)  # one is already an hour old
         assert isinstance(decide(crossed(), replace(ARMED, fired_at=old), LIMITS, NOW), Fire)
 
     def test_tope_diario_gastado(self):
@@ -184,7 +184,7 @@ class TestNoDispara:
         assert decide(crossed(), state, LIMITS, NOW).reason == "day_cap"
 
     def test_el_tope_diario_es_del_dia_utc(self):
-        state = replace(ARMED, day=NOW // DAY_MS - 1, day_btc=D("1"))  # era de ayer
+        state = replace(ARMED, day=NOW // DAY_MS - 1, day_btc=D("1"))  # it was yesterday's
         assert isinstance(decide(crossed(), state, LIMITS, NOW), Fire)
 
 
@@ -221,7 +221,7 @@ class TestEstados:
     def test_termina_mal_y_se_para(self):
         state = finished(fired(ARMED, self.fire(), NOW), LIMITS, NOW, error="hanging_leg: x")
         assert (state.status, state.reason) == ("halted", "hanging_leg: x")
-        assert tick(state, LIMITS, NOW + HOUR_MS).status == "halted"  # solo a mano
+        assert tick(state, LIMITS, NOW + HOUR_MS).status == "halted"  # by hand only
 
     def test_al_llegar_al_tope_diario_se_para(self):
         state = replace(fired(ARMED, self.fire(), NOW), day_btc=D("1"))
@@ -229,11 +229,11 @@ class TestEstados:
         assert state.status == "halted" and state.reason.startswith("day_cap")
 
     def test_tope_diario_sin_disparo_se_para(self):
-        """T-46 (D-54): con el tope ya gastado al evaluar, `halted` como al agotarlo."""
+        """T-46 (D-54): with the cap already spent at evaluation, `halted` as when used up."""
         state = capped(replace(ARMED, failures=2), LIMITS)
         assert (state.status, state.failures) == ("halted", 0)
         assert state.reason == f"day_cap: {LIMITS.max_daily_btc} BTC de compra hoy"
-        assert tick(state, LIMITS, NOW + HOUR_MS).status == "halted"  # solo a mano
+        assert tick(state, LIMITS, NOW + HOUR_MS).status == "halted"  # by hand only
 
     def test_rechazos_seguidos(self):
         state = fired(ARMED, self.fire(), NOW)
@@ -253,8 +253,8 @@ class TestEstados:
 
 
 def amm_steps(nx_bids=(("0.00460000", "5"),)):
-    """Escalones del pool AMM de NonKYC (D-60): 0.0018 BTCB2 cada uno, con el
-    mínimo del venue en 0.0000126 BTC (≈ 0.0029 BTCB2, dos escalones)."""
+    """Steps of NonKYC's AMM pool (D-60): 0.0018 BTCB2 each, with the venue minimum at
+    0.0000126 BTC (≈ 0.0029 BTCB2, two steps)."""
     nk_spec = replace(spec("nk"), min_notional=D("0.0000126"))
     asks = (("0.00447270", "0.0018"), ("0.00448768", "0.0017"), ("0.00450014", "0.0018"))
     return {
@@ -273,24 +273,24 @@ class TestRecorrerElBook:
         limits = replace(LIMITS, max_walk_pct={"nk": D("0.8")})
         fire = decide(amm_steps(), ARMED, limits, NOW)
         assert isinstance(fire, Fire) and (fire.buy_venue, fire.sell_venue) == ("nk", "nx")
-        # referencia: 3.er escalón; 0.00450014 × 1.002 = 0.00450914028 → arriba
+        # reference: 3rd step; 0.00450014 × 1.002 = 0.00450914028 → up
         assert fire.buy_price == D("0.00450915") and fire.qty == D("0.0053")
         assert fire.sell_price == D("0.00459080")
 
     def test_no_paga_profundidad_que_no_puede_vender(self):
-        # en Neoxa solo caben 0.0035 al mejor bid: el 2.º escalón basta y sale más barato
+        # on Neoxa only 0.0035 fit at the best bid: the 2nd step is enough and cheaper
         views = amm_steps(nx_bids=(("0.00460000", "0.0035"), ("0.00440000", "10")))
         fire = decide(views, ARMED, replace(LIMITS, max_walk_pct={"nk": D("0.8")}), NOW)
         assert fire.buy_price == D("0.00449666") and fire.qty == D("0.0035")
 
     def test_si_el_escalon_mas_hondo_no_da_el_umbral_se_queda_en_el_anterior(self):
-        # neta: 2.º escalón ≈ 1.69 %, 3.º ≈ 1.41 %
+        # net: 2nd step ≈ 1.69 %, 3rd ≈ 1.41 %
         limits = replace(LIMITS, max_walk_pct={"nk": D("0.8")}, min_net_pct=D("1.5"))
         fire = decide(amm_steps(), ARMED, limits, NOW)
         assert fire.buy_price == D("0.00449666") and fire.qty == D("0.0035")
 
     def test_el_tope_corta_el_recorrido(self):
-        # 0.00447270 × 1.004 = 0.00449059: entra el 2.º escalón, no el 3.º
+        # 0.00447270 × 1.004 = 0.00449059: the 2nd step fits, the 3rd does not
         limits = replace(LIMITS, max_walk_pct={"nk": D("0.4")})
         fire = decide(amm_steps(), ARMED, limits, NOW)
         assert fire.buy_price == D("0.00449666") and fire.qty == D("0.0035")
@@ -312,8 +312,8 @@ class TestRecorrerElBook:
 
 
 def thin(nk_fee=None):
-    """Comprar a 0.007 y vender a 0.00705, sin slippage: con fee 0.2 % en las dos
-    piernas la neta es 0.31 % (< 0.33 %); con 0.15 % en NonKYC, 0.36 %."""
+    """Buy at 0.007 and sell at 0.00705, no slippage: with 0.2 % fee on both legs the net
+    is 0.31 % (< 0.33 %); with 0.15 % on NonKYC, 0.36 %."""
     limits = replace(LIMITS, max_slippage_pct=D("0"), min_net_pct=D("0.33"))
     views = {
         "nk": view("nk", bids=[("0.00690000", "40")], asks=[("0.00700000", "50")]),
@@ -359,7 +359,7 @@ class TestTokenFee:
 
 @pytest.mark.spec("RF-19", "RNF-22", "CA-08")
 class TestMovimientoBrusco:
-    """D-71: tras un salto del mid, otros bots llegan antes; el bot no dispara."""
+    """D-71: after a mid jump, other bots get there first; the bot does not fire."""
 
     def test_sin_filtro_dispara_aunque_se_mueva(self):
         views = crossed(nx={"move_pct": D("5")})
@@ -375,7 +375,7 @@ class TestMovimientoBrusco:
     def test_con_filtro_y_calma_dispara(self):
         limits = replace(LIMITS, max_move_pct=D("1"))
         views = crossed(nk={"move_pct": D("1")}, nx={"move_pct": D("0.3")})
-        assert isinstance(decide(views, ARMED, limits, NOW), Fire)  # justo en el tope
+        assert isinstance(decide(views, ARMED, limits, NOW), Fire)  # exactly at the cap
 
     def test_sin_medida_no_frena(self):
         limits = replace(LIMITS, max_move_pct=D("1"))

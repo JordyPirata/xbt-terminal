@@ -1,5 +1,5 @@
-"""TUI conectada al daemon (T-53, T-63, RF-31, CA-15, CA-16, D-61, D-66): ve lo
-del daemon, opera por el socket y salir no le cambia nada."""
+"""TUI attached to the daemon (T-53, T-63, RF-31, CA-15, CA-16, D-61, D-66): sees the
+daemon's state, trades over the socket and exiting changes nothing for it."""
 
 import pytest
 
@@ -20,7 +20,7 @@ class AttachRig:
     def __init__(self, tmp_path):
         self.daemon = Daemon(tmp_path)
         self.remote = RemoteEngine(self.daemon.path, has_bot=True, retry_s=0.02)
-        self.hub = self.remote.market  # el mercado llega del daemon (D-66)
+        self.hub = self.remote.market  # the market comes from the daemon (D-66)
         services = ClientServices(
             orders=self.remote.orders,
             account=self.remote.account,
@@ -163,7 +163,7 @@ class TestOpera:
             await until(pilot, lambda: "sin conexión con el daemon" in rig.app.last_message)
 
     async def test_depositos_del_daemon(self, tmp_path):
-        """El Rig del daemon no tiene keys para depósitos: lo dice, sin abrir la ventana."""
+        """The daemon's Rig has no deposit keys: it says so, without opening the window."""
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await pilot.press("w")
@@ -176,7 +176,7 @@ class TestOpera:
             await linked(rig, pilot)
             await pilot.press("r")
             await until(pilot, lambda: isinstance(rig.app.screen, ResultsScreen))
-            await until(pilot, lambda: "resultados" in rig.app.last_message)  # sin servicio
+            await until(pilot, lambda: "resultados" in rig.app.last_message)  # no service
 
 
 @pytest.mark.spec("RF-31", "CA-15")

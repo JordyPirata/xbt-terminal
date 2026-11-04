@@ -1,5 +1,5 @@
-"""Qué apuntan en el log de diagnóstico el supervisor, el hub, la cuenta y los
-fallos (T-31, RNF-19)."""
+"""What the supervisor, hub, account and faults note in the diagnostic log (T-31,
+RNF-19)."""
 
 import logging
 
@@ -62,7 +62,7 @@ async def test_cada_fallo_con_traceback(caplog):
 @pytest.mark.spec("RNF-19")
 async def test_errores_de_la_cuenta_una_vez_por_racha(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
-    account = AccountService({})  # sin journal: el log de diagnóstico apunta igual
+    account = AccountService({})  # no journal: the diagnostic log notes anyway
     for _ in range(3):
         account._journal_error("nx", "balances", "Neoxa: 503")
     account._journal_error("nx", "balances", "Neoxa: 502")

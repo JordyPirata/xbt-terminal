@@ -1,10 +1,10 @@
-"""Book centrado con barras de profundidad a los lados (RF-02, D-49): la
-escalera va en el centro del panel; a su izquierda, una barra verde por nivel
-de compra que crece hacia fuera con el acumulado, y a su derecha la de ventas.
-Las barras usan el sitio que sobra: con el panel justo no hay barras.
+"""Book centred with depth bars on the sides (RF-02, D-49): the ladder sits in the middle
+of the panel; left of it, a green bar per bid level growing outwards with the
+cumulative, and right of it the asks one. Bars use the spare room: with a tight panel
+there are none.
 
-Books de FakeFeed: compras 0.00720000 × 1 y 0.00719900 × 2 (acumulado 1 y 3);
-ventas 0.00730000 × 0.5 y 0.00730100 × 3 (acumulado 0.5 y 3.5)."""
+FakeFeed books: bids 0.00720000 × 1 and 0.00719900 × 2 (cumulative 1 and 3); asks
+0.00730000 × 0.5 and 0.00730100 × 3 (cumulative 0.5 and 3.5)."""
 
 import pytest
 
@@ -14,7 +14,7 @@ from xbt_terminal.ui.panels import LADDER_W, BookPanel, depth_bar
 from .test_book_click import ASK_X, BID_CUM_X, BID_X, ready
 from .test_double_ui import Rig
 
-WIDE = (220, 50)  # cada book con ~108 columnas de contenido
+WIDE = (220, 50)  # each book with ~108 content columns
 
 
 def line_with(panel: BookPanel, needle: str) -> str:
@@ -47,10 +47,10 @@ class TestPanel:
         async with rig.app.run_test(size=WIDE) as pilot:
             panel = await ready(rig, pilot)
             first, second = line_with(panel, "0.00720000"), line_with(panel, "0.00719900")
-            # compras a la izquierda de la escalera, ventas a la derecha
+            # bids left of the ladder, asks right
             assert first.index("█") < first.index("0.00720000")
             assert first.rindex("█") > first.index("0.00730000")
-            # el nivel más profundo (acumulado 3.5, el máximo) llena su barra
+            # the deepest level (cumulative 3.5, the maximum) fills its bar
             bar_w = panel.bar_width
             assert bar_w >= 8 and second.rstrip().endswith("█" * bar_w)
             assert second.count("█") > first.count("█")

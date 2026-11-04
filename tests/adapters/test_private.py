@@ -1,5 +1,5 @@
-"""Seguimiento común de órdenes y fills propios (D-14): diff entre refrescos y
-bucle de polling con su estado de conexión privado."""
+"""Common tracking of own orders and fills (D-14): diff between refreshes and a polling
+loop with its private connection state."""
 
 import asyncio
 from contextlib import aclosing
@@ -32,11 +32,11 @@ def fill(tid="f-1", oid="o-1", qty="0.004", ts=T0 + 1):
 @pytest.mark.spec("RF-08", "RF-09")
 class TestTracker:
     def test_el_primer_refresco_da_las_ordenes_y_los_fills_viejos_como_pasados(self):
-        """D-68: los trades que ya estaban no son fills nuevos, pero la cuenta los
-        compara con el journal."""
+        """D-68: trades already there are not new fills, but the account compares them with
+        the journal."""
         t = OrderTracker()
         events, gone = t.update([order("a"), order("b")], [fill("f-2", ts=T0 + 2), fill("f-1")])
-        past = [PastFill(fill("f-1")), PastFill(fill("f-2", ts=T0 + 2))]  # por hora
+        past = [PastFill(fill("f-1")), PastFill(fill("f-2", ts=T0 + 2))]  # by time
         assert events == [order("a"), order("b"), *past]
         assert gone == [] and t.open == [order("a"), order("b")]
 
@@ -64,7 +64,7 @@ class TestTracker:
         t = OrderTracker()
         t.update([order("a")], [])
         assert t.update([], [])[1] == ["a"]
-        assert t.update([], [])[1] == ["a"]  # sigue pendiente mientras no se resuelva
+        assert t.update([], [])[1] == ["a"]  # stays pending until resolved
         final = order("a", filled="0.01", status="filled")
         assert t.resolve(final) == [final]
         assert t.update([], [])[1] == [] and t.open == []
@@ -73,7 +73,7 @@ class TestTracker:
         assert OrderTracker().resolve(order("x", status="cancelled")) == []
 
     def test_recuerda_el_client_id_de_lo_que_envio_la_terminal(self):
-        """Neoxa no guarda client_id: el de place_limit se mantiene en los refrescos."""
+        """Neoxa keeps no client_id: place_limit's is kept across refreshes."""
         t = OrderTracker()
         t.remember(order("a", cid="t-abc123"))
         events, _ = t.update([order("a")], [])
@@ -81,18 +81,18 @@ class TestTracker:
         assert t.resolve(order("a", status="cancelled"))[0].client_id == "t-abc123"
 
     def test_lo_enviado_se_sigue_aunque_no_se_vea_activo(self):
-        """Visto en real (2026-10-22 04:07, D-41): una venta en NonKYC se llenó en
-        ~1 s, antes del siguiente polling, y su cierre no llegó nunca."""
+        """Seen for real (2026-10-22 04:07, D-41): a sell on NonKYC filled in ~1 s, before the
+        next poll, and its close never arrived."""
         t = OrderTracker()
         t.update([], [])
         t.remember(order("a", cid="t-7bbce5"))
         assert t.open == [order("a", cid="t-7bbce5")]
-        assert t.update([], [])[1] == ["a"]  # ya no está activa: se consulta
+        assert t.update([], [])[1] == ["a"]  # no longer active: queried
         final = order("a", filled="0.01", status="filled")
         assert t.resolve(final) == [order("a", filled="0.01", status="filled", cid="t-7bbce5")]
 
     def test_lo_enviado_ya_terminado_no_se_sigue(self):
-        """Neoxa contesta "filled" al crear: no hay nada que consultar después."""
+        """Neoxa answers "filled" on creating: nothing to query later."""
         t = OrderTracker()
         t.remember(order("a", filled="0.01", status="filled", cid="t-1"))
         assert t.open == [] and t.update([], [])[1] == []
@@ -102,7 +102,7 @@ class TestTracker:
         t.remember(order("a", cid="t-1"))
         events, gone = t.update([order("a")], [])
         assert gone == [] and t.open == [order("a", cid="t-1")]
-        assert events == [order("a", cid="t-1")]  # la primera vez se avisa igual
+        assert events == [order("a", cid="t-1")]  # reported anyway the first time
 
 
 class FakeSource:
@@ -255,8 +255,8 @@ async def test_fan_in_mezcla_varios_trabajadores_y_los_para_al_cerrar():
 
 @pytest.mark.spec("RF-07", "RF-09")
 async def test_orden_llena_antes_del_primer_polling_sale_como_llena():
-    """De punta a punta en el refresco: el venue ya no la lista como activa, y
-    `getorder` dice que se llenó; sale un `Order` lleno con el client_id."""
+    """End to end in the refresh: the venue no longer lists it as active, and `getorder`
+    says it filled; a filled `Order` comes out with the client_id."""
     t = OrderTracker()
     filled = order("a", filled="0.01", status="filled")
 
@@ -270,7 +270,7 @@ async def test_orden_llena_antes_del_primer_polling_sale_como_llena():
         return filled if oid == "a" else None
 
     src = PrivateSource(active, fills, final)
-    await refresh(t, src)  # primer refresco: siembra
+    await refresh(t, src)  # first refresh: seeds
     t.remember(order("a", cid="t-7bbce5"))
     events = await refresh(t, src)
     assert order("a", filled="0.01", status="filled", cid="t-7bbce5") in events
@@ -279,7 +279,7 @@ async def test_orden_llena_antes_del_primer_polling_sale_como_llena():
 
 @pytest.mark.spec("RF-11", "RF-25")
 class TestFeeCorregida:
-    """NonKYC rehace la fee de un trade ya publicado (BTC → NKYC, D-64)."""
+    """NonKYC redoes the fee of an already published trade (BTC → NKYC, D-64)."""
 
     def test_la_misma_fee_no_avisa(self):
         t = OrderTracker()

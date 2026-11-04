@@ -1,8 +1,8 @@
-"""CA-06: tras un corte de red, la conexión se recupera sola.
+"""CA-06: after a network cut, the connection recovers by itself.
 
-Servidor WS local real que se cae entero (las reconexiones se rechazan) y vuelve
-en el mismo puerto. Mientras está caído, el stream sigue dando el book por REST;
-al volver, termina otra vez en `ws`. Se usan los frames reales de NonKYC."""
+A real local WS server goes down entirely (reconnects are refused) and returns on
+the same port. While down, the stream keeps giving the book over REST; on return, it
+ends up in `ws` again. NonKYC's real frames are used."""
 
 import asyncio
 import socket
@@ -24,7 +24,7 @@ def free_port() -> int:
 
 
 class Consumer:
-    """Lee el stream en segundo plano y deja esperar a una condición."""
+    """Read the stream in the background and let tests wait for a condition."""
 
     def __init__(self, stream):
         self.stream = stream
@@ -71,7 +71,7 @@ async def test_el_ws_se_cae_y_vuelve(rest):  # noqa: F811
         server = await serve(FakeNonKYC("stay", "stay").handler, "127.0.0.1", port)
         consumer = Consumer(venue.market_stream())
         try:
-            # 1. Conectado por WS, con latencia real de los pings de websockets.
+            # 1. Connected by WS, with real latency from websockets pings.
             await consumer.wait(lambda evs: last_state(evs) == ("ws", "up"))
             await consumer.wait(
                 lambda evs: any(
@@ -79,22 +79,22 @@ async def test_el_ws_se_cae_y_vuelve(rest):  # noqa: F811
                 )
             )
 
-            # 2. Corte total: el servidor desaparece y las reconexiones se rechazan.
+            # 2. Total cut: the server vanishes and reconnects are refused.
             server.close()
             await server.wait_closed()
             await consumer.wait(lambda evs: last_state(evs) == ("rest", "up"))
             cut = len(consumer.events)
             await consumer.wait(
                 lambda evs: any(isinstance(e, BookSnapshot) for e in evs[cut:])
-            )  # sigue habiendo book, ahora por REST
+            )  # still a book, now over REST
 
-            # 3. Vuelve la red: reconecta solo y termina otra vez en ws.
+            # 3. The network returns: it reconnects by itself and ends up in ws again.
             server = await serve(FakeNonKYC("stay").handler, "127.0.0.1", port)
             await consumer.wait(lambda evs: last_state(evs) == ("ws", "up"))
             back = len(consumer.events)
             calls = len(rest.calls)
             await asyncio.sleep(0.1)
-            assert len(rest.calls) == calls  # el polling se paró
+            assert len(rest.calls) == calls  # polling stopped
             assert all(
                 not (isinstance(e, ConnState) and e.source == "rest")
                 for e in consumer.events[back:]

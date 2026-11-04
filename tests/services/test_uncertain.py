@@ -1,8 +1,8 @@
-"""Envíos inciertos y reconciliación en OrderService (T-25, RNF-12, D-26).
+"""Uncertain sends and reconciliation in OrderService (T-25, RNF-12, D-26).
 
-El venue es un DryRunVenue con NonKYC 0.00720000 / 0.00730000 (ver test_orders).
-"Respuesta perdida" = la orden se crea en el venue pero `place_limit` lanza
-`UncertainError`, como un timeout después del POST."""
+The venue is a DryRunVenue with NonKYC 0.00720000 / 0.00730000 (see test_orders).
+"Lost response" = the order is created on the venue but `place_limit` raises
+`UncertainError`, like a timeout after the POST."""
 
 import pytest
 
@@ -22,7 +22,7 @@ from .test_orders import LIMITS, NOW, Setup, buy, sell
 
 
 class Rig(Setup):
-    """Setup de test_orders con un reloj que se puede mover."""
+    """test_orders Setup with a clock that can move."""
 
     def __init__(self, tmp_path, **kw):
         super().__init__(tmp_path, **kw)
@@ -38,7 +38,7 @@ class Rig(Setup):
         )
 
     def lose_reply(self, *, create=True):
-        """El siguiente envío pierde la respuesta; con `create`, la orden sí se crea."""
+        """The next send loses its response; with `create`, the order is created."""
         real = self.venue.place_limit
 
         async def lost(req):
@@ -95,7 +95,7 @@ class TestReconciliar:
         assert s.orders.uncertain == {}
 
     async def test_la_reconciliada_cuenta_para_validar(self, tmp_path):
-        """Una vez encontrada, una venta que la cruce se rechaza (self_cross)."""
+        """Once found, a sell crossing it is rejected (self_cross)."""
         s = Rig(tmp_path)
         s.lose_reply()
         await s.send(buy(price="0.00725000"))
@@ -127,7 +127,8 @@ class TestReconciliar:
             raise VenueError("caído")
 
         real, s.venue.recent_orders = s.venue.recent_orders, down
-        s.now = NOW + 120_000  # ni pasado el plazo se da por inexistente sin poder mirar
+        # not even past the deadline is it deemed nonexistent without being able to look
+        s.now = NOW + 120_000
         assert await s.orders.reconcile() == []
         assert list(s.orders.uncertain) == ["t-000001"]
         s.venue.recent_orders = real
@@ -137,7 +138,7 @@ class TestReconciliar:
 
 @pytest.mark.spec("RNF-12")
 class TestSinClientId:
-    """Neoxa (PA-09): por lado, precio y cantidad, sin las órdenes ya conocidas."""
+    """Neoxa (PA-09): by side, price and quantity, without already known orders."""
 
     async def test_una_igual_ya_conocida_no_se_confunde(self, tmp_path):
         s = Rig(tmp_path)
@@ -154,7 +155,7 @@ class TestSinClientId:
         s.venue.keeps_client_id = False
         s.lose_reply()
         await s.send(buy())
-        assert isinstance(await s.send(buy()), Sent)  # dry-nk-2, con su ack
+        assert isinstance(await s.send(buy()), Sent)  # dry-nk-2, with its ack
         (r,) = await s.orders.reconcile()
         assert r.outcome == "found" and "dry-nk-1" in r.message
 
@@ -163,7 +164,7 @@ class TestSinClientId:
         s.venue.keeps_client_id = False
         s.lose_reply()
         await s.send(buy())
-        # otra igual, creada fuera de la terminal en la misma ventana
+        # another identical, created outside the terminal in the same window
         await s.venue.place_limit(OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "x"))
         (r,) = await s.orders.reconcile()
         assert r.outcome == "ambiguous" and "2" in r.message

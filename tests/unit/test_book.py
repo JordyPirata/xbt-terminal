@@ -88,10 +88,10 @@ class TestDeltas:
         assert book.apply(delta(11, bids=(lv("500", "0"),)))
 
     def test_hueco_de_seq_invalida_hasta_nuevo_snapshot(self, book):
-        assert not book.apply(delta(12))  # falta el 11
+        assert not book.apply(delta(12))  # 11 is missing
         assert not book.valid and book.needs_snapshot
-        assert book.mid is None  # fallar cerrado: sin precio
-        assert not book.apply(delta(13))  # se ignoran hasta el snapshot
+        assert book.mid is None  # fail closed: no price
+        assert not book.apply(delta(13))  # ignored until the snapshot
         book.apply(snap(seq=20))
         assert book.valid and book.apply(delta(21))
 

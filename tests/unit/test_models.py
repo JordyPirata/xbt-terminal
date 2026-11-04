@@ -47,7 +47,7 @@ class TestQuantizePrice:
         assert m.quantize_price(D("850.04"), "sell") == D("850.00")
 
     def test_resultado_con_el_exponente_del_tick(self):
-        # 850 -> "850.00", no "8.5000E+2": lo que se envía al venue es str(price)
+        # 850 -> "850.00", not "8.5000E+2": what goes to the venue is str(price)
         assert str(spec().quantize_price(D("850"), "buy")) == "850.00"
 
     def test_lado_invalido(self):

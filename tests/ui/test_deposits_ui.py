@@ -1,6 +1,5 @@
-"""Ventana de direcciones de depósito (T-42, RF-28, CA-13): tecla `w`, comando
-`deposit`, filas con venue, ticker y red, errores sin dirección, recarga al
-reabrir y copia exacta."""
+"""Deposit addresses window (T-42, RF-28, CA-13): `w` key, `deposit` command, rows with
+venue, ticker and network, errors without address, reload on reopening and exact copy."""
 
 import pytest
 
@@ -60,7 +59,7 @@ class TestPantalla:
             lines = s.table_text().splitlines()
             assert len(lines) == 4
             nk_base = next(ln for ln in lines if "nk-BTCB2" in ln)
-            # nombre mostrado y ticker del venue, para no equivocar el activo
+            # display name and venue ticker, so the asset is not mistaken
             assert "XBT (BTCB2)" in nk_base and "NonKYC" in nk_base and "red" in nk_base
             failed = next(ln for ln in lines if "Neoxa" in ln and "XBT" in ln)
             assert "btcb2 cerrada" in failed and "nx-BTCB2" not in failed
@@ -68,7 +67,7 @@ class TestPantalla:
             await until(pilot, lambda: not isinstance(app.screen, DepositScreen))
 
     async def test_comando_deposit(self, tmp_path):
-        # en dry-run: en solo lectura la línea de comandos está apagada
+        # in dry-run: in read-only the command line is off
         app = Rig(tmp_path, deposits=DepositService({"nk": FakeDepositor("nk")})).app
         async with app.run_test(size=(160, 45)) as pilot:
             await type_command(pilot, app, "deposit")
@@ -103,7 +102,7 @@ class TestPantalla:
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
             s = await opened(app, pilot)
-            await pilot.press("down")  # segunda fila: BTCB2 de NonKYC
+            await pilot.press("down")  # second row: NonKYC's BTCB2
             await pilot.press("c")
             await until(pilot, lambda: copied == ["nk-BTCB2"])
             await until(pilot, lambda: "nk-BTCB2" in s.status_text())

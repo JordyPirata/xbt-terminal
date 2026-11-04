@@ -1,5 +1,5 @@
-"""Fallos aislados (T-27, RNF-14, D-28): un bug en un venue o servicio no para
-lo demás, queda en el journal con su traceback redactado y se reintenta."""
+"""Isolated faults (T-27, RNF-14, D-28): a bug in a venue or service stops nothing else,
+stays in the journal with its redacted traceback and is retried."""
 
 import asyncio
 import json
@@ -33,7 +33,7 @@ async def until(predicate, timeout=1.0):
 
 
 def full_disk(journal, *events):
-    """`journal.write` lanza OSError en esos eventos, como con el disco lleno."""
+    """`journal.write` raises OSError on those events, as with a full disk."""
     real = journal.write
 
     def write(event, **kw):
@@ -61,7 +61,7 @@ class TestFaults:
         assert "test_al_journal_con_traceback_redactado" in line["data"]["traceback"]
         assert KEY not in json.dumps(line)
         assert faults.recent == [fault] and fault.ts == T0
-        assert KEY not in fault.message  # lo que sale en pantalla tampoco
+        assert KEY not in fault.message  # nor what shows on screen
 
     def test_sin_journal_que_funcione_se_avisa_igual(self, tmp_path):
         journal = Journal(tmp_path, "live", Redactor([]))
@@ -100,7 +100,7 @@ class TestFaults:
 
 
 class Buggy(FakeFeed):
-    """`market()` tiene un bug las primeras `n` veces (no es un error de red)."""
+    """`market()` has a bug the first `n` times (not a network error)."""
 
     def __init__(self, venue, n=1):
         super().__init__(venue)
@@ -152,7 +152,7 @@ class TestCuenta:
         task = asyncio.create_task(account.run())
         try:
             await until(lambda: account.state["nk"].balances is not None)
-            assert venue.stream_calls == 1  # el stream siguió abierto
+            assert venue.stream_calls == 1  # the stream stayed open
         finally:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
@@ -173,10 +173,10 @@ class TestJournalTrasEnviar:
         assert fault.where == "journal" and "dry-nk-1 enviada" in fault.message
         assert "No space left" in fault.message
         again = await s.orders.prepare(buy(price="0.00725000"))
-        assert again is not None  # el servicio sigue funcionando
+        assert again is not None  # the service keeps working
 
     async def test_sin_order_sent_no_se_envia(self, tmp_path):
-        """Sin rastro de lo que se va a enviar, no se envía (RF-11)."""
+        """Without a trace of what is about to be sent, it is not sent (RF-11)."""
         s = Setup(tmp_path)
         full_disk(s.journal, "order_sent")
         result = await s.orders.confirm(await s.orders.prepare(buy()))
@@ -184,7 +184,7 @@ class TestJournalTrasEnviar:
         assert await s.venue.open_orders() == []
 
     async def test_cancelar_aunque_falle_el_journal(self, tmp_path):
-        """Cancelar reduce riesgo: no se deja de hacer por el disco."""
+        """Cancelling reduces risk: it is not skipped because of the disk."""
         s = Setup(tmp_path)
         await s.orders.confirm(await s.orders.prepare(buy()))
         full_disk(s.journal, "cancel_sent", "cancel_ack")

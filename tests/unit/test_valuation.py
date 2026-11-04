@@ -1,6 +1,6 @@
-"""Valor de la cuenta en el tiempo (T-69, RF-32, CA-17, D-69): la muestra se
-arma con el inventario de RF-05, se apunta como evento `value` y se lee del
-journal como serie con su resumen."""
+"""Account value over time (T-69, RF-32, CA-17, D-69): the sample is built from the RF-05
+inventory, written as a `value` event and read from the journal as a series with its
+summary."""
 
 import pytest
 
@@ -29,7 +29,7 @@ def bal(btc, btcb2):
 
 
 def vrow(stamp, data, mode="live"):
-    """Fila `value` del journal (`row` ya usa `at` para la hora)."""
+    """Journal `value` row (`row` already uses `at` for the time)."""
     return {
         "ts": ts(stamp),
         "mode": mode,
@@ -97,7 +97,7 @@ class TestSerie:
             value_row(T0 - 2 * EVERY, "1.0"),
             value_row(T0, "1.1"),
             *plain_double("d-1", T0),
-            value_row(T0 + EVERY, "1.2", mode="dry-run"),  # el modo no importa (D-69)
+            value_row(T0 + EVERY, "1.2", mode="dry-run"),  # the mode does not matter (D-69)
         ]
         got, bad = series(rows, T0)
         assert [(s.ts, s.value) for s in got] == [(T0, D("1.1")), (T0 + EVERY, D("1.2"))]
@@ -184,7 +184,7 @@ class TestUltimoTramo:
         assert last_stretch(s) == tuple(s)
 
     def test_un_salto_por_venue_aunque_el_total_no_cambie(self):
-        # llega a nx lo que salió de nk en la misma muestra: el total no se mueve
+        # what left nk reaches nx in the same sample: the total does not move
         s = [
             split(T0, "0.6", "0.4"),
             split(T0 + EVERY, "0.3", "0.7"),

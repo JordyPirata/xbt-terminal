@@ -1,4 +1,4 @@
-"""Formatos de sats y % de la pantalla (T-81, D-77): un solo sitio para todos."""
+"""Screen formats of sats and % (T-81, D-77): one place for all."""
 
 import pytest
 

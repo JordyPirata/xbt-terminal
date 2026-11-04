@@ -1,6 +1,6 @@
-"""Contraste del book local con el REST (T-78, RNF-24, D-76): el WS de NonKYC
-siguió conectado el 2026-10-29 sin mandar cambios del book y el bot disparó
-contra un bid que ya no estaba (d-9820a4, d-f1fe90, d-6eca2e)."""
+"""Local book check against REST (T-78, RNF-24, D-76): NonKYC's WS stayed connected on
+2026-10-29 without sending book changes and the bot fired at a bid no longer there
+(d-9820a4, d-f1fe90, d-6eca2e)."""
 
 import asyncio
 import json
@@ -47,14 +47,14 @@ class Rig:
 class TestContraste:
     async def test_coincide_confirma_el_book(self, tmp_path):
         rig = Rig(tmp_path)
-        rig.now += 300_000  # cinco minutos sin cambios
+        rig.now += 300_000  # five minutes without changes
         assert await rig.hub.check_book("nk") is True
         st = rig.hub.state["nk"]
         assert st.checked_at == rig.now and not st.suspect
         assert "resync" not in rig.feeds["nk"].calls and rig.events("book_resync") == []
 
     async def test_solo_cuenta_el_tope(self, tmp_path):
-        """El REST puede venir recortado: el resto del book no se compara."""
+        """REST may come trimmed: the rest of the book is not compared."""
         rig = Rig(tmp_path)
         rig.feeds["nk"].rest_book = BookSnapshot(
             "nk", (Level(D("0.00720000"), D("1")),), (Level(D("0.00730000"), D("0.5")),), T0
@@ -64,7 +64,7 @@ class TestContraste:
     @pytest.mark.parametrize(
         "bid, ask",
         [
-            ("0.00718273", "0.00730000"),  # otro precio (el bid de d-9820a4 ya no estaba)
+            ("0.00718273", "0.00730000"),  # another price (the bid of d-9820a4 was gone)
             ("0.00720000", "0.00731000"),
         ],
     )
@@ -93,7 +93,7 @@ class TestContraste:
         rig.feeds["nk"].rest_book = book("nk", "0.00718273", "0.00730000")
         await rig.hub.check_book("nk")
         rig.hub.apply("nk", BookDelta("nk", (Level(D("0.00719"), D("1")),), (), T0))
-        assert rig.hub.state["nk"].suspect  # un delta sobre un book malo no lo arregla
+        assert rig.hub.state["nk"].suspect  # a delta on a bad book does not fix it
         rig.hub.apply("nk", book("nk", "0.00718273", "0.00730000"))
         assert not rig.hub.state["nk"].suspect
 
@@ -106,7 +106,7 @@ class TestContraste:
         assert not rig.hub.state["nk"].suspect
 
     async def test_mensaje_durante_el_rest_no_cuenta(self, tmp_path):
-        """La carrera daría un falso desacuerdo; el mensaje ya da frescura."""
+        """The race would give a false mismatch; the message already gives freshness."""
         rig = Rig(tmp_path)
         feed = rig.feeds["nk"]
         rest = book("nk", "0.00718273", "0.00730000")
@@ -130,7 +130,7 @@ class TestContraste:
 
     async def test_sin_book_no_se_contrasta(self, tmp_path):
         rig = Rig(tmp_path)
-        assert await rig.hub.check_book("nx") is None  # nx sin book todavía
+        assert await rig.hub.check_book("nx") is None  # nx has no book yet
         assert "book" not in rig.feeds["nx"].calls
 
     async def test_el_hub_contrasta_cada_book_check_s(self, tmp_path):

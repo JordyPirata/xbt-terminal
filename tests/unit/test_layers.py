@@ -1,5 +1,5 @@
-"""Reglas de importación entre capas (design.md §2, T-46, D-54): core solo
-importa core, adapters no importa services ni ui, y ui no importa adapters."""
+"""Import rules between layers (design.md §2, T-46, D-54): core imports only core,
+adapters import neither services nor ui, and ui does not import adapters."""
 
 import ast
 from pathlib import Path
@@ -10,7 +10,7 @@ PKG = Path(__file__).resolve().parents[2] / "src/xbt_terminal"
 
 
 def imported_layers(layer: str) -> dict[str, set[str]]:
-    """Por fichero de la capa, las capas del proyecto que importa."""
+    """For each file of the layer, the project layers it imports."""
     out: dict[str, set[str]] = {}
     for path in sorted((PKG / layer).glob("*.py")):
         found: set[str] = set()
@@ -18,7 +18,7 @@ def imported_layers(layer: str) -> dict[str, set[str]]:
             if isinstance(node, ast.ImportFrom) and node.level > 0:
                 if node.level == 1:
                     found.add(layer)
-                else:  # `from ..x import y` o `from .. import x`
+                else:  # `from ..x import y` or `from .. import x`
                     names = [node.module] if node.module else [a.name for a in node.names]
                     found.update(n.split(".")[0] for n in names)
             elif isinstance(node, ast.ImportFrom | ast.Import):
@@ -57,7 +57,7 @@ def test_ui_no_importa_adapters():
 
 
 def services_imported(layer: str) -> dict[str, set[str]]:
-    """Por fichero de la capa, los módulos de `services` que importa."""
+    """For each file of the layer, the `services` modules it imports."""
     out: dict[str, set[str]] = {}
     for path in sorted((PKG / layer).glob("*.py")):
         found: set[str] = set()
@@ -74,8 +74,8 @@ def services_imported(layer: str) -> dict[str, set[str]]:
 
 @pytest.mark.spec("RF-31")
 def test_ui_solo_importa_el_cliente_del_daemon():
-    """D-66: la pantalla es el cliente; de `services` solo la cara remota y el
-    formato del socket, nunca lo que habla con los venues."""
+    """D-66: the screen is the client; from `services` only the remote face and the socket
+    format, never what talks to venues."""
     bad = {
         f: deps - {"remote", "wire"}
         for f, deps in services_imported("ui").items()

@@ -1,6 +1,6 @@
-"""Ventana del plan de reequilibrio (T-45, RF-29, CA-14): tecla `e`, comando
-`rebalance`, las dos alternativas con su coste o el motivo de no ser viables,
-la recomendada, recarga al reabrir y avisos sin keys o sin saldos."""
+"""Rebalance plan window (T-45, RF-29, CA-14): `e` key, `rebalance` command, both
+alternatives with their cost or why not viable, the recommended one, reload on
+reopening and notices without keys or balances."""
 
 import pytest
 
@@ -76,7 +76,7 @@ class TestPantalla:
             assert s.plan.best is not None and s.plan.best.asset == "BTC"
 
     async def test_aviso_si_el_total_esta_fuera_de_la_banda(self):
-        target = InventoryTarget(D("50"), D("10"))  # el total está en 25.5 %
+        target = InventoryTarget(D("50"), D("10"))  # the total is at 25.5 %
         app = make_app(service(), {"nk": NK, "nx": NX}, inventory_target=target)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
@@ -147,5 +147,5 @@ class TestSaldosDeLaApp:
                 "BTC": Balance("BTC", D("0.005")), "BTCB2": Balance("BTCB2", D("0.5")),
             }  # fmt: skip
             got = rig.app.rebalance_holdings()
-            # sin saldos de Neoxa no hay plan, y el mensaje lo dice
+            # without Neoxa balances there is no plan, and the message says so
             assert isinstance(got, str) and "nx" in got

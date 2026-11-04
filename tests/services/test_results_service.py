@@ -1,4 +1,4 @@
-"""Lectura de los journals para la ventana de resultados (T-40, RF-25, D-44)."""
+"""Reading the journals for the results window (T-40, RF-25, D-44)."""
 
 import json
 
@@ -32,8 +32,8 @@ class TestServicio:
     def test_doble_de_ayer_con_fills_hoy(self, tmp_path):
         midnight = T0 - 12 * 3600_000
         rows = plain_double("d-1", midnight - 500)
-        write(tmp_path, "20261021", rows[:2])  # envíos antes de medianoche
-        write(tmp_path, "20261022", rows[2:])  # fills después
+        write(tmp_path, "20261021", rows[:2])  # sends before midnight
+        write(tmp_path, "20261022", rows[2:])  # fills after
         svc = ResultsService(tmp_path, clock=lambda: T0)
         assert svc.load("dia").doubles == ()
         assert svc.load("7d").doubles[0].result == D("0.000002")
@@ -66,7 +66,7 @@ class Clock:
 
 
 class Pricer:
-    """`token_price` falso: cuenta las peticiones; `fail` lanza VenueError."""
+    """Fake `token_price`: counts requests; `fail` raises VenueError."""
 
     def __init__(self, price="0.00013089"):
         self.price, self.calls, self.fail = D(price), 0, False

@@ -48,6 +48,6 @@ class TestRedactor:
         assert Redactor([]).redact("hola") == "hola"
 
     def test_secreto_contenido_en_otro(self):
-        # el más largo primero: si no, quedaría un trozo del largo al descubierto
+        # longest first: otherwise a piece of the long one would stay exposed
         r = Redactor([Secret("abc123"), Secret("abc123XYZ")])
         assert r.redact("abc123XYZ") == "***"

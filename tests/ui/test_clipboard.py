@@ -1,5 +1,5 @@
-"""Copiar con la herramienta del sistema (T-44, RF-28, D-52): GNOME Terminal
-ignora OSC 52, así que se prueba `wl-copy`, `xclip` o `xsel`."""
+"""Copying with the system tool (T-44, RF-28, D-52): GNOME Terminal ignores OSC 52, so
+`wl-copy`, `xclip` or `xsel` are tried."""
 
 import pytest
 
@@ -54,13 +54,13 @@ class TestSystemCopy:
     async def test_sin_herramientas_o_sin_pantalla_da_none(self):
         run = Runner()
         assert await system_copy(ADDRESS, env={"DISPLAY": ":0"}, which=which(), run=run) is None
-        # xclip instalado pero sin sesión gráfica (ssh): ni se intenta
+        # xclip installed but no graphical session (ssh): not even tried
         assert await system_copy(ADDRESS, env={}, which=which("xclip"), run=run) is None
         assert run.calls == []
 
     async def test_el_runner_real_no_espera_al_proceso_en_segundo_plano(self, tmp_path):
-        # xclip se queda vivo sirviendo la selección: con la salida en un pipe la
-        # espera no acabaría. Un `sh` que deja un hijo dormido lo imita.
+        # xclip stays alive serving the selection: with output into a pipe the wait would not
+        # end. An `sh` leaving a sleeping child imitates it.
         script = tmp_path / "xclip"
         script.write_text("#!/bin/sh\ncat > /dev/null\nsleep 30 &\nexit 0\n")
         script.chmod(0o755)

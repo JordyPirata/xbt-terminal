@@ -1,10 +1,10 @@
-"""Matriz de trazabilidad: requerimientos de la spec contra tests marcados.
+"""Traceability matrix: spec requirements against marked tests.
 
-    uv run python tools/spec_trace.py            # informe
-    uv run python tools/spec_trace.py --strict   # falla si algún RF/RNF/CA no tiene test
+    uv run python tools/spec_trace.py            # report
+    uv run python tools/spec_trace.py --strict   # fails if a RF/RNF/CA has no test
 
-Lee los IDs de las tablas de requirements.md (filas que empiezan por `| RF-`,
-`| RNF-` o `| CA-`) y las marcas `@pytest.mark.spec("RF-10", ...)` de tests/.
+Reads the IDs from the requirements.md tables (rows starting with `| RF-`, `| RNF-`
+or `| CA-`) and the `@pytest.mark.spec("RF-10", ...)` marks in tests/.
 """
 
 from __future__ import annotations

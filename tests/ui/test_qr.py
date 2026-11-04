@@ -1,4 +1,4 @@
-"""QR de la dirección en texto (T-44, RF-28, D-52)."""
+"""Address QR as text (T-44, RF-28, D-52)."""
 
 import pytest
 import segno
@@ -6,18 +6,18 @@ import segno
 from xbt_terminal.ui.qr import qr_lines
 
 ADDRESS = "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
-TOP = {" ": (0, 0), "▀": (1, 0), "▄": (0, 1), "█": (1, 1)}  # carácter → (arriba, abajo) claros
+TOP = {" ": (0, 0), "▀": (1, 0), "▄": (0, 1), "█": (1, 1)}  # character → (above, below) light
 
 
 def decode(lines: list[str]) -> list[list[int]]:
-    """Vuelve de los caracteres a módulos (1 = oscuro)."""
+    """Back from characters to modules (1 = dark)."""
     rows: list[list[int]] = [[], []]
     out: list[list[int]] = []
     for line in lines:
         rows = [[], []]
         for ch in line:
             top, bottom = TOP[ch]
-            # el carácter pinta en claro (blanco): oscuro es lo no pintado
+            # the character paints light (white): dark is the unpainted
             rows[0].append(1 - top)
             rows[1].append(1 - bottom)
         out.extend(rows)
@@ -32,7 +32,7 @@ class TestQr:
         expected = [list(r) for r in qr.matrix_iter(border=2)]
         got = decode(lines)
         assert got[: len(expected)] == expected
-        # número impar de filas: la media fila que sobra es margen claro
+        # odd number of rows: the half row left over is light margin
         assert got[len(expected) :] in ([], [[0] * len(expected[0])])
 
     def test_tamano_para_una_direccion_bc1q(self):

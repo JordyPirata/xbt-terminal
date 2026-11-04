@@ -1,8 +1,7 @@
-"""Estado de una orden doble y pierna colgada (T-18, design.md §6.4, PA-08, D-15).
+"""State of a double order and hanging leg (T-18, design.md §6.4, PA-08, D-15).
 
-Pierna colgada: las cantidades llenas de las dos piernas difieren y la que va
-por detrás está rechazada o cancelada, o lleva más de `hanging_leg_after_s`
-sin igualarse."""
+Hanging leg: the filled quantities of both legs differ and the one behind is rejected
+or cancelled, or has gone more than `hanging_leg_after_s` without catching up."""
 
 from dataclasses import replace
 
@@ -23,7 +22,7 @@ def double(**kw) -> DoubleState:
 
 
 def sent(state, buy="o-b", sell="o-s") -> DoubleState:
-    """Respuestas del envío: traen el client_id de cada pierna."""
+    """Send responses: they bring each leg's client_id."""
     state = on_order(state, order("nk", buy, "buy", cid="t-b"), T0)
     return on_order(state, order("nx", sell, "sell", cid="t-s"), T0)
 
@@ -81,7 +80,7 @@ class TestColgada:
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.01", status="filled"), T0 + 1_000)
         assert s.imbalance_since == T0 + 1_000
-        assert hanging(s, T0 + 1_000 + AFTER_MS, AFTER_MS) is None  # el límite exacto aún no
+        assert hanging(s, T0 + 1_000 + AFTER_MS, AFTER_MS) is None  # not yet at the exact limit
         reason = hanging(s, T0 + 1_001 + AFTER_MS, AFTER_MS)
         assert reason is not None and "Neoxa" in reason and "30 s" in reason
 
@@ -100,7 +99,7 @@ class TestColgada:
         assert hanging(s, T0 + 25_000 + AFTER_MS, AFTER_MS) is None
 
     def test_mas_fills_sin_igualar_no_reinician_el_reloj(self):
-        """Una pierna que se llena a trozos sin que la otra la siga sigue colgándose."""
+        """A leg filling in pieces without the other following keeps hanging."""
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.002", status="partial"), T0)
         s = on_order(s, order("nk", "o-b", "buy", filled="0.006", status="partial"), T0 + 20_000)
@@ -122,7 +121,7 @@ class TestColgada:
         assert "cancelada" in (hanging(s, T0 + 1, AFTER_MS) or "")
 
     def test_rechazada_sin_fills_en_la_otra_no_es_colgada(self):
-        """PA-08: hace falta una pierna con fills."""
+        """PA-08: a leg with fills is needed."""
         s = on_order(double(), order("nk", "o-b", "buy", cid="t-b"), T0).fail("sell", "x")
         assert hanging(s, T0 + 10 * AFTER_MS, AFTER_MS) is None
 
@@ -142,7 +141,7 @@ def test_leg_es_inmutable():
 
 @pytest.mark.spec("RF-07", "RF-20", "RF-21")
 class TestPrimeraPierna:
-    """Doble del bot con `lead_venue` (D-75): la otra pierna espera sin enviar."""
+    """Bot double with `lead_venue` (D-75): the other leg waits unsent."""
 
     def test_la_otra_espera_sin_enviar(self):
         buy = OrderRequest("nk", "buy", D("0.01"), D("0.0072"), "t-b")

@@ -1,5 +1,5 @@
-"""Desfase de reloj con cada venue (T-29, RNF-16, D-30): se mide con la cabecera
-`Date` de cada respuesta REST, contra la hora local de la petición."""
+"""Clock skew with each venue (T-29, RNF-16, D-30): measured with each REST response's
+`Date` header, against the request's local time."""
 
 import httpx
 import pytest
@@ -9,13 +9,13 @@ from xbt_terminal.adapters.streaming import skew_ms
 from .test_supervisor import FakeVenue
 
 DATE = "Thu, 22 Oct 2026 02:07:27 GMT"
-DATE_MS = 1_792_634_847_000  # ese segundo en ms epoch
+DATE_MS = 1_792_634_847_000  # that second in epoch ms
 
 
 @pytest.mark.spec("RNF-16")
 class TestSkew:
     def test_reloj_en_hora(self):
-        """`Date` trunca al segundo: se toma la mitad del segundo."""
+        """`Date` truncates to the second: the middle of the second is taken."""
         assert skew_ms(DATE, DATE_MS + 400, DATE_MS + 600) == 0
 
     @pytest.mark.parametrize("off", [60_000, -60_000])

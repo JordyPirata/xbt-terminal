@@ -1,6 +1,5 @@
-"""Mercado por el socket del daemon (T-62, RF-31, D-66): el cliente ve el
-mismo book, velas, último trade y conexión que el hub del daemon, sin abrir
-ninguna conexión a los venues."""
+"""Market over the daemon socket (T-62, RF-31, D-66): the client sees the same book,
+candles, last trade and connection as the daemon's hub, opening no venue connection."""
 
 import asyncio
 
@@ -15,7 +14,7 @@ from .test_orders import NOW
 from .test_uncertain import Rig
 
 MIN = 60_000
-T0 = NOW - NOW % MIN - 10 * MIN  # alineado al minuto
+T0 = NOW - NOW % MIN - 10 * MIN  # aligned to the minute
 
 
 async def until(predicate, timeout=2.0):
@@ -155,7 +154,7 @@ class TestEventos:
 
     async def test_un_trade_que_el_hub_descarta_no_viaja(self, linked):
         daemon, remote = linked
-        old = trade("nk", "0.0090", T0 - MIN)  # anterior al histórico
+        old = trade("nk", "0.0090", T0 - MIN)  # older than the history
         daemon.hub.apply("nk", old)
         new = trade("nk", "0.0080", T0 + 2 * MIN + 1)
         daemon.hub.apply("nk", new)

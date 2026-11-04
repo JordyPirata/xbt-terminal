@@ -1,6 +1,5 @@
-"""El daemon muestrea el valor de la cuenta (T-69, RF-32, CA-17, D-69): un
-evento `value` en cada múltiplo UTC del intervalo, y ninguno si falta un mid o
-un saldo."""
+"""The daemon samples the account value (T-69, RF-32, CA-17, D-69): one `value` event on
+each UTC multiple of the interval, and none if a mid or balance is missing."""
 
 import asyncio
 import json
@@ -27,7 +26,7 @@ def bal(btc, btcb2):
 
 class Rig:
     def __init__(self, tmp_path, *, nx_mid="0.006", nx_bal=True):
-        self.now = T0 + 12_345  # entre dos múltiplos
+        self.now = T0 + 12_345  # between two multiples
         self.account = SimpleNamespace(
             state={
                 "nk": SimpleNamespace(balances=bal("0.1", "2")),
@@ -83,7 +82,7 @@ class TestRecorder:
         rig.recorder.record(T0)
         (row,) = rig.rows()
         assert row["event"] == "value" and row["mode"] == "live"
-        assert json.dumps(row["data"]["value"]) == '"0.334"'  # Decimal como string
+        assert json.dumps(row["data"]["value"]) == '"0.334"'  # Decimal as string
 
     async def test_sin_mid_se_salta(self, tmp_path):
         rig = Rig(tmp_path, nx_mid=None)

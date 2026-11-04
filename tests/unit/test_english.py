@@ -46,7 +46,7 @@ def docstrings(tree: ast.AST):
                 yield getattr(node, "lineno", 1), doc
 
 
-def test_names(tree: ast.AST):
+def spanish_names(tree: ast.AST):
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             if node.name.lower().startswith("test") and named_spanish(node.name):
@@ -72,7 +72,7 @@ def findings(source: str):
     tree = ast.parse(source)
     found = [(n, t) for n, t in comments(source) if spanish(t)]
     found += [(n, t) for n, t in docstrings(tree) if spanish(t)]
-    found += list(test_names(tree))
+    found += list(spanish_names(tree))
     found += [(n, t) for n, t in log_messages(tree) if spanish(t)]
     return found
 
@@ -84,7 +84,8 @@ def test_the_code_is_in_english():
         for path in sorted((ROOT / root).rglob("*.py")):
             if path.name == "test_english.py":
                 continue
-            bad += [f"{path.relative_to(ROOT)}:{n}: {t[:60]!r}" for n, t in findings(path.read_text())]
+            rel = path.relative_to(ROOT)
+            bad += [f"{rel}:{n}: {t[:60]!r}" for n, t in findings(path.read_text())]
     assert bad == []
 
 
@@ -94,7 +95,7 @@ class TestDetector:
         assert findings("x = 1  # lo que no llene se cancela\n")
 
     def test_flags_a_spanish_docstring(self):
-        assert findings('def f():\n    """Devuelve el precio."""\n')
+        assert findings('def f():\n    """Devuelve el precio de la orden."""\n')
 
     def test_flags_a_spanish_test_name(self):
         assert findings("def test_rechaza_con_el_saldo_justo(): ...\n")

@@ -1,4 +1,4 @@
-"""Códec Engine.IO 4 / Socket.IO 5 con frames reales del WS de Neoxa (2026-10-20)."""
+"""Engine.IO 4 / Socket.IO 5 codec with real frames of Neoxa's WS (2026-10-20)."""
 
 from decimal import Decimal
 

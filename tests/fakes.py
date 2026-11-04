@@ -1,5 +1,5 @@
-"""Venue falso de datos de mercado para tests de servicios y UI: el test empuja
-eventos con `push` y decide si `market()` y `candles()` fallan."""
+"""Fake market data venue for service and UI tests: the test pushes events with `push`
+and decides whether `market()` and `candles()` fail."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from xbt_terminal.adapters.base import VenueError
 from xbt_terminal.core.candles import TIMEFRAME_MS
 from xbt_terminal.core.models import BookSnapshot, Candle, D, Level, MarketSpec
 
-T0 = 1_792_497_600_000  # alineado a la hora: T0 % 3_600_000 == 0
+T0 = 1_792_497_600_000  # aligned to the hour: T0 % 3_600_000 == 0
 
 
 def spec(venue: str) -> MarketSpec:
@@ -46,15 +46,14 @@ def history(step_ms: int, n: int = 5, start: int = T0) -> list[Candle]:
 
 
 class FakeFeed:
-    """Cumple `MarketData`. Los eventos empujados salen por `market_stream`."""
+    """Fulfils `MarketData`. Pushed events come out through `market_stream`."""
 
     def __init__(self, venue: str, *, fail_market: int = 0) -> None:
         self.id = venue
         self.queue: asyncio.Queue = asyncio.Queue()
-        self.fail_market = fail_market  # cuántas llamadas a market() fallan antes
+        self.fail_market = fail_market  # how many market() calls fail first
         self.calls: list[str] = []
-        # book REST para el contraste de D-76: un BookSnapshot, una excepción o
-        # None (el de siempre)
+        # REST book for the D-76 check: a BookSnapshot, an exception or None (the usual one)
         self.rest_book: BookSnapshot | Exception | None = None
 
     def push(self, *events) -> None:
@@ -85,7 +84,7 @@ class FakeFeed:
         step = TIMEFRAME_MS[tf]
         if step <= 3_600_000:
             return history(step)
-        # 4h y 1d: alineadas a su paso (T0 no cae en día exacto) y acabando en T0
+        # 4h and 1d: aligned to their step (T0 is not a whole day) and ending at T0
         return history(step, start=T0 - T0 % step - 4 * step)
 
     async def market_stream(self):

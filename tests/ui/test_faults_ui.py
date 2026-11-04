@@ -1,5 +1,5 @@
-"""Fallos aislados en la terminal (T-27, RNF-14, D-28): un bug no la cierra,
-sale en rojo y queda contado en la barra de estado."""
+"""Isolated faults in the terminal (T-27, RNF-14, D-28): a bug does not close it, shows
+in red and is counted in the status bar."""
 
 import pytest
 
@@ -14,13 +14,13 @@ from .test_orders_ui import Rig, ready, type_command, until
 class TestFallos:
     async def test_un_bug_en_un_venue_no_cierra_la_terminal(self, tmp_path):
         rig = Rig(tmp_path)
-        rig.feeds["nx"] = rig.hub._venues["nx"] = Buggy("nx")  # falla una vez
+        rig.feeds["nx"] = rig.hub._venues["nx"] = Buggy("nx")  # fails once
         async with rig.app.run_test(size=(160, 45)) as pilot:
-            await ready(rig, pilot)  # NonKYC sigue con su book
+            await ready(rig, pilot)  # NonKYC keeps its book
             await until(pilot, lambda: "fallo en mercado de Neoxa" in rig.app.last_message)
             assert rig.app.last_error and "KeyError" in rig.app.last_message
             await until(pilot, lambda: "✖ 1 fallo" in rig.app.query_one(StatusBar).text)
-            await until(pilot, lambda: rig.hub.state["nx"].ready)  # reintentado
+            await until(pilot, lambda: rig.hub.state["nx"].ready)  # retried
             assert rig.app.is_running
 
     async def test_journal_lleno_tras_enviar(self, tmp_path):

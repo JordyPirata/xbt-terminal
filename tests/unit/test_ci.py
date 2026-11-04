@@ -1,4 +1,4 @@
-"""RNF-21: cada cambio pasa por CI con los mismos pasos que se corren al cerrar una tarea."""
+"""RNF-21: each change passes CI with the same steps run when closing a task."""
 
 from pathlib import Path
 
@@ -7,7 +7,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
 
-# En el orden en que deben correr: sin lockfile congelado, el resto no vale.
+# In the order they must run: without a frozen lockfile, the rest is worthless.
 STEPS = [
     "uv sync --frozen",
     "uv run pytest",

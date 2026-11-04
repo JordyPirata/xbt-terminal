@@ -1,5 +1,5 @@
-"""Resultados, depósitos y comisiones de retiro por el socket del daemon (T-64,
-RF-25, RF-28, RF-29, RF-31, D-66): el cliente no lee el journal ni las keys."""
+"""Results, deposits and withdrawal fees over the daemon socket (T-64, RF-25, RF-28,
+RF-29, RF-31, D-66): the client reads neither journal nor keys."""
 
 import asyncio
 
@@ -60,7 +60,7 @@ class TestResultados:
         results = ResultsService(jdir, clock=lambda: T0)
         async with Daemon(tmp_path, results=results) as d:
             rr = d.remote.results
-            assert rr.load("dia").summary.closed == 0  # aún sin pedir
+            assert rr.load("dia").summary.closed == 0  # not asked yet
             await rr.refresh("dia")
             report = rr.load("dia")
             assert [x.id for x in report.doubles] == ["d-1"]
@@ -102,7 +102,7 @@ class TestResultados:
         async with Daemon(tmp_path) as d:
             seen = []
             d.remote.account.subscribe(lambda vid, what: seen.append((vid, what)))
-            d.engine.account = None  # el Rig no tiene cuenta: se avisa a mano
+            d.engine.account = None  # the Rig has no account: notified by hand
             d.server._on_account("nk", "fill")
             await until(lambda: ("nk", "fill") in seen)
 

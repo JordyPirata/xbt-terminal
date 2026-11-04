@@ -1,5 +1,5 @@
-"""Inventario neto (RF-05, design.md §6.5): BTC y BTCB2 por venue y en total,
-valorados en BTC al mid de cada venue."""
+"""Net inventory (RF-05, design.md §6.5): BTC and BTCB2 per venue and in total, valued
+in BTC at each venue's mid."""
 
 import pytest
 
@@ -24,8 +24,8 @@ class TestInventario:
     def test_sin_mid_no_hay_valor(self):
         inv = inventory({"nk": NK, "nx": NX}, {"nk": D("0.0072"), "nx": None})
         assert inv.venues["nx"].value is None and inv.venues["nk"].value is not None
-        assert inv.value is None  # un total a medias engañaría
-        assert inv.btcb2 == D("0.35")  # las cantidades sí se suman
+        assert inv.value is None  # a partial total would mislead
+        assert inv.btcb2 == D("0.35")  # quantities do add up
 
     def test_venue_sin_saldos_todavia(self):
         inv = inventory({"nk": NK, "nx": None}, {"nk": D("0.0072"), "nx": D("0.0074")})
@@ -37,7 +37,7 @@ class TestInventario:
         assert inv.venues["nk"].btcb2 == 0 and inv.value == D("1")
 
     def test_otros_activos_se_ignoran(self):
-        """RNF-10: aunque un adaptador devolviera USDT, no entra en el inventario."""
+        """RNF-10: even if an adapter returned USDT, it does not enter the inventory."""
         bal = dict(NK, USDT=Balance("USDT", D("1000")))
         inv = inventory({"nk": bal}, {"nk": D("0.0072")})
         assert inv.btc == D("0.0015")

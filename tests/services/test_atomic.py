@@ -1,8 +1,8 @@
-"""Envíos atómicos por venue (T-26, RNF-13, D-27).
+"""Atomic sends per venue (T-26, RNF-13, D-27).
 
-Mismo mercado que test_orders: NonKYC 0.00720000 / 0.00730000. Una compra a
-0.00725 y una venta a 0.00724 se cruzan (`self_cross`): si las dos se validan a
-la vez sin contar la otra, salen las dos."""
+Same market as test_orders: NonKYC 0.00720000 / 0.00730000. A buy at 0.00725 and a
+sell at 0.00724 cross (`self_cross`): if both validate at once without counting the
+other, both go out."""
 
 import asyncio
 
@@ -18,7 +18,7 @@ from .test_uncertain import Rig
 
 
 def slow(venue, gate: asyncio.Event):
-    """`place_limit` espera a `gate` antes de crear la orden: un envío en vuelo."""
+    """`place_limit` waits for `gate` before creating the order: a send in flight."""
     real = venue.place_limit
 
     async def held(req):
@@ -44,7 +44,7 @@ class TestMismoVenue:
         a = asyncio.create_task(s.orders.confirm(first))
         b = asyncio.create_task(s.orders.confirm(second))
         await settle()
-        assert not b.done()  # espera a que acabe el envío de la primera
+        assert not b.done()  # waits for the first send to end
         gate.set()
         ra, rb = await a, await b
         assert isinstance(ra, Sent)
@@ -52,7 +52,7 @@ class TestMismoVenue:
         assert s.events() == ["order_sent", "order_ack", "reject_local"]
 
     async def test_una_incierta_cuenta_como_abierta(self, tmp_path):
-        """Puede existir en el venue: hasta saberlo, cuenta (ante la duda, no se envía)."""
+        """It may exist on the venue: until known, it counts (when in doubt, do not send)."""
         s = Rig(tmp_path)
         s.lose_reply(create=False)
         assert isinstance(await s.send(buy(price="0.00725000")), Uncertain)
@@ -70,7 +70,7 @@ class TestMismoVenue:
         assert isinstance(await s.send(sell(price="0.00724000")), Sent)
 
     async def test_incierta_y_encontrada_no_cuenta_dos_veces(self, tmp_path):
-        """Con la orden ya en el venue y el mismo client_id, una sola vez."""
+        """With the order already on the venue and the same client_id, only once."""
         s = Rig(tmp_path)
         s.lose_reply()
         await s.send(buy(price="0.00725000"))
@@ -105,7 +105,7 @@ class TestVenuesDistintos:
         task = asyncio.create_task(s.orders.confirm_double(pending))
         await settle()
         assert not task.done()
-        assert [e for e, _ in s.events()] == ["order_sent"]  # ni la pierna de nk sale
+        assert [e for e, _ in s.events()] == ["order_sent"]  # not even the nk leg goes
         gate.set()
         assert isinstance(await stuck, Sent)
         assert isinstance(await asyncio.wait_for(task, 1), DoubleSent)
