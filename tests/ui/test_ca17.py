@@ -23,8 +23,8 @@ async def open_values(pilot, app):
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestPestanaValor:
-    async def test_tab_cambia_de_pestana_y_vuelve(self, tmp_path):
+class TestValueTab:
+    async def test_tab_switches_tab_and_back(self, tmp_path):
         write(tmp_path, "20261022", plain_double("d-1", T0))
         app = make_app(tmp_path)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -36,7 +36,7 @@ class TestPestanaValor:
             await until(pilot, lambda: screen(app).tab == "doubles")
             assert s.row_count() == 1  # the doubles one, untouched
 
-    async def test_serie_del_rango_con_hueco_y_resumen(self, tmp_path):
+    async def test_range_series_with_gap_and_summary(self, tmp_path):
         rows = [
             value_row(T0 - 2 * DAY, "9", nk="9"),  # outside the day
             value_row(T0, "1.0", nk="0.6", nx="0.4"),
@@ -64,7 +64,7 @@ class TestPestanaValor:
             await until(pilot, lambda: len(screen(app).report.values) == 5)
             assert screen(app).tab == "value"  # the range does not change tab
 
-    async def test_sin_muestras_lo_dice(self, tmp_path):
+    async def test_no_samples_says_so(self, tmp_path):
         write(tmp_path, "20261022", plain_double("d-1", T0))
         app = make_app(tmp_path)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -73,8 +73,8 @@ class TestPestanaValor:
 
 
 @pytest.mark.spec("RF-32", "RF-25", "CA-17")
-class TestRefresco:
-    async def test_una_muestra_nueva_aparece_sin_cerrar(self, tmp_path, monkeypatch):
+class TestRefresh:
+    async def test_new_sample_appears_without_closing(self, tmp_path, monkeypatch):
         monkeypatch.setattr(results_module, "RESULTS_EVERY_S", 0.05)
         write(tmp_path, "20261022", [value_row(T0, "1.0")])
         app = make_app(tmp_path)
@@ -86,7 +86,7 @@ class TestRefresco:
             assert "1.10000000 BTC" in screen(app).value_text()
             assert screen(app).tab == "value"
 
-    async def test_la_seleccion_de_la_tabla_no_se_mueve(self, tmp_path, monkeypatch):
+    async def test_table_selection_does_not_move(self, tmp_path, monkeypatch):
         monkeypatch.setattr(results_module, "RESULTS_EVERY_S", 0.05)
         write(tmp_path, "20261022", plain_double("d-1", T0) + plain_double("d-2", T0 + 60_000))
         app = make_app(tmp_path)
@@ -107,8 +107,8 @@ class TestRefresco:
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestTramo:
-    async def test_z_ajusta_al_ultimo_tramo_y_vuelve(self, tmp_path):
+class TestStretch:
+    async def test_z_fits_last_stretch_and_returns(self, tmp_path):
         rows = [
             value_row(T0, "1.0", nk="0.6", nx="0.4"),
             value_row(T0 + EVERY, "0.5", nk="0.1", nx="0.4"),  # transfer in transit

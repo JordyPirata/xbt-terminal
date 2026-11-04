@@ -22,8 +22,8 @@ def heard(engine):
 
 
 @pytest.mark.spec("RF-07", "RF-30")
-class TestPiernaColgada:
-    async def test_avisa_en_rojo_una_vez(self, tmp_path):
+class TestHangingLeg:
+    async def test_warns_in_red_once(self, tmp_path):
         s = double.Setup(tmp_path)
         engine = Engine(s.hub, mode="dry-run", orders=s.orders)
         notices = heard(engine)
@@ -36,7 +36,7 @@ class TestPiernaColgada:
         (notice,) = notices
         assert notice.error and notice.text.startswith("⚠ pierna colgada en d-000001")
 
-    async def test_un_fallo_va_a_faults_y_no_corta(self, tmp_path):
+    async def test_failure_goes_to_faults_and_does_not_cut(self, tmp_path):
         s = double.Setup(tmp_path)
         faults = []
         s.orders.faults.subscribe(faults.append)
@@ -51,29 +51,29 @@ class TestPiernaColgada:
 
 
 @pytest.mark.spec("RNF-14", "RF-30")
-class TestFallos:
+class TestFailures:
     """With distinct registries in orders and hub (D-78), the engine joins them."""
 
-    def test_cada_servicio_trae_el_suyo(self, tmp_path):
+    def test_each_service_brings_its_own(self, tmp_path):
         s = double.Setup(tmp_path)
         engine = Engine(s.hub, mode="dry-run", orders=s.orders)
         assert s.orders.faults is not s.hub.faults
         assert engine.faults == [s.orders.faults, s.hub.faults]
 
-    def test_report_fault_apunta_en_el_de_ordenes(self, tmp_path):
+    def test_report_fault_notes_in_orders_registry(self, tmp_path):
         s = double.Setup(tmp_path)
         engine = Engine(s.hub, mode="dry-run", orders=s.orders)
         fault = engine.report_fault("control", RuntimeError("bug"))
         assert fault.where == "control" and "bug" in fault.error
         assert s.orders.faults.count == 1 and s.hub.faults.count == 0
 
-    def test_sin_ordenes_apunta_en_el_del_hub(self, tmp_path):
+    def test_no_orders_notes_in_hub_registry(self, tmp_path):
         s = double.Setup(tmp_path)
         engine = Engine(s.hub, mode="dry-run")
         engine.report_fault("ui", RuntimeError("bug"))
         assert s.hub.faults.count == 1
 
-    def test_fault_count_suma_y_subscribe_faults_oye_todos(self, tmp_path):
+    def test_fault_count_adds_and_subscribe_faults_hears_all(self, tmp_path):
         s = double.Setup(tmp_path)
         engine = Engine(s.hub, mode="dry-run", orders=s.orders)
         seen = []
@@ -85,8 +85,8 @@ class TestFallos:
 
 
 @pytest.mark.spec("RNF-12", "RF-30")
-class TestReconciliacion:
-    async def test_el_bucle_reconcilia_y_avisa(self, tmp_path):
+class TestReconciliation:
+    async def test_loop_reconciles_and_notifies(self, tmp_path):
         s = Rig(tmp_path)
         s.lose_reply()
         await s.send(buy())
@@ -104,19 +104,19 @@ class TestReconciliacion:
         assert "existe" in notice.text and not notice.error
         assert s.orders.uncertain == {}
 
-    async def test_sin_inciertas_no_pregunta(self, tmp_path):
+    async def test_without_uncertain_does_not_ask(self, tmp_path):
         s = Rig(tmp_path)
         engine = Engine(s.hub, mode="dry-run", orders=s.orders)
         assert await engine.reconcile() == []
 
 
 @pytest.mark.spec("RNF-16", "RF-30")
-class TestDesfase:
+class TestSkewCheck:
     @pytest.mark.parametrize(
         ("mode", "effect"),
         [("live", "no se envían órdenes a NonKYC"), ("dry-run", "en live no se podría")],
     )
-    def test_avisa_una_vez_por_venue(self, tmp_path, mode, effect):
+    def test_warns_once_per_venue(self, tmp_path, mode, effect):
         s = Rig(tmp_path)
         s.hub._venues["nk"].clock_skew_ms = 9_000
         engine = Engine(s.hub, mode=mode, orders=s.orders, max_clock_skew_s=5)
@@ -126,7 +126,7 @@ class TestDesfase:
         (notice,) = notices
         assert notice.error and "reloj desfasado +9 s" in notice.text and effect in notice.text
 
-    def test_dentro_del_tope_o_sin_tope_calla(self, tmp_path):
+    def test_within_cap_or_uncapped_stays_silent(self, tmp_path):
         s = Rig(tmp_path)
         s.hub._venues["nk"].clock_skew_ms = 9_000
         quiet = Engine(s.hub, mode="live", orders=s.orders)
@@ -136,8 +136,8 @@ class TestDesfase:
 
 
 @pytest.mark.spec("RNF-15", "RF-30")
-class TestCerrar:
-    async def test_espera_al_envio_en_vuelo(self, tmp_path):
+class TestClose:
+    async def test_waits_for_send_in_flight(self, tmp_path):
         s = Rig(tmp_path)
         gate = asyncio.Event()
         real = s.venue.place_limit
@@ -160,7 +160,7 @@ class TestCerrar:
         await sending
         assert s.events() == ["order_sent", "order_ack"]
 
-    async def test_error_incierto_en_vuelo_queda_apuntado(self, tmp_path):
+    async def test_uncertain_error_in_flight_is_noted(self, tmp_path):
         s = Rig(tmp_path)
 
         async def lost(req):
@@ -178,8 +178,8 @@ class TestCerrar:
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestValorDeLaCuenta:
-    def test_el_motor_muestrea_si_hay_cuenta_y_journal(self, tmp_path):
+class TestAccountValue:
+    def test_engine_samples_with_account_and_journal(self, tmp_path):
         from xbt_terminal.services.account import AccountService
 
         s = Rig(tmp_path)
@@ -189,7 +189,7 @@ class TestValorDeLaCuenta:
         )
         assert "value" in [name for name, _ in engine.services()]
 
-    def test_sin_cuenta_no_muestrea(self, tmp_path):
+    def test_without_account_no_sampling(self, tmp_path):
         s = Rig(tmp_path)
         engine = Engine(s.hub, mode="read-only", value_every_s=300)
         assert engine.values is None

@@ -103,14 +103,14 @@ def req(side="buy", qty="0.0100", price="0.00725000"):
 
 
 @pytest.mark.spec("RF-12")
-class TestFirma:
-    def test_vector_conocido(self):
+class TestSignature:
+    def test_known_vector(self):
         """OpenAPI example (POST /cancelorder) with fixed keys and nonce."""
         url = "https://api.nonkyc.io/api/v2/cancelorder"
         got = sign(KEY, SECRET, url, '{"id":"5845454765457"}', "1792530500000")
         assert got == "373c92f4e4fba2fe45d7074fd515b7df3bc3ba7c5eb55d7fe1d827e16ba7b52d"
 
-    def test_login_del_ws(self):
+    def test_ws_login(self):
         frame = json.loads(login_frame(KEY, SECRET, "0123456789abcdef0123", req_id=7))
         assert frame == {
             "method": "login",
@@ -123,7 +123,7 @@ class TestFirma:
             "id": 7,
         }
 
-    async def test_get_firmado_con_la_url_exacta(self, venue, api):
+    async def test_get_signed_with_exact_url(self, venue, api):
         await venue.open_orders()
         sent = api.calls.last.request
         url = str(sent.url)
@@ -131,7 +131,7 @@ class TestFirma:
         assert sent.headers["X-API-KEY"] == KEY
         assert sent.headers["X-API-SIGN"] == expected_sign(url, "", sent.headers["X-API-NONCE"])
 
-    async def test_post_firmado_con_el_cuerpo_que_viaja(self, venue, api):
+    async def test_post_signed_with_traveling_body(self, venue, api):
         await venue.place_limit(req())
         sent = api.calls.last.request
         body = sent.content.decode()
@@ -142,20 +142,20 @@ class TestFirma:
         nonce = sent.headers["X-API-NONCE"]
         assert sent.headers["X-API-SIGN"] == expected_sign(f"{REST_URL}/createorder", body, nonce)
 
-    async def test_nonce_siempre_crece(self, venue, api):
+    async def test_nonce_always_grows(self, venue, api):
         for _ in range(3):
             await venue.balances()
         nonces = [int(c.request.headers["X-API-NONCE"]) for c in api.calls]
         assert nonces == [NOW, NOW + 1, NOW + 2]  # same clock: forced to grow
 
-    async def test_sin_keys_no_se_llama_al_venue(self, limiter, api):
+    async def test_no_keys_venue_is_not_called(self, limiter, api):
         async with httpx.AsyncClient() as http:
             venue = make(http, limiter, creds=None)
             with pytest.raises(ReadOnlyError):
                 await venue.balances()
         assert not api.calls
 
-    async def test_error_sin_secretos(self, venue, api):
+    async def test_error_without_secrets(self, venue, api):
         api.get(f"{REST_URL}/balances").respond(
             401, json={"error": {"code": 401, "message": "Authorisation failed"}}
         )
@@ -165,7 +165,7 @@ class TestFirma:
 
 
 @pytest.mark.spec("RF-05", "RNF-10")
-async def test_balances_solo_btc_y_btcb2(venue, api, limiter):
+async def test_balances_only_btc_and_btcb2(venue, api, limiter):
     """`held` is what is locked in orders; `pending` are unconfirmed deposits."""
     assert await venue.balances() == {
         "BTC": Balance("BTC", D("0.00210000"), D("0.00150005")),
@@ -175,8 +175,8 @@ async def test_balances_solo_btc_y_btcb2(venue, api, limiter):
 
 
 @pytest.mark.spec("RF-08")
-class TestOrdenes:
-    async def test_abiertas(self, venue, api):
+class TestOrders:
+    async def test_open_orders_listed(self, venue, api):
         assert await venue.open_orders() == [
             Order(
                 "nk", "6a0000000000000000000001", "t-abc123", "buy", D("0.00710000"),
@@ -188,13 +188,13 @@ class TestOrdenes:
             ),
         ]  # fmt: skip
 
-    async def test_activa_con_algo_ejecutado_es_parcial(self, venue, api):
+    async def test_active_with_some_executed_is_partial(self, venue, api):
         raw = json.loads(fixture("orders_active.json"))
         raw[0]["executedQuantity"] = "0.0500"
         api.get(f"{REST_URL}/account/orders").respond(json=raw)
         assert (await venue.open_orders())[0].status == "partial"
 
-    async def test_activas_sin_las_ya_terminadas(self, venue, api):
+    async def test_active_without_finished_ones(self, venue, api):
         """T-48 (D-59): `status=active` also brings already cancelled orders (seen for real on
         2026-10-23, minutes after cancelling). Real shape of that order."""
         cancelled = {
@@ -213,7 +213,7 @@ class TestOrdenes:
             "6a0000000000000000000001", "6a0000000000000000000002",
         ]  # fmt: skip
 
-    async def test_activa_segun_el_venue_aunque_diga_inactiva(self, venue, api):
+    async def test_active_per_venue_even_if_it_says_inactive(self, venue, api):
         """`status` rules, not `isActive`: an `Active` with false `isActive` stays open (when in
         doubt, it counts as open for `self_cross` and the count)."""
         raw = json.loads(fixture("orders_active.json"))
@@ -221,7 +221,7 @@ class TestOrdenes:
         api.get(f"{REST_URL}/account/orders").respond(json=raw)
         assert len(await venue.open_orders()) == 2
 
-    async def test_estado_desconocido(self, venue, api):
+    async def test_unknown_status(self, venue, api):
         raw = json.loads(fixture("orders_active.json"))
         raw[0]["status"] = "Exploded"
         api.get(f"{REST_URL}/account/orders").respond(json=raw)
@@ -229,7 +229,7 @@ class TestOrdenes:
             await venue.open_orders()
 
     @pytest.mark.parametrize("raw,side", [("BUY", "buy"), ("Sell", "sell"), ("buy", "buy")])
-    def test_lado_sin_distinguir_mayusculas(self, raw, side):
+    def test_side_case_insensitive(self, raw, side):
         """D-22: `account/orders` says "BUY" and `getorder` "buy"; "BUY" used to kill each read
         of open orders and the real order did not show in the terminal."""
         order = json.loads(fixture("orders_active.json"))[0] | {"side": raw}
@@ -238,12 +238,12 @@ class TestOrdenes:
         assert parse_fill(trade, "BTC").side == side
 
     @pytest.mark.parametrize("raw", ["x", None, ""])
-    def test_lado_desconocido(self, raw):
+    def test_unknown_side(self, raw):
         order = json.loads(fixture("orders_active.json"))[0] | {"side": raw}
         with pytest.raises(VenueError, match="lado"):
             parse_order(order, NOW)
 
-    async def test_enviar(self, venue, api, limiter):
+    async def test_send_order(self, venue, api, limiter):
         order = await venue.place_limit(req())
         assert order == Order(
             "nk", "6a0000000000000000000005", "t-abc123", "buy", D("0.00725000"), D("0.0100"),
@@ -251,21 +251,21 @@ class TestOrdenes:
         )  # fmt: skip
         assert limiter.kinds == ["order"]
 
-    async def test_rechazo_del_venue(self, venue, api):
+    async def test_venue_rejection(self, venue, api):
         api.post(f"{REST_URL}/createorder").respond(
             400, json={"error": {"code": 400, "message": "Insufficient funds"}}
         )
         with pytest.raises(VenueError, match="Insufficient funds"):
             await venue.place_limit(req())
 
-    async def test_cancelar(self, venue, api, limiter):
+    async def test_cancel_order(self, venue, api, limiter):
         await venue.cancel("6a0000000000000000000005")
         sent = api.calls.last.request
         assert sent.url.path == "/api/v2/cancelorder"
         assert sent.content == b'{"id":"6a0000000000000000000005"}'
         assert limiter.kinds == ["cancel"]
 
-    async def test_cancelar_todas_del_par(self, venue, api, limiter):
+    async def test_cancel_all_of_the_pair(self, venue, api, limiter):
         """T-47 (D-58): the API asks `symbol` and `side`; without `side` it answered HTTP 200
         with `400 Bad Request` (seen for real on 2026-10-23). `all` comes from the OpenAPI."""
         await venue.cancel_all()
@@ -274,24 +274,24 @@ class TestOrdenes:
         assert sent.content == b'{"symbol":"BTCB2/BTC","side":"all"}'
         assert limiter.kinds == ["cancel"]
 
-    async def test_cancelar_todas_con_error_dentro_de_un_200(self, venue, api):
+    async def test_cancel_all_with_error_inside_a_200(self, venue, api):
         api.post(f"{REST_URL}/cancelallorders").respond(json={"error": "400 Bad Request"})
         with pytest.raises(VenueError, match="400 Bad Request"):
             await venue.cancel_all()
 
-    async def test_cancelar_todas_sin_success(self, venue, api):
+    async def test_cancel_all_without_success(self, venue, api):
         api.post(f"{REST_URL}/cancelallorders").respond(json={"success": False, "ids": []})
         with pytest.raises(VenueError, match="cancelallorders"):
             await venue.cancel_all()
 
-    async def test_estado_final(self, venue, api):
+    async def test_final_state(self, venue, api):
         final = await venue.fetch_final("6a0000000000000000000001")
         assert final is not None and final.status == "cancelled"
         assert api.calls.last.request.url.path == "/api/v2/getorder/6a0000000000000000000001"
 
 
 @pytest.mark.spec("RF-09")
-async def test_fills_con_su_orden(venue, api):
+async def test_fills_with_their_order(venue, api):
     fills = await venue.fetch_fills()
     assert fills[0] == Fill(
         "nk", "6b0000000000000000000001", "6a0000000000000000000002", "sell", D("0.00750000"),
@@ -340,8 +340,8 @@ def polls(api):
 
 
 @pytest.mark.spec("RF-09", "RF-14")
-class TestStreamPrivado:
-    async def test_login_y_reportes_por_ws(self, limiter, api):
+class TestPrivateStream:
+    async def test_login_and_reports_over_ws(self, limiter, api):
         server = FakePrivateWS()
         async with websockets.serve(server.handler, "127.0.0.1", 0) as srv:
             port = srv.sockets[0].getsockname()[1]
@@ -362,7 +362,7 @@ class TestStreamPrivado:
         good = hmac.new(SECRET.encode(), login["nonce"].encode(), hashlib.sha256).hexdigest()
         assert login["signature"] == good
 
-    async def test_con_ws_vivo_el_polling_baja_a_la_cadencia_de_seguridad(self, limiter, api):
+    async def test_with_ws_alive_polling_drops_to_safety_rate(self, limiter, api):
         server = FakePrivateWS()
         async with websockets.serve(server.handler, "127.0.0.1", 0) as srv:
             port = srv.sockets[0].getsockname()[1]
@@ -382,7 +382,7 @@ class TestStreamPrivado:
                     await asyncio.sleep(0.3)  # without WS it would be ~15 refreshes
                     assert polls(api) == before
 
-    async def test_login_rechazado_sigue_por_polling(self, limiter, api):
+    async def test_rejected_login_stays_on_polling(self, limiter, api):
         server = FakePrivateWS(login_ok=False)
         async with websockets.serve(server.handler, "127.0.0.1", 0) as srv:
             port = srv.sockets[0].getsockname()[1]
@@ -394,7 +394,7 @@ class TestStreamPrivado:
         assert (state.source, state.status) == ("rest", "up")
         assert polls(api) >= 3 and server.logins
 
-    async def test_sin_keys_no_hay_stream(self, limiter):
+    async def test_no_keys_no_stream(self, limiter):
         venue = NonKYCVenue("BTCB2/BTC", limiter, maker_fee=D("0"), taker_fee=D("0"))
         assert isinstance(
             NonKYCVenue("BTCB2/BTC", limiter, maker_fee=D("0"), taker_fee=D("0")), Venue
@@ -405,14 +405,14 @@ class TestStreamPrivado:
 
 
 @pytest.mark.spec("RNF-12")
-class TestEnvioIncierto:
+class TestUncertainSend:
     """D-26: the order may have been created and it is unknown → UncertainError; if surely
     not, VenueError or the connection error as is."""
 
     @pytest.mark.parametrize(
         "exc", [httpx.ReadTimeout("t"), httpx.RemoteProtocolError("x"), httpx.ReadError("r")]
     )
-    async def test_fallo_de_red_tras_conectar(self, venue, api, exc):
+    async def test_network_failure_after_connecting(self, venue, api, exc):
         api.post(f"{REST_URL}/createorder").mock(side_effect=exc)
         with pytest.raises(UncertainError):
             await venue.place_limit(req())
@@ -420,7 +420,7 @@ class TestEnvioIncierto:
     @pytest.mark.parametrize(
         "exc", [httpx.ConnectError("c"), httpx.ConnectTimeout("c"), httpx.PoolTimeout("p")]
     )
-    async def test_sin_conectar_no_es_incierto(self, venue, api, exc):
+    async def test_unconnected_is_not_uncertain(self, venue, api, exc):
         api.post(f"{REST_URL}/createorder").mock(side_effect=exc)
         with pytest.raises(type(exc)):
             await venue.place_limit(req())
@@ -430,23 +430,23 @@ class TestEnvioIncierto:
         with pytest.raises(UncertainError, match="502"):
             await venue.place_limit(req())
 
-    async def test_2xx_que_no_es_json(self, venue, api):
+    async def test_2xx_not_json(self, venue, api):
         api.post(f"{REST_URL}/createorder").respond(200, text="<html>ok</html>")
         with pytest.raises(UncertainError):
             await venue.place_limit(req())
 
-    async def test_2xx_ilegible_como_orden(self, venue, api):
+    async def test_unreadable_2xx_as_order(self, venue, api):
         api.post(f"{REST_URL}/createorder").respond(json={"id": "x", "status": "Active"})
         with pytest.raises(UncertainError):
             await venue.place_limit(req())
 
-    async def test_4xx_es_un_rechazo_claro(self, venue, api):
+    async def test_4xx_is_a_clear_rejection(self, venue, api):
         api.post(f"{REST_URL}/createorder").respond(400, text="<html>Bad Request</html>")
         with pytest.raises(VenueError) as info:
             await venue.place_limit(req())
         assert not isinstance(info.value, UncertainError)
 
-    async def test_error_del_venue_con_200_es_un_rechazo_claro(self, venue, api):
+    async def test_venue_error_with_200_is_clear_rejection(self, venue, api):
         api.post(f"{REST_URL}/createorder").respond(
             json={"error": {"code": 400, "message": "Insufficient funds"}}
         )
@@ -456,11 +456,11 @@ class TestEnvioIncierto:
 
 
 @pytest.mark.spec("RNF-12")
-class TestOrdenesRecientes:
-    def test_guarda_el_client_id(self, venue):
+class TestRecentOrders:
+    def test_keeps_client_id(self, venue):
         assert venue.keeps_client_id is True
 
-    async def test_activas_sin_trades_nuevos(self, venue, api, limiter):
+    async def test_active_without_new_trades(self, venue, api, limiter):
         orders = await venue.recent_orders(1_792_530_400_000)
         assert [o.order_id for o in orders] == [
             "6a0000000000000000000001",
@@ -468,7 +468,7 @@ class TestOrdenesRecientes:
         ]
         assert limiter.kinds == ["private", "private"]
 
-    async def test_las_de_trades_recientes_se_piden_por_id(self, venue, api, limiter):
+    async def test_recent_trade_orders_asked_by_id(self, venue, api, limiter):
         """An order filled entirely at once is not among the active ones."""
         done = json.loads(fixture("order_cancelled.json")) | {
             "id": "6a00000000000000000000ff",
@@ -530,27 +530,27 @@ def mixed(api):
 
 
 @pytest.mark.spec("RF-05", "RF-08", "RF-09")
-class TestOtrosMercados:
-    async def test_los_fills_de_otro_mercado_no_salen(self, venue, mixed):
+class TestOtherMarkets:
+    async def test_other_market_fills_stay_out(self, venue, mixed):
         fills = await venue.fetch_fills()
         assert [f.trade_id for f in fills] == [
             r["id"] for r in json.loads(fixture("trades_my.json"))
         ]
 
-    async def test_las_activas_de_otro_mercado_no_salen(self, venue, mixed):
+    async def test_other_market_active_orders_stay_out(self, venue, mixed):
         orders = await venue.fetch_active()
         assert [o.order_id for o in orders] == [
             "6a0000000000000000000001",
             "6a0000000000000000000002",
         ]
 
-    async def test_sin_symbol_en_la_fila_cuenta_como_del_par(self, venue, api):
+    async def test_no_symbol_in_row_counts_as_pair(self, venue, api):
         """Only what claims to be from another market is dropped."""
         bare = {k: v for k, v in json.loads(fixture("trades_my.json"))[0].items() if k != "market"}
         api.get(f"{REST_URL}/account/trades").respond(json=[bare])
         assert [f.trade_id for f in await venue.fetch_fills()] == [bare["id"]]
 
-    async def test_recientes_no_pide_ordenes_de_otro_mercado(self, venue, mixed):
+    async def test_recent_does_not_ask_other_market_orders(self, venue, mixed):
         orders = await venue.recent_orders(1_792_510_000_000)
         assert "6a00000000000000000000aa" not in {o.order_id for o in orders}
         paths = [c.request.url.path for c in mixed.calls]
@@ -568,7 +568,7 @@ NKYC_BALANCE = {
 
 
 @pytest.mark.spec("RF-24", "RF-25", "RNF-10")
-class TestTokenDeFee:
+class TestFeeTokenSetup:
     @pytest.fixture
     async def token_venue(self, limiter, api):
         api.get(f"{REST_URL}/balances").respond(
@@ -577,18 +577,18 @@ class TestTokenDeFee:
         async with httpx.AsyncClient() as http:
             yield make(http, limiter, fee_token="NKYC")
 
-    async def test_el_saldo_del_token_sale_con_los_del_par(self, token_venue):
+    async def test_token_balance_comes_with_the_pairs(self, token_venue):
         balances = await token_venue.balances()
         assert balances["NKYC"] == Balance("NKYC", D("4.54266766"), D("5.09230000"))
         assert set(balances) == {"BTC", "BTCB2", "NKYC"}
 
-    async def test_sin_token_no_sale(self, venue, api):
+    async def test_no_token_not_shown(self, venue, api):
         api.get(f"{REST_URL}/balances").respond(
             json=[*json.loads(fixture("balances.json")), NKYC_BALANCE]
         )
         assert set(await venue.balances()) == {"BTC", "BTCB2"}
 
-    async def test_la_fee_en_token_lleva_su_ticker(self, token_venue, api):
+    async def test_token_fee_has_its_ticker(self, token_venue, api):
         """`alternateFeeAsset` is the `/balances` `assetid`, not the ticker."""
         mine = OTHER_TRADE | {"market": {"id": "x", "symbol": "BTCB2/BTC"}}
         api.get(f"{REST_URL}/account/trades").respond(json=[mine])
@@ -596,7 +596,7 @@ class TestTokenDeFee:
         (fill,) = await token_venue.fetch_fills()
         assert (fill.fee, fill.fee_asset) == (D("0.0016640800"), "NKYC")
 
-    async def test_sin_saldos_leidos_queda_el_id(self, token_venue, api):
+    async def test_no_read_balances_keeps_the_id(self, token_venue, api):
         mine = OTHER_TRADE | {"market": {"id": "x", "symbol": "BTCB2/BTC"}}
         api.get(f"{REST_URL}/account/trades").respond(json=[mine])
         (fill,) = await token_venue.fetch_fills()
@@ -613,21 +613,21 @@ NKYC_MARKET = {
 
 
 @pytest.mark.spec("RF-24", "RF-25")
-class TestPrecioDelToken:
-    async def test_mid_publico(self, venue, api, limiter):
+class TestTokenPrice:
+    async def test_public_mid(self, venue, api, limiter):
         route = api.get(f"{REST_URL}/market/getbysymbol/NKYC_BTC").respond(json=NKYC_MARKET)
         assert await venue.token_price("NKYC") == (D("0.00013071") + D("0.00013093")) / 2
         assert route.called and "X-API-KEY" not in route.calls.last.request.headers
         assert limiter.kinds == ["market"]
 
     @pytest.mark.parametrize("missing", ["bestBid", "bestAsk"])
-    async def test_sin_un_lado_es_error(self, venue, api, missing):
+    async def test_one_side_missing_is_error(self, venue, api, missing):
         market = NKYC_MARKET | {missing: "0"}
         api.get(f"{REST_URL}/market/getbysymbol/NKYC_BTC").respond(json=market)
         with pytest.raises(VenueError, match="NKYC"):
             await venue.token_price("NKYC")
 
-    async def test_otro_mercado_en_la_respuesta_es_error(self, venue, api):
+    async def test_other_market_in_response_is_error(self, venue, api):
         market = NKYC_MARKET | {"symbol": "BTCB2/BTC"}
         api.get(f"{REST_URL}/market/getbysymbol/NKYC_BTC").respond(json=market)
         with pytest.raises(VenueError, match="NKYC"):

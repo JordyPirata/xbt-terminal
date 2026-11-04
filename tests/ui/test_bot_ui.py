@@ -34,8 +34,8 @@ def bar(app):
 
 
 @pytest.mark.spec("RF-18")
-class TestArmar:
-    async def test_confirmar_arma(self, tmp_path):
+class TestArm:
+    async def test_confirm_arms(self, tmp_path):
         async with BotRig(tmp_path) as rig:
             app = app_for(rig)
             async with app.run_test(size=(160, 45)) as pilot:
@@ -51,7 +51,7 @@ class TestArmar:
                 assert "bot armado" in app.last_message
 
     @pytest.mark.parametrize("key", ["n", "escape", "enter"])
-    async def test_por_defecto_no_se_arma(self, tmp_path, key):
+    async def test_does_not_arm_by_default(self, tmp_path, key):
         async with BotRig(tmp_path) as rig:
             app = app_for(rig)
             async with app.run_test(size=(160, 45)) as pilot:
@@ -61,7 +61,7 @@ class TestArmar:
                 await until(pilot, lambda: not isinstance(app.screen, ConfirmScreen))
                 assert rig.bot.state.status == "off" and "no se armó" in app.last_message
 
-    async def test_live_sin_enabled_ni_dialogo(self, tmp_path):
+    async def test_live_without_enabled_no_dialog(self, tmp_path):
         async with BotRig(tmp_path, live=True, enabled=False) as rig:
             app = app_for(rig, mode="live")
             async with app.run_test(size=(160, 45)) as pilot:
@@ -70,7 +70,7 @@ class TestArmar:
                 assert app.last_error and not isinstance(app.screen, ConfirmScreen)
                 assert rig.bot.state.status == "off"
 
-    async def test_live_avisa_de_ordenes_reales(self, tmp_path):
+    async def test_live_warns_of_real_orders(self, tmp_path):
         async with BotRig(tmp_path, live=True) as rig:
             app = app_for(rig, mode="live")
             async with app.run_test(size=(160, 45)) as pilot:
@@ -78,7 +78,7 @@ class TestArmar:
                 await until(pilot, lambda: isinstance(app.screen, ConfirmScreen))
                 assert "LIVE · ARMAR EL BOT: ÓRDENES REALES AUTOMÁTICAS" in app.screen.text
 
-    async def test_sin_bot_en_la_config(self, tmp_path):
+    async def test_without_bot_in_config(self, tmp_path):
         async with BotRig(tmp_path) as rig:
             app = app_for(rig)
             app.bot = None
@@ -89,8 +89,8 @@ class TestArmar:
 
 
 @pytest.mark.spec("RF-18", "RF-23")
-class TestParar:
-    async def test_tecla_p(self, tmp_path):
+class TestStopping:
+    async def test_p_key(self, tmp_path):
         async with BotRig(tmp_path) as rig:
             rig.bot.arm()
             app = app_for(rig)
@@ -100,7 +100,7 @@ class TestParar:
                 assert "bot parado" in app.last_message
                 await until(pilot, lambda: "BOT" not in bar(app))
 
-    async def test_comando_off(self, tmp_path):
+    async def test_off_command(self, tmp_path):
         async with BotRig(tmp_path) as rig:
             rig.bot.arm()
             app = app_for(rig)
@@ -110,7 +110,7 @@ class TestParar:
 
 
 @pytest.mark.spec("RF-21", "RF-23")
-async def test_parada_por_pierna_rechazada_se_ve_en_rojo(tmp_path):
+async def test_stop_by_rejected_leg_shows_red(tmp_path):
     async def refuse(req):
         raise VenueError("Neoxa: [400] rechazada")
 
@@ -127,7 +127,7 @@ async def test_parada_por_pierna_rechazada_se_ve_en_rojo(tmp_path):
 
 
 @pytest.mark.spec("RF-23")
-async def test_status_dice_estado_y_por_que_no_dispara(tmp_path):
+async def test_status_says_state_and_why_not_firing(tmp_path):
     async with BotRig(tmp_path) as rig:
         app = app_for(rig)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -140,7 +140,7 @@ async def test_status_dice_estado_y_por_que_no_dispara(tmp_path):
 
 
 @pytest.mark.spec("RF-15", "RF-18")
-async def test_la_ayuda_explica_el_bot(tmp_path):
+async def test_help_explains_the_bot(tmp_path):
     async with BotRig(tmp_path) as rig:
         app = app_for(rig)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -152,7 +152,7 @@ async def test_la_ayuda_explica_el_bot(tmp_path):
 
 
 @pytest.mark.spec("RF-18")
-async def test_parar_justo_despues_de_armar_desde_la_linea(tmp_path):
+async def test_stop_right_after_arming_from_the_line(tmp_path):
     """After `bot on` + y, focus returns to the command line, where `p` would be typed as
     text: ctrl+b stops the bot even with the line focused."""
     async with BotRig(tmp_path) as rig:

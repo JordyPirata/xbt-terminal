@@ -23,8 +23,8 @@ def round_trip(tp, obj):
 
 
 @pytest.mark.spec("RF-31", "RNF-07")
-class TestIdaYVuelta:
-    def test_decimal_va_como_texto_exacto(self):
+class TestRoundTrip:
+    def test_decimal_goes_as_exact_text(self):
         assert encode(D("0.00000001")) == "0.00000001"
         assert round_trip(Decimal, D("0.10")) == D("0.10")
 
@@ -32,7 +32,7 @@ class TestIdaYVuelta:
         st = BotState("halted", "pierna colgada", (1, 2), 20_000, D("0.0123"), 3, 2)
         assert round_trip(BotState, st) == st
 
-    def test_doble_con_piernas(self):
+    def test_double_with_legs(self):
         buy = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-1")
         sell = OrderRequest("nx", "sell", D("0.01"), D("0.00730"), "t-2")
         st = DoubleState(
@@ -40,7 +40,7 @@ class TestIdaYVuelta:
         )
         assert round_trip(DoubleState, st) == st
 
-    def test_cuenta_del_venue(self):
+    def test_venue_account(self):
         conn = ConnState("nk", "private", "ws", "up", 12.5, 9)
         fill = Fill("nk", "f-1", "o-1", "buy", D("0.0072"), D("0.004"), D("6E-8"), "BTC", 5)
         acct = VenueAccount(
@@ -59,21 +59,21 @@ class TestIdaYVuelta:
         assert back.orders == acct.orders and back.balances == acct.balances
         assert back.conn == conn and back.fills == [fill]
 
-    def test_contenedores(self):
+    def test_containers(self):
         assert round_trip(dict[str, str], {"d-1": "venta"}) == {"d-1": "venta"}
         assert round_trip(list[OrderRequest], []) == []
         assert round_trip(int | None, None) is None
 
 
 @pytest.mark.spec("RF-31")
-class TestLineas:
-    def test_una_linea_rara_es_error(self):
+class TestLines:
+    def test_odd_line_is_error(self):
         with pytest.raises(ValueError):
             loads(b"no es json\n")
         with pytest.raises(ValueError):
             loads(b"[1, 2]\n")  # a message is always an object
 
-    def test_un_float_en_dinero_no_pasa(self):
+    def test_float_in_money_does_not_pass(self):
         with pytest.raises((TypeError, ValueError)):
             decode(Balance, {"asset": "BTC", "available": 0.1, "locked": "0"})
 
@@ -89,7 +89,7 @@ class Sample:
 
 
 @pytest.mark.spec("RF-31", "RNF-07")
-class TestCadaTipo:
+class TestEachType:
     """Pin what `decode` returns with each type family (D-77: splitting it changes nothing)."""
 
     @pytest.mark.parametrize(
@@ -113,16 +113,16 @@ class TestCadaTipo:
             (float, 1.5, 1.5),
         ],
     )
-    def test_valores(self, tp, data, expected):
+    def test_values(self, tp, data, expected):
         got = decode(tp, data)
         assert got == expected and type(got) is type(expected)
 
-    def test_deque_y_float_desde_entero(self):
+    def test_deque_and_float_from_integer(self):
         assert decode(deque[int], [1]) == deque([1])
         assert type(decode(deque[int], [1])) is deque
         assert type(decode(float, 1)) is float
 
-    def test_dataclass(self):
+    def test_dataclass_codec(self):
         assert decode(Sample, {"a": 1}) == Sample(1)
         got = decode(Sample, {"a": 1, "c": [1, 2, 3], "d": 9, "z": 0})
         # keeps the field's maxlen; ignores extra keys and non-init fields
@@ -160,11 +160,11 @@ class TestCadaTipo:
             (bytes, b"", TypeError, "tipo sin decodificar: <class 'bytes'>"),
         ],
     )
-    def test_errores(self, tp, data, error, message):
+    def test_errors(self, tp, data, error, message):
         with pytest.raises(error) as exc:
             decode(tp, data)
         assert type(exc.value) is error and str(exc.value) == message
 
-    def test_tupla_de_largo_fijo_con_menos_elementos(self):
+    def test_fixed_tuple_with_fewer_elements(self):
         with pytest.raises(ValueError):
             decode(tuple[int, str], [1])

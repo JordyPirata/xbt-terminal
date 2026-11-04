@@ -42,7 +42,7 @@ def panels(app):
 
 @pytest.mark.spec("RNF-02", "RF-02", "RF-03")
 class TestLayout:
-    async def test_monta_los_6_paneles_a_160x45(self):
+    async def test_mounts_6_panels_at_160x45(self):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
             await pilot.pause()
@@ -52,7 +52,7 @@ class TestLayout:
             assert all(w.display and w.region.area > 0 for w in widgets)
             assert not app.query_one(TooSmall).display
 
-    async def test_nonkyc_a_la_izquierda_neoxa_a_la_derecha(self):
+    async def test_nonkyc_left_neoxa_right(self):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
             await pilot.pause()
@@ -61,7 +61,7 @@ class TestLayout:
                 assert (left.venue, right.venue) == ("nk", "nx")
                 assert left.region.y == right.region.y
 
-    async def test_charts_arriba_books_en_medio_barra_abajo(self):
+    async def test_charts_top_books_middle_bar_bottom(self):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
             await pilot.pause()
@@ -72,7 +72,7 @@ class TestLayout:
             assert info.width >= 158  # takes both columns
 
     @pytest.mark.parametrize("size", [(159, 45), (160, 44), (100, 30)])
-    async def test_por_debajo_del_minimo_aviso(self, size):
+    async def test_below_minimum_notice(self, size):
         app, _ = make_app()
         async with app.run_test(size=size) as pilot:
             await pilot.pause()
@@ -80,7 +80,7 @@ class TestLayout:
             assert warning.display and not app.query_one("#layout").display
             assert f"{size[0]}×{size[1]}" in warning.text and "160×45" in warning.text
 
-    async def test_al_agrandar_vuelve_el_layout(self):
+    async def test_enlarging_brings_layout_back(self):
         app, _ = make_app()
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
@@ -91,7 +91,7 @@ class TestLayout:
 
 @pytest.mark.spec("RF-02")
 class TestBook:
-    async def test_niveles_acumulado_y_spread(self):
+    async def test_levels_cumulative_and_spread(self):
         app, feeds = make_app()
         async with app.run_test(size=SIZE) as pilot:
             feeds["nk"].push(book("nk", "0.00720000", "0.00730000", seq=1))
@@ -103,7 +103,7 @@ class TestBook:
             assert "3.0000" in text  # bid cumulative: 1 + 2 (4 decimals on nk)
             assert "spread 0.00010000" in text and "10000 sats" in text
 
-    async def test_niveles_amm_marcados(self):
+    async def test_amm_levels_marked(self):
         app, feeds = make_app()
         async with app.run_test(size=SIZE) as pilot:
             feeds["nx"].push(book("nx", "0.00720000", "0.00730000"))
@@ -115,7 +115,7 @@ class TestBook:
             assert "0.00720000" + AMM_TAG not in normal
             assert "liquidez AMM" in panel.border_subtitle
 
-    async def test_respeta_el_numero_de_niveles(self):
+    async def test_respects_level_count(self):
         app, feeds = make_app(levels=1)
         async with app.run_test(size=SIZE) as pilot:
             feeds["nk"].push(book("nk", "0.00720000", "0.00730000"))
@@ -123,7 +123,7 @@ class TestBook:
             await until(pilot, lambda: "0.00720000" in panel.text)
             assert "0.00719900" not in panel.text and "0.00730100" not in panel.text
 
-    async def test_book_invalido_lo_dice(self):
+    async def test_invalid_book_says_so(self):
         app, feeds = make_app()
         async with app.run_test(size=SIZE) as pilot:
             feeds["nk"].push(book("nk", "0.00720000", "0.00730000", seq=1))
@@ -133,7 +133,7 @@ class TestBook:
             await until(pilot, lambda: "esperando snapshot" in panel.text)
             assert "0.00720000" not in panel.text  # no old prices
 
-    async def test_sin_datos_todavia(self):
+    async def test_no_data_yet(self):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
             await pilot.pause()
@@ -141,7 +141,7 @@ class TestBook:
 
 
 @pytest.mark.spec("RNF-06")
-async def test_un_delta_se_pinta_en_menos_de_500_ms():
+async def test_delta_drawn_within_500_ms():
     app, feeds = make_app()
     async with app.run_test(size=SIZE) as pilot:
         feeds["nk"].push(book("nk", "0.00720000", "0.00730000", seq=1))
@@ -154,8 +154,8 @@ async def test_un_delta_se_pinta_en_menos_de_500_ms():
 
 
 @pytest.mark.spec("RF-03")
-class TestVelas:
-    async def test_cada_venue_su_grafico_con_historico(self):
+class TestCandleBars:
+    async def test_each_venue_its_chart_with_history(self):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
             await until(pilot, lambda: all(c.candles for c in app.query(ChartPanel)), timeout=3)
@@ -172,7 +172,7 @@ class TestVelas:
             ("5", "1d", 86_400_000),
         ],
     )
-    async def test_atajos_de_timeframe(self, key, tf, step):
+    async def test_timeframe_shortcuts(self, key, tf, step):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
             await until(pilot, lambda: all(c.candles for c in app.query(ChartPanel)), timeout=3)
@@ -186,7 +186,7 @@ class TestVelas:
             await until(pilot, lambda: all(c.timeframe == "1m" for c in app.query(ChartPanel)))
 
 
-async def test_q_sale():
+async def test_q_exits():
     app, _ = make_app()
     async with app.run_test(size=SIZE) as pilot:
         await pilot.press("q")
@@ -195,7 +195,7 @@ async def test_q_sale():
 
 
 @pytest.mark.spec("RF-02", "RNF-02")
-async def test_las_filas_del_book_caben_sin_partirse():
+async def test_book_rows_fit_unsplit():
     app, feeds = make_app()
     async with app.run_test(size=SIZE) as pilot:
         feeds["nx"].push(book("nx", "0.00720000", "0.00730000"))
@@ -210,7 +210,7 @@ async def test_las_filas_del_book_caben_sin_partirse():
     "tf,fmt",
     [("1m", "%H:%M"), ("5m", "%H:%M"), ("1h", "%d %H:%M"), ("4h", "%d %H:%M"), ("1d", "%m-%d")],
 )
-def test_formato_del_eje_por_timeframe(tf, fmt):
+def test_axis_format_per_timeframe(tf, fmt):
     """In 4h the hour alone repeats daily, and in 1d it says nothing: the date is added."""
     from xbt_terminal.ui.panels import axis_format
 
@@ -229,7 +229,7 @@ def test_formato_del_eje_por_timeframe(tf, fmt):
         (10, 0, (0, 1)),
     ],
 )
-def test_reparto_de_columnas(count, canvas, expected):
+def test_column_split(count, canvas, expected):
     """D-24: each candle gets a whole number of columns, the same for all."""
     from xbt_terminal.ui.panels import candle_layout
 
@@ -237,7 +237,7 @@ def test_reparto_de_columnas(count, canvas, expected):
 
 
 @pytest.mark.spec("RF-03")
-def test_eje_y_se_ajusta_a_los_cuerpos_no_a_las_mechas():
+def test_y_axis_fits_bodies_not_wicks():
     """D-67: a stray wick does not crush the candles; the Y axis follows the bodies and the
     wick sticking out is cut at the border."""
     from xbt_terminal.core.models import Candle
@@ -262,7 +262,7 @@ def _candle_columns(chart: ChartPanel) -> tuple[list[int], int]:
 
 @pytest.mark.spec("RF-03")
 @pytest.mark.parametrize("key", ["1", "5"])
-async def test_velas_sin_huecos_sueltos(key):
+async def test_candles_without_stray_gaps(key):
     """D-24: candles go at a fixed step with the last against the right border; plotext used
     to spread N candles over M columns leaving random empty columns."""
     app, _ = make_app()

@@ -6,8 +6,8 @@ from .test_orders_ui import Rig, ready, until
 
 
 @pytest.mark.spec("RNF-16")
-class TestAvisoDeDesfase:
-    async def test_dry_run_avisa_una_vez(self, tmp_path):
+class TestSkewWarning:
+    async def test_dry_run_warns_once(self, tmp_path):
         rig = Rig(tmp_path, max_clock_skew_s=5)
         rig.feeds["nk"].clock_skew_ms = -61_000
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -21,7 +21,7 @@ class TestAvisoDeDesfase:
             await pilot.pause(0.05)
             assert rig.app.last_message == "otra cosa"
 
-    async def test_live_dice_que_no_se_envian_ordenes(self, tmp_path):
+    async def test_live_says_orders_are_not_sent(self, tmp_path):
         rig = Rig(tmp_path, max_clock_skew_s=5)
         rig.app.mode = rig.app.engine.mode = "live"  # the warning comes from the engine (D-61)
         rig.feeds["nk"].clock_skew_ms = 9_000
@@ -29,7 +29,7 @@ class TestAvisoDeDesfase:
             await until(pilot, lambda: "reloj" in rig.app.last_message)
             assert "no se envían órdenes a NonKYC" in rig.app.last_message
 
-    async def test_dentro_del_tope_no_avisa(self, tmp_path):
+    async def test_within_cap_does_not_warn(self, tmp_path):
         rig = Rig(tmp_path, max_clock_skew_s=5)
         rig.feeds["nk"].clock_skew_ms = 4_000
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -39,7 +39,7 @@ class TestAvisoDeDesfase:
 
 
 @pytest.mark.spec("RNF-18")
-async def test_avisos_de_arranque_en_rojo(tmp_path):
+async def test_startup_warnings_in_red(tmp_path):
     rig = Rig(tmp_path, startup_warnings=(".env legible por otros: chmod 600 .env",))
     async with rig.app.run_test(size=(160, 45)) as pilot:
         await until(pilot, lambda: "chmod 600" in rig.app.last_message)

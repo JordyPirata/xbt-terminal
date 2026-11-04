@@ -52,7 +52,7 @@ def last_state(events):
 
 
 @pytest.mark.spec("CA-06", "RF-01", "RF-14")
-async def test_el_ws_se_cae_y_vuelve(rest):  # noqa: F811
+async def test_ws_drops_and_returns(rest):  # noqa: F811
     port = free_port()
     async with httpx.AsyncClient() as http:
         venue = NonKYCVenue(

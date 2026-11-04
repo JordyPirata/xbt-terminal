@@ -26,14 +26,14 @@ def style_of(text, fragment):
 
 @pytest.mark.spec("RF-27", "CA-12")
 class TestPanel:
-    def test_porcentajes_con_color(self):
+    def test_percentages_with_colour(self):
         title, text = render(TARGET)
         assert "XBT 25.0 %" in text.plain and "XBT 75.0 %" in text.plain
         assert "green" in style_of(text, "XBT 25.0 %")
         assert "yellow" in style_of(text, "XBT 75.0 %")
         assert "XBT 50.0 % (objetivo 25 ±10)" in title
 
-    def test_sin_objetivo_sin_color(self):
+    def test_no_target_no_colour(self):
         title, text = render(None)
         assert "XBT 25.0 %" in text.plain
         assert style_of(text, "XBT 25.0 %") == []

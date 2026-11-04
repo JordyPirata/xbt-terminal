@@ -32,36 +32,36 @@ def order(venue, oid, side, filled="0", status="open", cid=None):
 
 
 @pytest.mark.spec("RF-07")
-class TestPiernas:
-    def test_al_empezar_las_dos_estan_pendientes(self):
+class TestLegs:
+    def test_both_pending_at_start(self):
         s = double()
         assert (s.buy.status, s.sell.status) == ("pending", "pending")
         assert (s.buy.order_id, s.sell.order_id) == (None, None)
 
-    def test_la_respuesta_del_envio_asigna_la_orden_por_client_id(self):
+    def test_send_reply_assigns_order_by_client_id(self):
         s = on_order(double(), order("nk", "o-b", "buy", cid="t-b"), T0)
         assert (s.buy.order_id, s.buy.status) == ("o-b", "open")
         assert s.sell.order_id is None
 
-    def test_las_actualizaciones_van_por_order_id(self):
+    def test_updates_go_by_order_id(self):
         s = sent(double())
         s = on_order(s, order("nx", "o-s", "sell", filled="0.004", status="partial"), T0 + 5)
         assert (s.sell.status, s.sell.filled) == ("partial", D("0.004"))
         assert s.buy.filled == 0
 
-    def test_una_orden_ajena_no_cambia_nada(self):
+    def test_foreign_order_changes_nothing(self):
         s = sent(double())
         assert on_order(s, order("nk", "otra", "buy", filled="0.01", status="filled"), T0) == s
 
-    def test_mismo_id_en_otro_venue_no_cuenta(self):
+    def test_same_id_on_another_venue_does_not_count(self):
         s = sent(double())
         assert on_order(s, order("nx", "o-b", "sell", filled="0.01", status="filled"), T0) == s
 
-    def test_fallo_al_enviar(self):
+    def test_failure_sending(self):
         s = double().fail("sell", "PRICE_OUT_OF_BAND")
         assert (s.sell.status, s.sell.error) == ("rejected", "PRICE_OUT_OF_BAND")
 
-    def test_terminada_cuando_las_dos_estan_terminadas(self):
+    def test_finished_when_both_finished(self):
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.01", status="filled"), T0)
         assert not s.done
@@ -70,13 +70,13 @@ class TestPiernas:
 
 
 @pytest.mark.spec("RF-07", "CA-03")
-class TestColgada:
-    def test_sin_fills_no_hay_desequilibrio(self):
+class TestHanging:
+    def test_no_fills_no_imbalance(self):
         s = sent(double())
         assert s.imbalance_since is None
         assert hanging(s, T0 + 10 * AFTER_MS, AFTER_MS) is None
 
-    def test_una_llena_y_la_otra_abierta_mas_de_n_segundos(self):
+    def test_one_filled_other_open_over_n_seconds(self):
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.01", status="filled"), T0 + 1_000)
         assert s.imbalance_since == T0 + 1_000
@@ -84,12 +84,12 @@ class TestColgada:
         reason = hanging(s, T0 + 1_001 + AFTER_MS, AFTER_MS)
         assert reason is not None and "Neoxa" in reason and "30 s" in reason
 
-    def test_parcial_tambien_cuenta(self):
+    def test_partial_counts_too(self):
         s = sent(double())
         s = on_order(s, order("nx", "o-s", "sell", filled="0.002", status="partial"), T0)
         assert hanging(s, T0 + AFTER_MS + 1, AFTER_MS) is not None
 
-    def test_si_se_igualan_se_reinicia_el_reloj(self):
+    def test_equalizing_resets_the_clock(self):
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.005", status="partial"), T0)
         s = on_order(s, order("nx", "o-s", "sell", filled="0.005", status="partial"), T0 + 20_000)
@@ -98,7 +98,7 @@ class TestColgada:
         assert s.imbalance_since == T0 + 25_000
         assert hanging(s, T0 + 25_000 + AFTER_MS, AFTER_MS) is None
 
-    def test_mas_fills_sin_igualar_no_reinician_el_reloj(self):
+    def test_more_fills_without_equalizing_keep_the_clock(self):
         """A leg filling in pieces without the other following keeps hanging."""
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.002", status="partial"), T0)
@@ -106,7 +106,7 @@ class TestColgada:
         assert s.imbalance_since == T0
         assert hanging(s, T0 + AFTER_MS + 1, AFTER_MS) is not None
 
-    def test_una_llena_y_la_otra_rechazada_es_inmediato(self):
+    def test_one_filled_other_rejected_is_immediate(self):
         s = on_order(
             double(), order("nk", "o-b", "buy", filled="0.01", status="filled", cid="t-b"), T0
         )
@@ -114,18 +114,18 @@ class TestColgada:
         reason = hanging(s, T0, AFTER_MS)
         assert reason is not None and "rechazada" in reason
 
-    def test_una_parcial_y_la_otra_cancelada(self):
+    def test_one_partial_other_cancelled(self):
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.003", status="partial"), T0)
         s = on_order(s, order("nx", "o-s", "sell", status="cancelled"), T0 + 1)
         assert "cancelada" in (hanging(s, T0 + 1, AFTER_MS) or "")
 
-    def test_rechazada_sin_fills_en_la_otra_no_es_colgada(self):
+    def test_rejected_without_fills_on_other_is_not_hanging(self):
         """PA-08: a leg with fills is needed."""
         s = on_order(double(), order("nk", "o-b", "buy", cid="t-b"), T0).fail("sell", "x")
         assert hanging(s, T0 + 10 * AFTER_MS, AFTER_MS) is None
 
-    def test_la_que_va_por_detras_es_la_colgada(self):
+    def test_the_one_behind_is_hanging(self):
         s = sent(double())
         s = on_order(s, order("nk", "o-b", "buy", filled="0.004", status="partial"), T0)
         s = on_order(s, order("nx", "o-s", "sell", filled="0.01", status="filled"), T0)
@@ -133,35 +133,35 @@ class TestColgada:
         assert reason is not None and reason.startswith("compra en NonKYC")
 
 
-def test_leg_es_inmutable():
+def test_leg_is_immutable():
     leg = Leg(OrderRequest("nk", "buy", D("1"), D("1"), "t"))
     with pytest.raises(AttributeError):
         leg.status = "open"  # type: ignore[misc]
 
 
 @pytest.mark.spec("RF-07", "RF-20", "RF-21")
-class TestPrimeraPierna:
+class TestFirstLeg:
     """Bot double with `lead_venue` (D-75): the other leg waits unsent."""
 
-    def test_la_otra_espera_sin_enviar(self):
+    def test_other_waits_unsent(self):
         buy = OrderRequest("nk", "buy", D("0.01"), D("0.0072"), "t-b")
         sell = OrderRequest("nx", "sell", D("0.01"), D("0.0073"), "t-s")
         s = start("d-1", buy, sell, T0, held="buy")
         assert (s.buy.status, s.sell.status) == ("held", "pending")
         assert not s.buy.done and not s.done
 
-    def test_sin_enviar_cuenta_como_cerrada_con_cero(self):
+    def test_unsent_counts_as_closed_with_zero(self):
         s = double().skip("buy")
         s = on_order(s, order("nx", "o-s", "sell", status="cancelled", cid="t-s"), T0)
         assert s.buy.status == "skipped" and s.buy.done and s.done
         assert hanging(s, T0, AFTER_MS) is None
 
-    def test_sin_enviar_con_la_otra_llena_es_colgada(self):
+    def test_unsent_with_other_filled_is_hanging(self):
         s = double().skip("buy")
         s = on_order(s, order("nx", "o-s", "sell", "0.004", "cancelled", cid="t-s"), T0)
         assert hanging(s, T0, AFTER_MS) == "compra en NonKYC sin enviar con 0.004 XBT sin cubrir"
 
-    def test_se_envia_por_otra_cantidad(self):
+    def test_sent_for_another_quantity(self):
         s = start(
             "d-1",
             OrderRequest("nk", "buy", D("0.01"), D("0.0072"), "t-b"),

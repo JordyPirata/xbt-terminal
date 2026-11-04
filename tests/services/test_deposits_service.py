@@ -21,8 +21,8 @@ class FakeDepositor:
 
 
 @pytest.mark.spec("RF-28", "CA-13")
-class TestCarga:
-    async def test_una_fila_por_venue_y_activo(self):
+class TestLoad:
+    async def test_one_row_per_venue_and_asset(self):
         svc = DepositService({"nk": FakeDepositor("nk"), "nx": FakeDepositor("nx")})
         rows = await svc.load()
         assert [(r.venue, r.asset, r.address.address) for r in rows] == [
@@ -31,7 +31,7 @@ class TestCarga:
         ]  # fmt: skip
         assert all(r.error == "" for r in rows)
 
-    async def test_el_error_queda_en_su_fila(self):
+    async def test_error_stays_in_its_row(self):
         nk = FakeDepositor("nk", fail={"BTC": VenueError("NonKYC: HTTP 500")})
         nx = FakeDepositor("nx", fail={"BTCB2": httpx.ConnectError("sin red")})
         rows = await DepositService({"nk": nk, "nx": nx}).load()
@@ -39,14 +39,14 @@ class TestCarga:
         assert rows[1].address is not None and rows[2].address is not None
         assert rows[3].address is None and "sin red" in rows[3].error
 
-    async def test_sin_cache(self):
+    async def test_without_cache(self):
         nk = FakeDepositor("nk")
         svc = DepositService({"nk": nk})
         await svc.load()
         await svc.load()
         assert nk.calls == ["BTC", "BTCB2", "BTC", "BTCB2"]
 
-    async def test_solo_los_venues_dados(self):
+    async def test_only_given_venues(self):
         svc = DepositService({"nx": FakeDepositor("nx")})
         assert svc.venues == ("nx",)
         assert {r.venue for r in await svc.load()} == {"nx"}

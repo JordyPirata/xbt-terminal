@@ -50,33 +50,33 @@ async def linked(tmp_path):
 
 
 @pytest.mark.spec("RF-31")
-class TestProbar:
-    async def test_dice_el_modo_y_si_hay_bot(self, tmp_path):
+class TestProbe:
+    async def test_says_mode_and_whether_bot_exists(self, tmp_path):
         async with Daemon(tmp_path) as d:
             hello = await probe(d.path)
         assert (hello.mode, hello.has_bot) == ("dry-run", True)
 
-    async def test_sin_bot(self, tmp_path):
+    async def test_without_bot(self, tmp_path):
         async with Daemon(tmp_path, bot=False) as d:
             assert not (await probe(d.path)).has_bot
 
-    async def test_sin_daemon(self, tmp_path):
+    async def test_no_daemon(self, tmp_path):
         with pytest.raises(DaemonGoneError, match="xbt daemon"):
             await probe(tmp_path / "no.sock")
 
-    async def test_una_ruta_que_no_cabe_se_explica(self, tmp_path):
+    async def test_unfit_path_is_explained(self, tmp_path):
         with pytest.raises(DaemonGoneError, match="no se puede abrir el socket"):
             await probe(tmp_path / ("x" * 120) / "d.sock")
 
 
 @pytest.mark.spec("RF-31")
-class TestEstado:
-    async def test_con_que_venues_opera_el_daemon(self, linked):
+class TestState:
+    async def test_which_venues_the_daemon_trades(self, linked):
         _, remote = linked
         assert remote.mode == "dry-run"
         assert remote.can_trade == {"nk": True, "nx": False}
 
-    async def test_saldos_y_ordenes_de_la_cuenta(self, tmp_path):
+    async def test_account_balances_and_orders(self, tmp_path):
         from xbt_terminal.services.account import AccountService
 
         from .test_account import FakePrivate, order
@@ -101,7 +101,7 @@ class TestEstado:
             runner.cancel()
             await remote.aclose()
 
-    async def test_el_bot_y_sus_cambios(self, linked):
+    async def test_bot_and_its_changes(self, linked):
         daemon, remote = linked
         states = []
         remote.bot.subscribe(states.append)
@@ -116,7 +116,7 @@ class TestEstado:
         await until(lambda: remote.bot.state.status == "off")
         assert daemon.bot.state.status == "off"
 
-    async def test_inciertas_y_dobles(self, linked):
+    async def test_uncertain_and_doubles(self, linked):
         daemon, remote = linked
         daemon.s.lose_reply(create=False)
         from .test_uncertain import buy
@@ -128,8 +128,8 @@ class TestEstado:
 
 
 @pytest.mark.spec("RF-31")
-class TestAvisos:
-    async def test_avisos_y_fallos_del_daemon(self, linked):
+class TestNotices:
+    async def test_daemon_notices_and_faults(self, linked):
         daemon, remote = linked
         notices = []
         remote.subscribe(notices.append)
@@ -140,7 +140,7 @@ class TestAvisos:
         assert "bug" in notices[1].text and notices[1].error
         await until(lambda: remote.faults == 1)
 
-    async def test_un_rechazo_del_daemon_se_avisa(self, linked):
+    async def test_daemon_rejection_is_notified(self, linked):
         daemon, remote = linked
         daemon.bot._refusal = "en live el bot solo se arma con bot.enabled = true"
         notices = []
@@ -151,8 +151,8 @@ class TestAvisos:
 
 
 @pytest.mark.spec("RF-31")
-class TestReconectar:
-    async def test_se_va_el_daemon_y_vuelve(self, tmp_path):
+class TestReconnect:
+    async def test_daemon_leaves_and_returns(self, tmp_path):
         async with Daemon(tmp_path) as d:
             remote = RemoteEngine(d.path, has_bot=True, retry_s=0.02)
             links = []
@@ -168,7 +168,7 @@ class TestReconectar:
             task.cancel()
             await remote.aclose()
 
-    async def test_sin_conexion_la_orden_no_sale_y_se_dice(self, tmp_path):
+    async def test_unconnected_order_does_not_leave_and_says_so(self, tmp_path):
         remote = RemoteEngine(tmp_path / "no.sock", has_bot=True)
         notices = []
         remote.subscribe(notices.append)
@@ -177,7 +177,7 @@ class TestReconectar:
 
 
 @pytest.mark.spec("RF-31")
-class TestMensajesDelDaemon:
+class TestDaemonMessages:
     """`_handle` dispatches each message type (T-85); no connection, only notices."""
 
     def heard(self, tmp_path):
@@ -186,26 +186,26 @@ class TestMensajesDelDaemon:
         remote.subscribe(out.append)
         return remote, out
 
-    def test_un_tipo_desconocido_no_hace_nada(self, tmp_path):
+    def test_unknown_type_does_nothing(self, tmp_path):
         remote, out = self.heard(tmp_path)
         remote._handle({"type": "nuevo", "x": 1})
         remote._handle({"x": 1})
         assert out == []
 
-    def test_reply_con_error_sin_esperar_se_avisa(self, tmp_path):
+    def test_unawaited_error_reply_is_notified(self, tmp_path):
         remote, out = self.heard(tmp_path)
         remote._handle({"type": "reply", "id": 99, "error": "no"})
         remote._handle({"type": "reply", "id": 98})
         assert [(n.text, n.error) for n in out] == [("no", True)]
 
-    def test_error_sin_esperar_se_avisa(self, tmp_path):
+    def test_unawaited_error_is_notified(self, tmp_path):
         remote, out = self.heard(tmp_path)
         remote._handle({"type": "error", "id": 97, "error": "sin saldo"})
         assert [(n.text, n.error) for n in out] == [
             ("el daemon no aceptó la orden: sin saldo", True)
         ]
 
-    def test_aviso_y_fallo(self, tmp_path):
+    def test_notice_and_fault(self, tmp_path):
         remote, out = self.heard(tmp_path)
         remote._handle({"type": "notice", "text": "hola", "error": False})
         remote._handle({"type": "fault", "message": "bug"})

@@ -18,8 +18,8 @@ def write(directory, day, rows, extra=()):
 
 
 @pytest.mark.spec("RF-25", "CA-11")
-class TestServicio:
-    def test_rangos_por_dia_utc(self, tmp_path):
+class TestService:
+    def test_ranges_by_utc_day(self, tmp_path):
         # T0 = 2026-10-22 12:00 UTC
         write(tmp_path, "20261012", plain_double("d-viejo", T0 - 10 * DAY))
         write(tmp_path, "20261020", plain_double("d-semana", T0 - 2 * DAY))
@@ -29,7 +29,7 @@ class TestServicio:
         assert [d.id for d in svc.load("7d").doubles] == ["d-semana", "d-hoy"]
         assert [d.id for d in svc.load("todo").doubles] == ["d-viejo", "d-semana", "d-hoy"]
 
-    def test_doble_de_ayer_con_fills_hoy(self, tmp_path):
+    def test_yesterdays_double_with_fills_today(self, tmp_path):
         midnight = T0 - 12 * 3600_000
         rows = plain_double("d-1", midnight - 500)
         write(tmp_path, "20261021", rows[:2])  # sends before midnight
@@ -38,18 +38,18 @@ class TestServicio:
         assert svc.load("dia").doubles == ()
         assert svc.load("7d").doubles[0].result == D("0.000002")
 
-    def test_sin_directorio_ni_journals(self, tmp_path):
+    def test_no_directory_or_journals(self, tmp_path):
         rep = ResultsService(tmp_path / "nada", clock=lambda: T0).load("todo")
         assert rep.doubles == ()
         assert rep.summary.closed == 0
 
-    def test_lineas_rotas_se_cuentan(self, tmp_path):
+    def test_broken_lines_are_counted(self, tmp_path):
         write(tmp_path, "20261022", plain_double(), extra=["{roto"])
         rep = ResultsService(tmp_path, clock=lambda: T0).load("dia")
         assert rep.summary.bad_rows == 1
         assert rep.summary.closed == 1
 
-    def test_otros_ficheros_se_ignoran(self, tmp_path):
+    def test_other_files_ignored(self, tmp_path):
         write(tmp_path, "20261022", plain_double())
         (tmp_path / "diag.log").write_text("no es json\n")
         (tmp_path / "journal-raro.jsonl").write_text("{roto\n")
@@ -85,13 +85,13 @@ def nkyc_double(tmp_path):
 
 
 @pytest.mark.spec("RF-24", "RF-25")
-class TestPrecioDelToken:
-    async def test_sin_pedir_el_precio_no_se_valora(self, tmp_path):
+class TestTokenPrice:
+    async def test_price_not_asked_stays_unvalued(self, tmp_path):
         nkyc_double(tmp_path)
         svc = ResultsService(tmp_path, clock=lambda: T0, pricers={"NKYC": Pricer()})
         assert svc.load("dia").summary.other_fees == (("NKYC", D("0.0025")),)
 
-    async def test_con_el_precio_se_resta(self, tmp_path):
+    async def test_with_price_it_subtracts(self, tmp_path):
         nkyc_double(tmp_path)
         svc = ResultsService(tmp_path, clock=lambda: T0, pricers={"NKYC": Pricer()})
         await svc.refresh_prices()
@@ -99,7 +99,7 @@ class TestPrecioDelToken:
         assert rep.summary.prices == (("NKYC", D("0.00013089")),)
         assert rep.doubles[0].token_fees == D("0.0025") * D("0.00013089")
 
-    async def test_el_precio_se_guarda_un_minuto(self, tmp_path):
+    async def test_price_kept_one_minute(self, tmp_path):
         clock, pricer = Clock(), Pricer()
         svc = ResultsService(tmp_path, clock=clock, pricers={"NKYC": pricer})
         await svc.refresh_prices()
@@ -110,7 +110,7 @@ class TestPrecioDelToken:
         await svc.refresh_prices()
         assert pricer.calls == 2
 
-    async def test_si_falla_queda_sin_valorar_y_lo_dice(self, tmp_path):
+    async def test_failure_stays_unvalued_and_says_so(self, tmp_path):
         nkyc_double(tmp_path)
         pricer = Pricer()
         pricer.fail = True
@@ -119,7 +119,7 @@ class TestPrecioDelToken:
         assert svc.load("dia").summary.other_fees == (("NKYC", D("0.0025")),)
         assert svc.price_errors == {"NKYC": "sin red"}
 
-    async def test_un_fallo_no_borra_el_precio_anterior(self, tmp_path):
+    async def test_failure_keeps_previous_price(self, tmp_path):
         clock, pricer = Clock(), Pricer()
         svc = ResultsService(tmp_path, clock=clock, pricers={"NKYC": pricer})
         await svc.refresh_prices()

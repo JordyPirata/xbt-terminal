@@ -74,8 +74,8 @@ def events(lines):
 
 
 @pytest.mark.spec("RF-31", "RF-06", "CA-16")
-class TestOrdenSimple:
-    async def test_prepara_confirma_y_llega_al_venue(self, tmp_path):
+class TestSimpleOrder:
+    async def test_prepares_confirms_and_reaches_venue(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             pending = await remote.orders.prepare(buy())
             assert isinstance(pending, Pending) and pending.req.venue == "nk"
@@ -85,13 +85,13 @@ class TestOrdenSimple:
             assert events(d.s.lines())[-2:] == ["order_sent", "order_ack"]
             assert len(await d.s.venue.open_orders()) == 1
 
-    async def test_el_daemon_valida_y_rechaza(self, tmp_path):
+    async def test_daemon_validates_and_rejects(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             rejected = await remote.orders.prepare(buy(qty="100"))
             assert isinstance(rejected, Rejected) and rejected.codes
             assert events(d.s.lines()) == ["reject_local"]  # noted by the daemon
 
-    async def test_la_propuesta_vale_una_sola_vez(self, tmp_path):
+    async def test_proposal_valid_once(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             pending = await remote.orders.prepare(buy())
             token = remote.orders._tokens[id(pending)][1]
@@ -100,7 +100,7 @@ class TestOrdenSimple:
                 await remote.request("confirm", {"token": token})
             assert events(d.s.lines()).count("order_sent") == 1
 
-    async def test_una_propuesta_caducada_no_se_envia(self, tmp_path):
+    async def test_expired_proposal_not_sent(self, tmp_path):
         async with Daemon(tmp_path, ttl_s=0.01) as d, Linked(d) as remote:
             pending = await remote.orders.prepare(buy())
             await asyncio.sleep(0.05)
@@ -109,12 +109,12 @@ class TestOrdenSimple:
             assert "caducada" in result.error
             assert d.s.lines() == []
 
-    async def test_un_token_desconocido(self, tmp_path):
+    async def test_unknown_token(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             with pytest.raises(DaemonRefusedError, match="caducada o ya usada"):
                 await remote.request("confirm", {"token": "inventado"})
 
-    async def test_dos_clientes_con_el_mismo_token_solo_uno_envia(self, tmp_path):
+    async def test_two_clients_same_token_only_one_sends(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as a, Linked(d) as b:
             pending = await a.orders.prepare(buy())
             token = a.orders._tokens[id(pending)][1]
@@ -126,7 +126,7 @@ class TestOrdenSimple:
             assert sum(isinstance(r, DaemonRefusedError) for r in results) == 1
             assert events(d.s.lines()).count("order_sent") == 1
 
-    async def test_en_solo_lectura_no_hay_ordenes(self, tmp_path):
+    async def test_read_only_has_no_orders(self, tmp_path):
         s = Rig(tmp_path)
         s.orders = None
         async with Daemon(tmp_path, setup=s) as d, Linked(d) as remote:
@@ -135,8 +135,8 @@ class TestOrdenSimple:
 
 
 @pytest.mark.spec("RF-31", "RF-07", "CA-16")
-class TestOrdenDoble:
-    async def test_prepara_y_confirma(self, tmp_path):
+class TestDoubleOrder:
+    async def test_prepares_and_confirms(self, tmp_path):
         s = DoubleSetup(tmp_path)
         async with Daemon(tmp_path, setup=s) as d, Linked(d) as remote:
             seen = []
@@ -149,7 +149,7 @@ class TestOrdenDoble:
             await until(lambda: "d-000001" in remote.doubles)
             await until(lambda: "d-000001" in seen)
 
-    async def test_rechazada_por_el_daemon(self, tmp_path):
+    async def test_rejected_by_daemon(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:  # nx without keys
             cmd = DoubleOrder(D("0.01"), "nk", D("0.00730000"), "nx", D("0.00722000"))
             rejected = await remote.orders.prepare_double(cmd)
@@ -157,8 +157,8 @@ class TestOrdenDoble:
 
 
 @pytest.mark.spec("RF-31", "RF-08", "CA-16")
-class TestCancelar:
-    async def test_planea_y_cancela(self, tmp_path):
+class TestCancel:
+    async def test_plans_and_cancels(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             await remote.orders.confirm(await remote.orders.prepare(buy()))
             plan = await remote.orders.plan_cancel(CancelAll())
@@ -167,15 +167,15 @@ class TestCancelar:
             assert isinstance(result, CancelResult) and result.ok
             assert await d.s.venue.open_orders() == []
 
-    async def test_nada_que_cancelar(self, tmp_path):
+    async def test_nothing_to_cancel(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             refused = await remote.orders.plan_cancel(CancelAll())
             assert isinstance(refused, CancelRefused)
 
 
 @pytest.mark.spec("RF-31")
-class TestSinDaemon:
-    async def test_se_va_con_una_peticion_en_vuelo(self, tmp_path):
+class TestWithoutDaemon:
+    async def test_leaves_with_request_in_flight(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:
             gate = asyncio.Event()
             real = d.s.orders.prepare
@@ -192,7 +192,7 @@ class TestSinDaemon:
                 await asking
             gate.set()
 
-    async def test_sin_conexion_no_se_manda(self, tmp_path):
+    async def test_unconnected_sends_nothing(self, tmp_path):
         remote = RemoteEngine(tmp_path / "no.sock", has_bot=False)
         with pytest.raises(DaemonGoneError):
             await remote.orders.prepare(buy())

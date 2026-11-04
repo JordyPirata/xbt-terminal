@@ -58,7 +58,7 @@ async def confirm(pilot, app):
 
 
 @pytest.mark.spec("CA-16", "RF-31", "RF-06", "RF-07", "RF-08")
-async def test_opera_por_el_socket_y_al_cerrar_las_ordenes_siguen(tmp_path):
+async def test_trades_over_socket_and_orders_stay_after_closing(tmp_path):
     async with DaemonRig(tmp_path) as rig:
         app = client_app(rig)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -93,7 +93,7 @@ async def test_opera_por_el_socket_y_al_cerrar_las_ordenes_siguen(tmp_path):
 
 
 @pytest.mark.spec("CA-16", "RF-31", "RF-08")
-async def test_cancela_por_el_socket(tmp_path):
+async def test_cancels_over_the_socket(tmp_path):
     async with DaemonRig(tmp_path) as rig:
         app = client_app(rig)
         async with app.run_test(size=(160, 45)) as pilot:

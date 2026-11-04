@@ -49,8 +49,8 @@ async def opened(app, pilot):
 
 
 @pytest.mark.spec("RF-28", "CA-13")
-class TestPantalla:
-    async def test_tecla_w_muestra_las_direcciones_y_esc_cierra(self):
+class TestScreen:
+    async def test_w_key_shows_addresses_and_esc_closes(self):
         nx = FakeDepositor("nx", fail={"BTCB2": VenueError("Neoxa: btcb2 cerrada")})
         app = make_app(DepositService({"nk": FakeDepositor("nk"), "nx": nx}))
         async with app.run_test(size=(160, 45)) as pilot:
@@ -66,7 +66,7 @@ class TestPantalla:
             await pilot.press("escape")
             await until(pilot, lambda: not isinstance(app.screen, DepositScreen))
 
-    async def test_comando_deposit(self, tmp_path):
+    async def test_deposit_command(self, tmp_path):
         # in dry-run: in read-only the command line is off
         app = Rig(tmp_path, deposits=DepositService({"nk": FakeDepositor("nk")})).app
         async with app.run_test(size=(160, 45)) as pilot:
@@ -74,7 +74,7 @@ class TestPantalla:
             s = await opened(app, pilot)
             assert len(s.table_text().splitlines()) == 2
 
-    async def test_reabrir_vuelve_a_pedir(self):
+    async def test_reopening_asks_again(self):
         nk = FakeDepositor("nk")
         app = make_app(DepositService({"nk": nk}))
         async with app.run_test(size=(160, 45)) as pilot:
@@ -86,7 +86,7 @@ class TestPantalla:
             await opened(app, pilot)
             assert nk.calls == ["BTC", "BTCB2", "BTC", "BTCB2"]
 
-    async def test_r_recarga(self):
+    async def test_r_reloads(self):
         nk = FakeDepositor("nk")
         app = make_app(DepositService({"nk": nk}))
         async with app.run_test(size=(160, 45)) as pilot:
@@ -95,7 +95,7 @@ class TestPantalla:
             await pilot.press("r")
             await until(pilot, lambda: len(nk.calls) == 4)
 
-    async def test_copiar_la_direccion_exacta(self, monkeypatch):
+    async def test_copy_exact_address(self, monkeypatch):
         app = make_app(DepositService({"nk": FakeDepositor("nk")}))
         copied = []
         monkeypatch.setattr(app, "copy_to_clipboard", copied.append)
@@ -109,7 +109,7 @@ class TestPantalla:
             await pilot.press("up", "enter")
             await until(pilot, lambda: copied == ["nk-BTCB2", "nk-BTC"])
 
-    async def test_copiar_una_fila_con_error_no_copia(self, monkeypatch):
+    async def test_copying_error_row_copies_nothing(self, monkeypatch):
         nk = FakeDepositor("nk", fail={"BTC": VenueError("caída")})
         app = make_app(DepositService({"nk": nk}))
         copied = []
@@ -120,7 +120,7 @@ class TestPantalla:
             await pilot.press("c")
             assert copied == [] and "sin dirección" in s.status_text()
 
-    async def test_copia_con_el_sistema_y_lo_dice(self, monkeypatch):
+    async def test_copies_with_system_and_says_so(self, monkeypatch):
         clip = FakeClipboard("xclip")
         app = make_app(DepositService({"nk": FakeDepositor("nk")}), clipboard=clip)
         osc: list[str] = []
@@ -133,7 +133,7 @@ class TestPantalla:
             assert clip.copied == ["nk-BTC"] and osc == ["nk-BTC"]
             assert "copiada" in s.status_text()
 
-    async def test_sin_herramienta_dice_que_solo_fue_a_la_terminal(self, monkeypatch):
+    async def test_without_tool_says_it_only_went_to_terminal(self, monkeypatch):
         app = make_app(DepositService({"nk": FakeDepositor("nk")}), clipboard=FakeClipboard(None))
         monkeypatch.setattr(app, "copy_to_clipboard", lambda text: None)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -144,7 +144,7 @@ class TestPantalla:
             assert "copiada" not in s.status_text()
             assert "Shift" in s.status_text() and "nk-BTC" in s.status_text()
 
-    async def test_el_qr_sigue_al_cursor(self):
+    async def test_qr_follows_cursor(self):
         app = make_app(DepositService({"nk": FakeDepositor("nk")}))
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
@@ -153,7 +153,7 @@ class TestPantalla:
             await pilot.press("down")
             await until(pilot, lambda: s.qr_text() == "\n".join(qr_lines("nk-BTCB2")))
 
-    async def test_fila_con_error_sin_qr(self):
+    async def test_error_row_without_qr(self):
         nk = FakeDepositor("nk", fail={"BTC": VenueError("caída")})
         app = make_app(DepositService({"nk": nk}))
         async with app.run_test(size=(160, 45)) as pilot:
@@ -162,7 +162,7 @@ class TestPantalla:
             await until(pilot, lambda: "sin QR" in s.qr_text())
             assert "█" not in s.qr_text()
 
-    async def test_sin_keys_lo_dice(self):
+    async def test_no_keys_says_so(self):
         app = make_app(None)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")

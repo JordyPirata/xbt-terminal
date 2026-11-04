@@ -46,7 +46,7 @@ def full_disk(journal, *events):
 
 @pytest.mark.spec("RNF-14")
 class TestFaults:
-    def test_al_journal_con_traceback_redactado(self, tmp_path):
+    def test_to_journal_with_redacted_traceback(self, tmp_path):
         journal = Journal(tmp_path, "live", Redactor([Secret(KEY)]))
         faults = Faults(journal, clock=lambda: T0)
         try:
@@ -58,12 +58,12 @@ class TestFaults:
         assert line["data"]["where"] == "market"
         assert line["data"]["error"] == "RuntimeError: bug con la key *** dentro"
         assert "Traceback" in line["data"]["traceback"]
-        assert "test_al_journal_con_traceback_redactado" in line["data"]["traceback"]
+        assert "test_to_journal_with_redacted_traceback" in line["data"]["traceback"]
         assert KEY not in json.dumps(line)
         assert faults.recent == [fault] and fault.ts == T0
         assert KEY not in fault.message  # nor what shows on screen
 
-    def test_sin_journal_que_funcione_se_avisa_igual(self, tmp_path):
+    def test_without_working_journal_notifies_anyway(self, tmp_path):
         journal = Journal(tmp_path, "live", Redactor([]))
         full_disk(journal, "error")
         faults = Faults(journal)
@@ -72,7 +72,7 @@ class TestFaults:
         fault = faults.report("market", RuntimeError("bug"), venue="nk")
         assert seen == [fault] and "RuntimeError: bug" in fault.message
 
-    async def test_supervised_reintenta_con_backoff(self, monkeypatch):
+    async def test_supervised_retries_with_backoff(self, monkeypatch):
         crashes, calls, waits = [], [], []
         real_sleep = asyncio.sleep
 
@@ -91,7 +91,7 @@ class TestFaults:
         assert [str(e) for e in crashes] == [f"bug {i}" for i in range(1, 6)]
         assert waits == [1.0, 2.0, 4.0, 8.0, 8.0]
 
-    async def test_supervised_no_se_traga_la_cancelacion(self):
+    async def test_supervised_does_not_swallow_cancellation(self):
         task = asyncio.create_task(supervised(asyncio.Event().wait, print, retry_s=0.01))
         await asyncio.sleep(0)
         task.cancel()
@@ -115,7 +115,7 @@ class Buggy(FakeFeed):
 
 @pytest.mark.spec("RNF-14", "RF-14")
 class TestHub:
-    async def test_un_bug_en_un_venue_no_para_al_otro_y_se_reintenta(self, tmp_path):
+    async def test_venue_bug_does_not_stop_other_and_retries(self, tmp_path):
         journal = Journal(tmp_path, "live", Redactor([]))
         faults = Faults(journal)
         feeds = {"nk": Buggy("nk"), "nx": FakeFeed("nx")}
@@ -132,8 +132,8 @@ class TestHub:
 
 
 @pytest.mark.spec("RNF-14", "RF-05")
-class TestCuenta:
-    async def test_un_bug_en_saldos_no_para_el_canal_privado(self, tmp_path):
+class TestAccount:
+    async def test_balance_bug_does_not_stop_private_channel(self, tmp_path):
         venue = FakePrivate()
         real = venue.balances
         bugs = [ZeroDivisionError("división")]
@@ -161,8 +161,8 @@ class TestCuenta:
 
 
 @pytest.mark.spec("RNF-14", "RF-11")
-class TestJournalTrasEnviar:
-    async def test_order_ack_sin_disco_la_orden_cuenta_igual(self, tmp_path):
+class TestJournalAfterSending:
+    async def test_order_ack_without_disk_order_still_counts(self, tmp_path):
         s = Setup(tmp_path)
         full_disk(s.journal, "order_ack")
         seen = []
@@ -175,7 +175,7 @@ class TestJournalTrasEnviar:
         again = await s.orders.prepare(buy(price="0.00725000"))
         assert again is not None  # the service keeps working
 
-    async def test_sin_order_sent_no_se_envia(self, tmp_path):
+    async def test_no_order_sent_nothing_sent(self, tmp_path):
         """Without a trace of what is about to be sent, it is not sent (RF-11)."""
         s = Setup(tmp_path)
         full_disk(s.journal, "order_sent")
@@ -183,7 +183,7 @@ class TestJournalTrasEnviar:
         assert isinstance(result, Failed) and "journal" in result.error
         assert await s.venue.open_orders() == []
 
-    async def test_cancelar_aunque_falle_el_journal(self, tmp_path):
+    async def test_cancels_even_if_journal_fails(self, tmp_path):
         """Cancelling reduces risk: it is not skipped because of the disk."""
         s = Setup(tmp_path)
         await s.orders.confirm(await s.orders.prepare(buy()))

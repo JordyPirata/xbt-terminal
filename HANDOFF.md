@@ -6,6 +6,10 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-04)
 
+- **T-91 hecha (D-81):** comentarios, docstrings, logs y nombres de test en inglés
+  en `src/`, `tests/` y `tools/`; lo vigila `tests/unit/test_english.py`. El AST de
+  `src/` solo cambia en mensajes de log y en `DESCRIPTION` de `--help`, que sigue en
+  español (antes salía del docstring del módulo).
 - **T-87 fusionada en `main`** (`dd7208b`), sin subir: falta `git push origin main`.
 - **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
   `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
@@ -121,12 +125,13 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 - **CI (T-32):** `.github/workflows/ci.yml` en cada push a `main` y cada PR.
   Primera ejecución en GitHub en verde (2026-11-01 02:46 UTC, 1 min 22 s,
   `gh run list`). Ojo con los tests de reloj real
-  (`test_el_dialogo_no_espera_a_la_red`, `tests/perf/`): en un runner
+  (`test_dialog_does_not_wait_for_network`, `tests/perf/`): en un runner
   compartido pueden fallar más que en local.
 
 ### Siguiente
 
-00. **T-91** (limpieza y código en inglés, D-81), en la rama `t-91-english-code`.
+00. **T-91 hecha** en la rama `t-91-english-code`, sin fusionar: falta el visto
+    bueno del usuario.
     Después **T-88** (contrato de adaptador), que empieza por su versión de la spec; luego
     T-89 y T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
     seguridad en `CONTRIBUTING.md`.
@@ -184,8 +189,8 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   fuera: sin corregir.
 - **Ver el journal:** `~/.local/state/xbt/journal-YYYYMMDD.jsonl`; el daemon
   escribe `diag.log` y la pantalla `client.log`.
-- **Tests inestables:** `test_el_dialogo_no_espera_a_la_red` (límite de 0.3 s
-  de reloj real) y, una vez, `test_las_dos_llenas_enfria` (timeout) fallan a
+- **Tests inestables:** `test_dialog_does_not_wait_for_network` (límite de 0.3 s
+  de reloj real) y, una vez, `test_both_filled_cools_down` (timeout) fallan a
   veces con la suite entera; por separado pasan.
 
 ## Config real del usuario

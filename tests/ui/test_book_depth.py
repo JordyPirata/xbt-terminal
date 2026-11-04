@@ -22,27 +22,27 @@ def line_with(panel: BookPanel, needle: str) -> str:
 
 
 @pytest.mark.spec("RF-02")
-class TestBarra:
-    def test_compras_crecen_hacia_la_izquierda(self):
+class TestBar:
+    def test_bids_grow_left(self):
         assert depth_bar(D(1), 4, "bid") == "████"
         assert depth_bar(D("0.5"), 4, "bid") == "  ██"
         assert depth_bar(D("0.625"), 4, "bid") == " ▐██"
 
-    def test_ventas_crecen_hacia_la_derecha(self):
+    def test_asks_grow_right(self):
         assert depth_bar(D("0.5"), 4, "ask") == "██  "
         assert depth_bar(D("0.625"), 4, "ask") == "██▌ "
 
-    def test_un_nivel_con_algo_siempre_se_ve(self):
+    def test_level_with_something_always_shows(self):
         assert depth_bar(D("0.001"), 4, "ask") == "▌   "
         assert depth_bar(D(0), 4, "ask") == "    "
 
-    def test_sin_sitio_no_hay_barra(self):
+    def test_no_room_no_bar(self):
         assert depth_bar(D(1), 0, "bid") == ""
 
 
 @pytest.mark.spec("RF-02", "RF-16")
 class TestPanel:
-    async def test_barras_a_los_lados_proporcionales_al_acumulado(self, tmp_path):
+    async def test_side_bars_proportional_to_cumulative(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=WIDE) as pilot:
             panel = await ready(rig, pilot)
@@ -55,7 +55,7 @@ class TestPanel:
             assert bar_w >= 8 and second.rstrip().endswith("█" * bar_w)
             assert second.count("█") > first.count("█")
 
-    async def test_escalera_centrada(self, tmp_path):
+    async def test_centred_ladder(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=WIDE) as pilot:
             panel = await ready(rig, pilot)
@@ -64,7 +64,7 @@ class TestPanel:
             right = width - left - LADDER_W
             assert abs(left - right) <= 1
 
-    async def test_el_clic_se_desplaza_con_la_escalera(self, tmp_path):
+    async def test_click_shifts_with_the_ladder(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=WIDE) as pilot:
             panel = await ready(rig, pilot)
@@ -74,7 +74,7 @@ class TestPanel:
             assert panel.level_at(x0 + ASK_X, 1) == ("ask", D("0.00730000"), D("0.5"))
             assert panel.level_at(x0 + BID_CUM_X, 2)[2] == D("3")
 
-    async def test_clic_en_la_barra_da_el_acumulado(self, tmp_path):
+    async def test_click_on_bar_gives_cumulative(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=WIDE) as pilot:
             panel = await ready(rig, pilot)
@@ -82,7 +82,7 @@ class TestPanel:
             assert panel.level_at(x0 - 2, 2) == ("bid", D("0.00719900"), D("3"))
             assert panel.level_at(x0 + LADDER_W + 2, 2) == ("ask", D("0.00730100"), D("3.5"))
 
-    async def test_panel_justo_sin_barras(self, tmp_path):
+    async def test_tight_panel_without_bars(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             panel = await ready(rig, pilot)

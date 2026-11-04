@@ -31,7 +31,7 @@ def fill(tid="f-1", oid="o-1", qty="0.004", ts=T0 + 1):
 
 @pytest.mark.spec("RF-08", "RF-09")
 class TestTracker:
-    def test_el_primer_refresco_da_las_ordenes_y_los_fills_viejos_como_pasados(self):
+    def test_first_refresh_gives_orders_and_old_fills_as_past(self):
         """D-68: trades already there are not new fills, but the account compares them with
         the journal."""
         t = OrderTracker()
@@ -40,19 +40,19 @@ class TestTracker:
         assert events == [order("a"), order("b"), *past]
         assert gone == [] and t.open == [order("a"), order("b")]
 
-    def test_los_pasados_solo_en_el_primer_refresco(self):
+    def test_past_only_in_first_refresh(self):
         t = OrderTracker()
         t.update([], [fill("f-1")])
         assert t.update([], [fill("f-1")])[0] == []
         assert t.update([], [fill("f-1"), fill("f-2")])[0] == [fill("f-2")]
 
-    def test_solo_avisa_de_lo_que_cambia(self):
+    def test_only_notifies_changes(self):
         t = OrderTracker()
         t.update([order("a"), order("b")], [])
         events, _ = t.update([order("a"), order("b", filled="0.004", status="partial")], [])
         assert events == [order("b", filled="0.004", status="partial")]
 
-    def test_fill_nuevo_una_sola_vez_y_en_orden(self):
+    def test_new_fill_once_and_in_order(self):
         t = OrderTracker()
         t.update([], [fill("f-1")])
         new = [fill("f-3", ts=T0 + 3), fill("f-2", ts=T0 + 2), fill("f-1")]
@@ -60,7 +60,7 @@ class TestTracker:
         assert events == [fill("f-2", ts=T0 + 2), fill("f-3", ts=T0 + 3)]
         assert t.update([], new)[0] == []
 
-    def test_orden_que_desaparece_se_consulta_hasta_resolverla(self):
+    def test_vanishing_order_queried_until_resolved(self):
         t = OrderTracker()
         t.update([order("a")], [])
         assert t.update([], [])[1] == ["a"]
@@ -69,10 +69,10 @@ class TestTracker:
         assert t.resolve(final) == [final]
         assert t.update([], [])[1] == [] and t.open == []
 
-    def test_resolver_algo_que_no_se_sigue_no_avisa(self):
+    def test_resolving_untracked_does_not_notify(self):
         assert OrderTracker().resolve(order("x", status="cancelled")) == []
 
-    def test_recuerda_el_client_id_de_lo_que_envio_la_terminal(self):
+    def test_remembers_client_id_of_what_terminal_sent(self):
         """Neoxa keeps no client_id: place_limit's is kept across refreshes."""
         t = OrderTracker()
         t.remember(order("a", cid="t-abc123"))
@@ -80,7 +80,7 @@ class TestTracker:
         assert events == [order("a", cid="t-abc123")]
         assert t.resolve(order("a", status="cancelled"))[0].client_id == "t-abc123"
 
-    def test_lo_enviado_se_sigue_aunque_no_se_vea_activo(self):
+    def test_sent_is_tracked_even_if_not_seen_active(self):
         """Seen for real (2026-10-22 04:07, D-41): a sell on NonKYC filled in ~1 s, before the
         next poll, and its close never arrived."""
         t = OrderTracker()
@@ -91,13 +91,13 @@ class TestTracker:
         final = order("a", filled="0.01", status="filled")
         assert t.resolve(final) == [order("a", filled="0.01", status="filled", cid="t-7bbce5")]
 
-    def test_lo_enviado_ya_terminado_no_se_sigue(self):
+    def test_sent_already_finished_is_not_tracked(self):
         """Neoxa answers "filled" on creating: nothing to query later."""
         t = OrderTracker()
         t.remember(order("a", filled="0.01", status="filled", cid="t-1"))
         assert t.open == [] and t.update([], [])[1] == []
 
-    def test_lo_enviado_que_sigue_activo_no_se_da_por_desaparecido(self):
+    def test_sent_still_active_is_not_deemed_gone(self):
         t = OrderTracker()
         t.remember(order("a", cid="t-1"))
         events, gone = t.update([order("a")], [])
@@ -156,8 +156,8 @@ async def take(stream, n, timeout=2.0):
 
 
 @pytest.mark.spec("RF-09", "RF-14")
-class TestPolling:
-    async def test_estado_up_y_ordenes(self):
+class TestPollingLoop:
+    async def test_up_state_and_orders(self):
         src = FakeSource()
         src.active = [order("a")]
         async with aclosing(fan_in(runner(src, asyncio.Event()))) as stream:
@@ -166,7 +166,7 @@ class TestPolling:
         assert (state.channel, state.source, state.status) == ("private", "rest", "up")
         assert o == order("a")
 
-    async def test_un_fallo_de_red_marca_caido_y_se_recupera(self):
+    async def test_network_failure_marks_down_and_recovers(self):
         src = FakeSource()
         src.fail = httpx.ConnectError("sin red")
         async with aclosing(fan_in(runner(src, asyncio.Event()))) as stream:
@@ -175,13 +175,13 @@ class TestPolling:
             up = (await take(stream, 1))[0]
         assert (down.status, up.status) == ("down", "up")
 
-    async def test_error_del_venue_tambien_es_caido(self):
+    async def test_venue_error_is_also_down(self):
         src = FakeSource()
         src.fail = VenueError("401 Authorisation failed")
         async with aclosing(fan_in(runner(src, asyncio.Event()))) as stream:
             assert (await take(stream, 1))[0].status == "down"
 
-    async def test_orden_terminada_se_resuelve(self):
+    async def test_finished_order_resolves(self):
         src = FakeSource()
         src.active = [order("a")]
         async with aclosing(fan_in(runner(src, asyncio.Event()))) as stream:
@@ -190,7 +190,7 @@ class TestPolling:
             src.final["a"] = order("a", filled="0.01", status="filled")
             assert await take(stream, 1) == [order("a", filled="0.01", status="filled")]
 
-    async def test_despertar_refresca_sin_esperar_la_cadencia(self):
+    async def test_wake_refreshes_without_waiting_for_the_rate(self):
         src = FakeSource()
         wake = asyncio.Event()
         async with aclosing(fan_in(runner(src, wake, every=60))) as stream:
@@ -199,7 +199,7 @@ class TestPolling:
             wake.set()
             assert await take(stream, 1, timeout=1.0) == [order("a")]
 
-    async def test_cambio_de_fuente_reemite_el_estado(self):
+    async def test_source_change_reemits_state(self):
         src = FakeSource()
         wake = asyncio.Event()
         where = {"source": "rest"}
@@ -222,7 +222,7 @@ class TestPolling:
             wake.set()
             assert (await take(stream, 1))[0].source == "ws"
 
-    async def test_un_bug_no_se_traga(self):
+    async def test_bug_is_not_swallowed(self):
         src = FakeSource()
         src.fail = ZeroDivisionError("bug")
         with pytest.raises(ZeroDivisionError):
@@ -231,7 +231,7 @@ class TestPolling:
 
 
 @pytest.mark.spec("RF-09")
-async def test_fan_in_mezcla_varios_trabajadores_y_los_para_al_cerrar():
+async def test_fan_in_mixes_workers_and_stops_them_on_close():
     stopped = []
 
     def worker(name):
@@ -254,7 +254,7 @@ async def test_fan_in_mezcla_varios_trabajadores_y_los_para_al_cerrar():
 
 
 @pytest.mark.spec("RF-07", "RF-09")
-async def test_orden_llena_antes_del_primer_polling_sale_como_llena():
+async def test_order_filled_before_first_poll_shows_filled():
     """End to end in the refresh: the venue no longer lists it as active, and `getorder`
     says it filled; a filled `Order` comes out with the client_id."""
     t = OrderTracker()
@@ -278,16 +278,16 @@ async def test_orden_llena_antes_del_primer_polling_sale_como_llena():
 
 
 @pytest.mark.spec("RF-11", "RF-25")
-class TestFeeCorregida:
+class TestCorrectedFee:
     """NonKYC redoes the fee of an already published trade (BTC → NKYC, D-64)."""
 
-    def test_la_misma_fee_no_avisa(self):
+    def test_same_fee_does_not_notify(self):
         t = OrderTracker()
         t.update([], [])
         t.update([], [fill("f-1")])
         assert t.update([], [fill("f-1")])[0] == []
 
-    def test_otra_fee_avisa_una_vez_sin_otro_fill(self):
+    def test_another_fee_notifies_once_without_another_fill(self):
         t = OrderTracker()
         t.update([], [])
         assert t.update([], [fill("f-1")])[0] == [fill("f-1")]
@@ -296,7 +296,7 @@ class TestFeeCorregida:
         assert events == [FeeUpdate("nx", "f-1", "o-1", D("0.0000893166"), "NKYC", T0 + 1)]
         assert t.update([], [fixed])[0] == []
 
-    def test_tambien_si_el_trade_era_historia(self):
+    def test_also_if_trade_was_history(self):
         t = OrderTracker()
         t.update([], [fill("f-viejo")])
         fixed = replace(fill("f-viejo"), fee=D("0.00001"))

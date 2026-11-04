@@ -95,8 +95,8 @@ async def send_double(rig, pilot):
 
 
 @pytest.mark.spec("RF-07")
-class TestOrdenDoble:
-    async def test_una_confirmacion_con_las_dos_piernas_y_el_spread(self, tmp_path):
+class TestDoubleOrder:
+    async def test_one_confirmation_with_both_legs_and_spread(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -111,7 +111,7 @@ class TestOrdenDoble:
             assert [len(await v.open_orders()) for v in rig.venues.values()] == [1, 1]
             assert rig.events().count("order_ack") == 2
 
-    async def test_cancelar_el_dialogo_no_envia_nada(self, tmp_path):
+    async def test_cancelling_the_dialog_sends_nothing(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -120,7 +120,7 @@ class TestOrdenDoble:
             await until(pilot, lambda: "no se envió nada" in rig.app.last_message)
             assert rig.events() == []
 
-    async def test_rechazo_sin_dialogo(self, tmp_path):
+    async def test_rejection_without_dialog(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -134,15 +134,15 @@ class TestOrdenDoble:
 
 
 @pytest.mark.spec("RF-07", "CA-03", "RNF-02")
-class TestPanelDePiernas:
-    async def test_oculto_hasta_la_primera_orden_doble(self, tmp_path):
+class TestLegsPanel:
+    async def test_hidden_until_first_double(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
             assert not rig.app.query_one(LegsPanel).display
             assert rig.app.query_one(BalancesPanel).region.width == 160  # full width
 
-    async def test_muestra_cada_pierna_y_sigue_cabiendo(self, tmp_path):
+    async def test_shows_each_leg_and_still_fits(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -165,7 +165,7 @@ class TestPanelDePiernas:
             assert all(c.region.height >= 8 for c in rig.app.query(ChartPanel))
             assert all(b.region.height == 19 for b in rig.app.query(BookPanel))
 
-    async def test_un_fill_se_ve_en_la_pierna(self, tmp_path):
+    async def test_fill_shows_on_leg(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -177,7 +177,7 @@ class TestPanelDePiernas:
             await rig.venues["nk"].simulate_fill(state.buy.order_id, D("0.004"))
             await until(pilot, lambda: "parcial 0.0040" in panel.text)
 
-    async def test_pierna_colgada_en_rojo_y_en_el_journal(self, tmp_path):
+    async def test_hanging_leg_in_red_and_journal(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)

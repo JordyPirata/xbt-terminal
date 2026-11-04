@@ -14,7 +14,7 @@ from .test_rebalance_ui import LIMITS
 
 
 @pytest.mark.spec("RF-31")
-def test_la_app_expone_lo_que_le_llega_agrupado():
+def test_app_exposes_what_arrives_grouped():
     hub = MarketHub({})
     target = InventoryTarget(D("25"), D("10"))
     limits = LIMITS
@@ -30,7 +30,7 @@ def test_la_app_expone_lo_que_le_llega_agrupado():
 
 
 @pytest.mark.spec("RF-31")
-def test_sin_servicios_es_solo_lectura():
+def test_no_services_is_read_only():
     hub = MarketHub({})
     app = XbtApp(
         hub,

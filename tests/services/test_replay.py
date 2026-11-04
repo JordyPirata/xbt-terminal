@@ -97,7 +97,7 @@ def scenario(path):
 
 @pytest.mark.spec("RF-34", "CA-19")
 class TestVirtualLoop:
-    def test_el_tiempo_salta_sin_esperar(self):
+    def test_time_jumps_without_waiting(self):
         loop = VirtualLoop(1000.0)
         try:
             loop.run_until_complete(asyncio.sleep(3600))
@@ -116,8 +116,8 @@ def venues_on_virtual(tmp_path, recording, competitor="0"):
 
 
 @pytest.mark.spec("RF-34", "CA-19")
-class TestReproducir:
-    def test_mismos_eventos_en_orden_y_con_sus_tiempos(self, tmp_path):
+class TestReplayStream:
+    def test_same_events_in_order_with_their_times(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         loop, _, feeds = venues_on_virtual(tmp_path, recording)
         got = {vid: [] for vid in feeds}
@@ -146,7 +146,7 @@ class TestReproducir:
             assert got[vid][-1][1].status == "down"
             assert got[vid][-1][0] == T0 + 90_000  # both, when the recording ends
 
-    def test_con_otro_origen_los_tiempos_se_desplazan_igual(self, tmp_path):
+    def test_another_origin_shifts_times_equally(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         info = scan_recording(recording)
         loop = VirtualLoop((info.first + 1_000_000) / 1000)
@@ -164,7 +164,7 @@ class TestReproducir:
             loop.close()
         assert at == ts == T0 + 10_000 + 1_000_000
 
-    async def test_el_book_rest_es_el_reproducido(self, tmp_path):
+    async def test_rest_book_is_the_replayed_one(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         feeds = replay_venues(recording, scan_recording(recording), lambda: T0)
         stream = feeds["nk"].market_stream()
@@ -210,7 +210,7 @@ def buy(qty, price):
 
 @pytest.mark.spec("RF-34", "CA-19")
 class TestSimVenue:
-    async def test_llena_por_niveles_con_fee_taker_y_devuelve_el_sobrante(self, tmp_path):
+    async def test_fills_by_levels_with_taker_fee_and_returns_the_excess(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP)
         order = await sim.place_limit(buy("2", "0.0102"))
         assert order.status == "filled" and order.filled == D(2)
@@ -220,7 +220,7 @@ class TestSimVenue:
         assert balances["BTC"].locked == 0
         assert balances["BTCB2"].available == D(12)
 
-    async def test_lo_que_no_casa_queda_abierto_hasta_cancelarlo(self, tmp_path):
+    async def test_unmatched_stays_open_until_cancelled(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP)
         order = await sim.place_limit(buy("3", "0.0101"))
         assert order.status == "partial" and order.filled == D(2)
@@ -229,12 +229,12 @@ class TestSimVenue:
         assert balances["BTC"].locked == 0
         assert not await sim.open_orders()
 
-    async def test_el_competidor_se_lo_lleva_todo(self, tmp_path):
+    async def test_competitor_takes_it_all(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP, competitor="100")
         order = await sim.place_limit(buy("1", "0.0102"))
         assert order.status == "open" and order.filled == 0
 
-    async def test_la_misma_semilla_da_lo_mismo(self, tmp_path):
+    async def test_same_seed_gives_the_same(self, tmp_path):
         async def fills():
             sim = await sim_on(tmp_path, DEEP, competitor="50")
             return [(await sim.place_limit(buy("1", "0.0100"))).filled for _ in range(8)]
@@ -243,12 +243,12 @@ class TestSimVenue:
         assert first == second
         assert len(set(first)) == 2  # with half the levels, some fill and others do not
 
-    async def test_lo_casado_no_se_vuelve_a_casar(self, tmp_path):
+    async def test_matched_does_not_match_again(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP)
         assert (await sim.place_limit(buy("1", "0.0100"))).filled == D(1)
         assert (await sim.place_limit(buy("1", "0.0100"))).filled == 0
 
-    async def test_lo_gastado_se_olvida_si_la_grabacion_mueve_el_nivel(self, tmp_path):
+    async def test_spent_forgotten_if_recording_moves_level(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP)
         await sim.place_limit(buy("0.5", "0.0100"))
         assert (await sim.place_limit(buy("1", "0.0100"))).filled == D("0.5")
@@ -256,19 +256,19 @@ class TestSimVenue:
         sim._feed.apply(moved)
         assert (await sim.place_limit(buy("2", "0.0100"))).filled == D(2)
 
-    async def test_saldo_insuficiente_se_rechaza_como_en_dry_run(self, tmp_path):
+    async def test_insufficient_balance_rejected_as_in_dry_run(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP)
         with pytest.raises(Exception, match="saldo insuficiente"):
             await sim.place_limit(buy("500", "0.0105"))
 
-    async def test_la_orden_llega_tras_la_latencia(self, tmp_path):
+    async def test_order_arrives_after_latency(self, tmp_path):
         sim = await sim_on(tmp_path, DEEP, latency=5)
         order = await asyncio.wait_for(sim.place_limit(buy("1", "0.0100")), 1)
         assert order.status == "filled"
 
 
 @pytest.mark.spec("RF-34", "RF-18", "CA-19")
-async def test_daemon_de_reproduccion_arranca_sin_keys_y_un_cliente_ve_el_book(tmp_path):
+async def test_replay_daemon_starts_without_keys_and_client_sees_book(tmp_path):
     recording = scenario(tmp_path / "r.jsonl")
     settings = load_settings(config(tmp_path), tmp_path / "no.env", False, replay=True)
     feeds = replay_venues(recording, scan_recording(recording))
@@ -296,8 +296,8 @@ async def test_daemon_de_reproduccion_arranca_sin_keys_y_un_cliente_ve_el_book(t
 
 
 @pytest.mark.spec("RF-35", "CA-20")
-class TestInforme:
-    def test_da_lo_esperado_dos_veces_igual_y_no_deja_nada(self, tmp_path):
+class TestReport:
+    def test_gives_expected_twice_the_same_and_leaves_nothing(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         settings = load_settings(config(tmp_path), tmp_path / "no.env", False, replay=True)
         before = sorted(p.name for p in tmp_path.iterdir())
@@ -314,7 +314,7 @@ class TestInforme:
         assert first.net == 2 * each
         assert sorted(p.name for p in tmp_path.iterdir()) == before
 
-    def test_con_competidor_total_no_llena_nada(self, tmp_path):
+    def test_total_competitor_fills_nothing(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         settings = load_settings(
             config(tmp_path, competitor="100"), tmp_path / "no.env", False, replay=True
@@ -323,7 +323,7 @@ class TestInforme:
         assert report.filled == 0 and report.net == Decimal(0)
         assert report.misses == report.fires == 4
 
-    def test_un_cruce_largo_no_da_dinero_de_mas(self, tmp_path):
+    def test_long_cross_makes_no_extra_money(self, tmp_path):
         """The matched level stays spent: firing again at the same cross fails."""
         recording = tmp_path / "r.jsonl"
         text = scenario(recording).read_text().replace(f'"t":{T0 + 11_000}', f'"t":{T0 + 16_000}')
@@ -338,7 +338,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "replay"
 
 
 @pytest.mark.spec("RF-35", "CA-20", "RF-34")
-def test_informe_sobre_la_muestra_real_fija(tmp_path):
+def test_report_on_fixed_real_sample(tmp_path):
     """7 min of real books with the demo config: two thin crossings. The first fills; the
     second hangs, because NonKYC's ask is still spent from the first."""
     settings = load_settings(FIXTURES / "config.toml", tmp_path / "no.env", False, replay=True)

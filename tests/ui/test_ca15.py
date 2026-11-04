@@ -67,7 +67,7 @@ def bar(app):
 
 
 @pytest.mark.spec("CA-15", "RF-30", "RF-31", "RF-18")
-async def test_el_bot_sigue_armado_y_dispara_tras_cerrar_la_tui(tmp_path):
+async def test_bot_stays_armed_and_fires_after_closing_tui(tmp_path):
     async with DaemonRig(tmp_path) as rig:
         hello = await probe(rig.socket)
         assert (hello.mode, hello.has_bot) == ("dry-run", True)
@@ -115,7 +115,7 @@ async def test_el_bot_sigue_armado_y_dispara_tras_cerrar_la_tui(tmp_path):
 
 
 @pytest.mark.spec("CA-15", "RF-30", "RNF-15")
-async def test_la_parada_espera_a_la_doble_en_vuelo(tmp_path):
+async def test_stop_waits_for_double_in_flight(tmp_path):
     """SIGTERM with the bot firing: the legs finish and stay in the journal."""
     async with DaemonRig(tmp_path) as rig:
         gate = asyncio.Event()
@@ -141,7 +141,7 @@ async def test_la_parada_espera_a_la_doble_en_vuelo(tmp_path):
 
 
 @pytest.mark.spec("CA-15", "RF-30", "RF-07", "RF-21")
-async def test_las_piernas_llenas_no_paran_el_bot(tmp_path):
+async def test_filled_legs_do_not_stop_bot(tmp_path):
     """Seen live on 2026-10-24 (d-68e3ed): with both legs filled, the daemon missed NonKYC's
     fills, cancelled an already filled order ("Not found"), stopped the bot with
     `unsettled` and warned of a hanging leg that did not exist."""

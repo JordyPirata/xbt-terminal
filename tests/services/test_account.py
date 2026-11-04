@@ -96,7 +96,7 @@ async def until(predicate, timeout=1.0):
 
 
 @pytest.mark.spec("RF-14")
-async def test_estado_del_canal_privado(tmp_path):
+async def test_private_channel_state(tmp_path):
     async with Rig(tmp_path) as rig:
         rig.venue.push(ConnState("nk", "private", "ws", "up", 120.0, T0))
         st = rig.account.state["nk"]
@@ -106,7 +106,7 @@ async def test_estado_del_canal_privado(tmp_path):
 
 
 @pytest.mark.spec("RF-08")
-async def test_ordenes_abiertas_y_terminadas(tmp_path):
+async def test_open_and_finished_orders(tmp_path):
     async with Rig(tmp_path) as rig:
         st = rig.account.state["nk"]
         rig.venue.push(order("a"), order("b"))
@@ -117,7 +117,7 @@ async def test_ordenes_abiertas_y_terminadas(tmp_path):
 
 
 @pytest.mark.spec("RF-05", "RF-09", "RF-11")
-async def test_un_fill_va_al_journal_y_refresca_balances(tmp_path):
+async def test_fill_to_journal_and_refreshes_balances(tmp_path):
     async with Rig(tmp_path) as rig:
         st = rig.account.state["nk"]
         await until(lambda: st.balances is not None)  # initial load
@@ -141,13 +141,13 @@ async def test_un_fill_va_al_journal_y_refresca_balances(tmp_path):
 
 
 @pytest.mark.spec("RF-05")
-async def test_balances_cada_pocos_segundos(tmp_path):
+async def test_balances_every_few_seconds(tmp_path):
     async with Rig(tmp_path, every=0.05) as rig:
         await until(lambda: rig.venue.balance_calls >= 3, timeout=1.0)
 
 
 @pytest.mark.spec("RF-05")
-async def test_un_fallo_de_saldos_conserva_los_anteriores(tmp_path):
+async def test_balance_failure_keeps_previous(tmp_path):
     async with Rig(tmp_path, every=0.02) as rig:
         st = rig.account.state["nk"]
         await until(lambda: st.balances is not None)
@@ -159,7 +159,7 @@ async def test_un_fallo_de_saldos_conserva_los_anteriores(tmp_path):
 
 
 @pytest.mark.spec("RF-13")
-async def test_sin_keys_no_reintenta_en_bucle(tmp_path):
+async def test_no_keys_does_not_loop_retries(tmp_path):
     """ReadOnlyError is not transient: noted and not retried."""
     async with Rig(tmp_path, fail_stream=ReadOnlyError("NonKYC: sin keys")) as rig:
         await until(lambda: rig.venue.stream_calls == 1)
@@ -168,7 +168,7 @@ async def test_sin_keys_no_reintenta_en_bucle(tmp_path):
 
 
 @pytest.mark.spec("RF-09")
-async def test_fill_sin_orden_conocida_va_sin_client_id(tmp_path):
+async def test_fill_of_unknown_order_has_no_client_id(tmp_path):
     """Neoxa does not say a fill's order (D-14)."""
     async with Rig(tmp_path) as rig:
         rig.venue.push(Fill("nk", "f-9", None, "sell", D("0.0073"), D("0.01"), D("0"), None, T0))
@@ -178,7 +178,7 @@ async def test_fill_sin_orden_conocida_va_sin_client_id(tmp_path):
 
 
 @pytest.mark.spec("RF-07")
-async def test_reenvia_cada_evento_a_quien_lo_pida(tmp_path):
+async def test_forwards_each_event_to_those_asking(tmp_path):
     async with Rig(tmp_path) as rig:
         got = []
         rig.account.subscribe_events(lambda v, ev: got.append((v, ev)))
@@ -188,7 +188,7 @@ async def test_reenvia_cada_evento_a_quien_lo_pida(tmp_path):
 
 
 @pytest.mark.spec("RF-05")
-async def test_una_orden_propia_tambien_refresca_balances(tmp_path):
+async def test_own_order_also_refreshes_balances(tmp_path):
     """Opening or cancelling moves balance between available and locked."""
     async with Rig(tmp_path) as rig:
         st = rig.account.state["nk"]
@@ -204,7 +204,7 @@ def errors(rig):
 
 
 @pytest.mark.spec("RF-11", "RF-08")
-async def test_un_error_del_canal_privado_va_al_journal_una_vez(tmp_path):
+async def test_private_channel_error_to_journal_once(tmp_path):
     """D-22: NonKYC's "BUY" dropped the stream every few seconds and left no trace."""
     async with Rig(
         tmp_path, fail_stream=VenueError("NonKYC: lado de trade desconocido 'BUY'")
@@ -217,7 +217,7 @@ async def test_un_error_del_canal_privado_va_al_journal_una_vez(tmp_path):
 
 
 @pytest.mark.spec("RF-11", "RF-05")
-async def test_un_error_de_balances_va_al_journal_una_vez_por_racha(tmp_path):
+async def test_balance_error_to_journal_once_per_streak(tmp_path):
     async with Rig(tmp_path, every=0.01) as rig:
         rig.venue.fail_balances = True
         start = rig.venue.balance_calls
@@ -231,7 +231,7 @@ async def test_un_error_de_balances_va_al_journal_una_vez_por_racha(tmp_path):
 
 
 @pytest.mark.spec("RF-11", "RF-08")
-async def test_el_mismo_error_tras_recuperarse_se_vuelve_a_anotar(tmp_path):
+async def test_same_error_after_recovering_is_noted_again(tmp_path):
     async with Rig(tmp_path) as rig:
         rig.venue.push(VenueError("caído"))
         await until(lambda: len(errors(rig)) == 1)
@@ -244,7 +244,7 @@ async def test_el_mismo_error_tras_recuperarse_se_vuelve_a_anotar(tmp_path):
 
 
 @pytest.mark.spec("RF-05")
-async def test_el_intervalo_no_suma_lo_que_tarda_la_lectura(tmp_path):
+async def test_interval_does_not_add_read_time(tmp_path):
     """CA-01 saw balances 10.4 s old with a 10 s refresh: it waited 10 s after each read
     ended (~0.4 s). Reads must start every 10 s."""
     import time
@@ -265,7 +265,7 @@ async def test_el_intervalo_no_suma_lo_que_tarda_la_lectura(tmp_path):
 
 
 @pytest.mark.spec("RF-11", "RF-19")
-async def test_un_error_sin_texto_guarda_su_tipo(tmp_path):
+async def test_textless_error_keeps_its_type(tmp_path):
     """D-51: ConnectTimeout comes with empty text; the account left it as "" and the bot
     took it for "no error"."""
     async with Rig(tmp_path, every=0.01) as rig:
@@ -277,7 +277,7 @@ async def test_un_error_sin_texto_guarda_su_tipo(tmp_path):
 
 
 @pytest.mark.spec("RF-11", "RF-25")
-async def test_una_fee_corregida_va_al_journal_sin_otro_fill(tmp_path):
+async def test_corrected_fee_to_journal_without_another_fill(tmp_path):
     async with Rig(tmp_path) as rig:
         st = rig.account.state["nk"]
         await until(lambda: st.balances is not None)

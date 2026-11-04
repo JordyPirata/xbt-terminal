@@ -33,20 +33,20 @@ def part(rendered: str, venue: str) -> str:
 
 
 @pytest.mark.spec("RF-14")
-class TestCanalDeMercado:
-    def test_ws_up_con_latencia(self):
+class TestMarketChannel:
+    def test_ws_up_with_latency(self):
         nk = part(text(nk=link()).plain, "NonKYC")
         assert "ws ●" in nk and "168 ms" in nk
 
-    def test_reconectando_y_desde_cuando(self):
+    def test_reconnecting_and_since_when(self):
         nk = part(text(nk=link(status="reconnecting", latency=None)).plain, "NonKYC")
         assert "reconectando 30s" in nk and " ms" not in nk
 
-    def test_respaldo_rest(self):
+    def test_rest_fallback(self):
         nk = part(text(nk=link(source="rest", latency=240.0)).plain, "NonKYC")
         assert "respaldo ●" in nk and "240 ms" in nk
 
-    def test_caido(self):
+    def test_down(self):
         rendered = text(nk=link(source="rest", status="down", latency=None))
         nk = part(rendered.plain, "NonKYC")
         assert "respaldo ✖ caído 30s" in nk
@@ -55,20 +55,20 @@ class TestCanalDeMercado:
         ]
         assert any("red" in st for st in styles)
 
-    def test_sin_estado_todavia(self):
+    def test_no_state_yet(self):
         assert "conectando…" in part(text().plain, "Neoxa")
 
-    def test_latencia_aun_sin_medir(self):
+    def test_latency_not_measured_yet(self):
         nk = part(text(nk=link(latency=None)).plain, "NonKYC")
         assert "ws ● — ms" in nk
 
-    def test_aviso_si_el_estado_no_se_renueva(self):
+    def test_warns_if_state_is_not_renewed(self):
         old = link(seen=NOW - STALE_AFTER_MS - 1)
         nk = part(text(nk=old).plain, "NonKYC")
         assert "sin noticias 15s" in nk
         assert "sin noticias" not in part(text(nk=link(seen=NOW - 4_000)).plain, "NonKYC")
 
-    def test_reconectando_no_avisa_de_silencio(self):
+    def test_reconnecting_does_not_warn_of_silence(self):
         """Reconnecting has no heartbeats (D-11): the warning would only confuse."""
         old = link(status="reconnecting", latency=None, seen=NOW - STALE_AFTER_MS - 1)
         assert "sin noticias" not in part(text(nk=old).plain, "NonKYC")
@@ -79,15 +79,15 @@ def private(source="ws", status="up", since=NOW - 12_000):
 
 
 @pytest.mark.spec("RF-14", "RF-13")
-class TestCanalPrivado:
-    def test_sin_keys(self):
+class TestPrivateChannel:
+    def test_no_keys(self):
         assert "privado sin keys" in part(text(nk=link(trade=False)).plain, "NonKYC")
 
-    def test_dry_run_es_simulado(self):
+    def test_dry_run_is_simulated(self):
         """In dry-run orders and balances are simulated (D-13): no real channel."""
         assert "privado simulado" in part(text(nk=link(trade=True), mode="dry-run").plain, "NonKYC")
 
-    def test_live_aun_sin_canal(self):
+    def test_live_without_channel_yet(self):
         assert "privado —" in part(text(nk=link(trade=True), mode="live").plain, "NonKYC")
 
     def test_ws_up(self):
@@ -98,21 +98,21 @@ class TestCanalPrivado:
         nk = replace(link(trade=True), private=private(source="rest"))
         assert "privado ● rest" in part(text(nk=nk, mode="live").plain, "NonKYC")
 
-    def test_caido_y_desde_cuando(self):
+    def test_down_and_since_when(self):
         nk = replace(link(trade=True), private=private(source="rest", status="down"))
         rendered = text(nk=nk, mode="live")
         assert "privado ✖ caído 12s" in part(rendered.plain, "NonKYC")
 
 
 @pytest.mark.spec("RF-13")
-class TestModo:
-    def test_solo_lectura(self):
+class TestMode:
+    def test_read_only(self):
         assert "SOLO LECTURA" in text().plain
 
     def test_dry_run(self):
         assert "DRY-RUN" in text(mode="dry-run").plain
 
-    def test_live_banner_rojo(self):
+    def test_live_red_banner(self):
         rendered = text(mode="live")
         assert "LIVE · ÓRDENES REALES" in rendered.plain
         span = next(s for s in rendered.spans if "LIVE" in rendered.plain[s.start : s.end])
@@ -126,7 +126,7 @@ async def until(pilot, predicate, timeout=1.5):
 
 
 @pytest.mark.spec("RF-14", "RNF-02")
-class TestEnPantalla:
+class TestOnScreen:
     def make(self, mode="read-only", can_trade=None, account=None):
         self.feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         self.now = NOW
@@ -141,7 +141,7 @@ class TestEnPantalla:
             clock=lambda: self.now,
         )
 
-    async def test_canal_privado_desde_la_cuenta(self):
+    async def test_private_channel_from_the_account(self):
         from xbt_terminal.services.account import AccountService
 
         venue = FakePrivate()
@@ -155,7 +155,7 @@ class TestEnPantalla:
             venue.push(ConnState("nk", "private", "rest", "down", None, NOW - 5_000))
             await until(pilot, lambda: "privado ✖ caído 5s" in part(bar.text, "NonKYC"))
 
-    async def test_arriba_y_el_layout_sigue_cabiendo(self):
+    async def test_on_top_and_layout_still_fits(self):
         app = self.make()
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
@@ -165,7 +165,7 @@ class TestEnPantalla:
             cross = app.query_one(CrossPanel).region
             assert cross.y + cross.height <= 45
 
-    async def test_refleja_el_estado_del_hub(self):
+    async def test_reflects_hub_state(self):
         app = self.make()
         async with app.run_test(size=(160, 45)) as pilot:
             bar = app.query_one(StatusBar)
@@ -174,7 +174,7 @@ class TestEnPantalla:
             self.feeds["nx"].push(ConnState("nx", "market", "ws", "reconnecting", None, NOW))
             await until(pilot, lambda: "reconectando" in part(bar.text, "Neoxa"))
 
-    async def test_modo_y_keys_desde_la_app(self):
+    async def test_mode_and_keys_from_app(self):
         app = self.make(mode="dry-run", can_trade={"nk": True, "nx": False})
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
@@ -184,7 +184,7 @@ class TestEnPantalla:
             assert "privado sin keys" in part(bar.text, "Neoxa")
             assert "modo" not in (app.query_one(CrossPanel).border_subtitle or "")
 
-    async def test_la_antiguedad_avanza_sola(self):
+    async def test_age_advances_by_itself(self):
         app = self.make()
         async with app.run_test(size=(160, 45)) as pilot:
             bar = app.query_one(StatusBar)
@@ -195,7 +195,7 @@ class TestEnPantalla:
 
 
 @pytest.mark.spec("RF-14", "RNF-02")
-def test_el_peor_caso_cabe_en_160_columnas():
+def test_worst_case_fits_160_columns():
     def bad(venue, source, status):
         state = ConnState(venue, "market", source, status, None, NOW - 600_000)
         priv = ConnState(venue, "private", "rest", "down", None, NOW - 600_000)
@@ -215,7 +215,7 @@ def test_el_peor_caso_cabe_en_160_columnas():
 
 @pytest.mark.spec("RNF-12")
 @pytest.mark.parametrize(("n", "label"), [(0, None), (1, "⚠ 1 incierta"), (3, "⚠ 3 inciertas")])
-def test_ordenes_inciertas(n, label):
+def test_uncertain_orders(n, label):
     links = {"nk": VenueLink(None, None, False), "nx": VenueLink(None, None, False)}
     rendered = render_status(links, "live", NOW, uncertain=n).plain
     if label is None:
@@ -226,7 +226,7 @@ def test_ordenes_inciertas(n, label):
 
 @pytest.mark.spec("RNF-14")
 @pytest.mark.parametrize(("n", "label"), [(0, None), (1, "✖ 1 fallo "), (3, "✖ 3 fallos")])
-def test_fallos_internos(n, label):
+def test_internal_faults(n, label):
     links = {"nk": VenueLink(None, None, False), "nx": VenueLink(None, None, False)}
     rendered = render_status(links, "live", NOW, faults=n).plain
     if label is None:
@@ -236,12 +236,12 @@ def test_fallos_internos(n, label):
 
 
 @pytest.mark.spec("RF-14")
-async def test_un_cambio_de_estado_se_pinta_al_llegar(monkeypatch):
+async def test_state_change_drawn_on_arrival(monkeypatch):
     """Without waiting for the periodic refresh, set to 60 s here."""
     from xbt_terminal.ui import app as app_module
 
     monkeypatch.setattr(app_module, "STATUS_EVERY_S", 60.0)
-    t = TestEnPantalla()
+    t = TestOnScreen()
     app = t.make()
     async with app.run_test(size=(160, 45)) as pilot:
         bar = app.query_one(StatusBar)
@@ -255,27 +255,27 @@ class TestBot:
     def links(self):
         return {"nk": VenueLink(None, None, False), "nx": VenueLink(None, None, False)}
 
-    def test_apagado_no_se_ve(self):
+    def test_off_is_not_shown(self):
         assert "BOT" not in render_status(self.links(), "live", NOW, bot="off").plain
 
     @pytest.mark.parametrize(
         ("status", "label"),
         [("armed", "BOT armado"), ("firing", "BOT dispara"), ("cooldown", "BOT enfría")],
     )
-    def test_ocupa_el_banner_del_modo(self, status, label):
+    def test_takes_the_mode_banner(self, status, label):
         rendered = render_status(self.links(), "live", NOW, bot=status)
         assert f" LIVE · {label} " in rendered.plain and "ÓRDENES REALES" not in rendered.plain
         span = next(s for s in rendered.spans if "LIVE" in rendered.plain[s.start : s.end])
         assert "on red" in str(span.style)  # still the live red banner
 
-    def test_parado_en_rojo_tambien_en_dry_run(self):
+    def test_halted_red_in_dry_run_too(self):
         rendered = render_status(self.links(), "dry-run", NOW, bot="halted")
         assert " DRY-RUN · BOT ✖ PARADO " in rendered.plain
         span = next(s for s in rendered.spans if "PARADO" in rendered.plain[s.start : s.end])
         assert "on red" in str(span.style)
 
     @pytest.mark.spec("RNF-02")
-    def test_el_peor_caso_sigue_cabiendo(self):
+    def test_worst_case_still_fits(self):
         state = ConnState("nk", "market", "rest", "down", None, NOW - 600_000)
         priv = ConnState("nk", "private", "rest", "down", None, NOW - 600_000)
         bad = VenueLink(state, NOW - 600_000, can_trade=True, private=priv)

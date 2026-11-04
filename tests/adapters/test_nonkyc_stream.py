@@ -202,7 +202,7 @@ def expected_book() -> L2Book:
 
 @pytest.mark.spec("RF-01", "RF-02")
 class TestWebSocket:
-    async def test_suscripcion_y_snapshot(self, rest):
+    async def test_subscription_and_snapshot(self, rest):
         server = FakeNonKYC("stay")
         events = await collect(server, is_last)
 
@@ -216,7 +216,7 @@ class TestWebSocket:
         assert (snap.venue, snap.seq) == ("nk", SEQ)
         assert snap.ts == json.loads(FRAMES["snapshotOrderbook"])["timestamp"]
 
-    async def test_deltas_desordenados_se_reordenan(self, rest):
+    async def test_unordered_deltas_get_reordered(self, rest):
         server = FakeNonKYC("stay")
         events = await collect(server, is_last)
         deltas = [e for e in events if isinstance(e, BookDelta)]
@@ -225,7 +225,7 @@ class TestWebSocket:
         assert deltas[0].asks == (Level(D("0.00724756"), D("0")),)  # quantity: numeric 0
         assert len(server.received[0]) == 2  # no resubscriptions: there was no gap
 
-    async def test_el_book_queda_igual_que_aplicando_en_orden(self, rest):
+    async def test_book_ends_same_as_applying_in_order(self, rest):
         server = FakeNonKYC("stay")
         events = await collect(server, is_last)
         book = L2Book("nk")
@@ -234,26 +234,26 @@ class TestWebSocket:
         assert book.top(100) == want.top(100)
         assert book.seq == LAST_SEQ and book.mid is not None
 
-    async def test_otro_simbolo_se_ignora(self, rest):
+    async def test_other_symbol_ignored(self, rest):
         events = await collect(FakeNonKYC("stay"), is_last)
         assert all(e.venue == "nk" for e in events)
         assert len([e for e in events if isinstance(e, BookDelta)]) == len(UPDATES)
 
-    async def test_trades(self, rest):
+    async def test_trades_listed(self, rest):
         events = await collect(FakeNonKYC("stay"), is_last)
         trades = [e for e in events if isinstance(e, Trade)]
         assert len(trades) == 52  # 50 of the snapshot + the real live one + the ending one
         assert [t.ts for t in trades[:50]] == sorted(t.ts for t in trades[:50])
         assert trades[50] == Trade("nk", D("0.00724378"), D("0.5095"), "sell", 1792508806091)
 
-    async def test_delta_repetido_se_ignora(self, rest):
+    async def test_repeated_delta_ignored(self, rest):
         server = FakeNonKYC("dup")
         events = await collect(server, is_last)
         deltas = [e for e in events if isinstance(e, BookDelta)]
         assert [d.seq for d in deltas] == list(range(SEQ + 1, LAST_SEQ + 1))
         assert len(server.received[0]) == 2  # not taken for a gap
 
-    async def test_hueco_real_pide_snapshot_nuevo(self, rest):
+    async def test_real_gap_asks_new_snapshot(self, rest):
         server = FakeNonKYC("gap")
         events = await collect(server, is_last)
         assert [m["method"] for m in server.received[0]] == [
@@ -267,7 +267,7 @@ class TestWebSocket:
         assert book.valid and book.seq == SEQ
 
     @pytest.mark.spec("RNF-24")
-    async def test_resync_pide_el_book_en_el_mismo_ws(self, rest):
+    async def test_resync_asks_book_on_same_ws(self, rest):
         """D-76: without reconnecting; what arrives between the request and the snapshot is
         dropped, and the snapshot counts even if its sequence is lower (restart)."""
         server = FakeNonKYC("resync")
@@ -293,7 +293,7 @@ class TestWebSocket:
         assert all(book.apply(e) for e in books)
         assert book.seq == 6 and book.valid
 
-    async def test_lote_inicial_no_repite_trades(self, rest):
+    async def test_initial_batch_repeats_no_trades(self, rest):
         server = FakeNonKYC("drop", "stay")
         events = await collect(
             server, lambda evs: states(evs).count(("ws", "up")) == 2 and is_last(evs)
@@ -303,16 +303,16 @@ class TestWebSocket:
 
 
 @pytest.mark.spec("RF-01", "RF-14")
-class TestReconexion:
+class TestReconnection:
     """Supervisor rules (D-11) with NonKYC's real protocol."""
 
-    async def test_una_caida_reconecta_por_ws(self, rest):
+    async def test_drop_reconnects_by_ws(self, rest):
         server = FakeNonKYC("drop", "stay")
         events = await collect(server, lambda evs: states(evs).count(("ws", "up")) == 2)
         assert states(events) == [("ws", "up"), ("ws", "reconnecting"), ("ws", "up")]
         assert not rest.calls
 
-    async def test_tres_fallos_polling_y_vuelta_al_ws(self, rest):
+    async def test_three_failures_polling_and_back_to_ws(self, rest):
         server = FakeNonKYC("error", "error", "error", "stay")
         events = await collect(server, lambda evs: ("ws", "up") in states(evs))
         assert states(events) == [
@@ -326,7 +326,7 @@ class TestReconexion:
         rest_books = [e for e in events[i:] if isinstance(e, BookSnapshot)]
         assert rest_books[0].seq is None and len(rest_books[0].bids) == 20
 
-    async def test_sin_snapshot_no_esta_up(self, rest):
+    async def test_no_snapshot_not_up(self, rest):
         """Connected but dataless: not declared up until the first snapshot."""
         server = FakeNonKYC("silent")
         with pytest.raises(TimeoutError):
@@ -334,7 +334,7 @@ class TestReconexion:
 
 
 @pytest.mark.spec("RF-01")
-async def test_cerrar_el_stream_cierra_el_ws(rest):
+async def test_closing_stream_closes_ws(rest):
     """With over 16 unread frames, a clean close would wait websockets' default 10 s:
     `WS_CLOSE_TIMEOUT_S` bounds it (exiting the terminal cannot take 10 s)."""
     server = FakeNonKYC("stay")
@@ -349,24 +349,24 @@ async def test_cerrar_el_stream_cierra_el_ws(rest):
 
 
 @pytest.mark.spec("RF-01", "RF-02")
-class TestMensajeWS:
+class TestWsMessage:
     """`ws_message` decides which WS messages count (T-85)."""
 
-    def test_el_del_par_pasa_entero(self):
+    def test_pair_message_passes_whole(self):
         msg = {"method": "updateTrades", "params": {"symbol": "BTCB2/BTC", "data": []}}
         assert ws_message(msg, "BTCB2/BTC", "frame") is msg
 
-    def test_otro_simbolo_o_sin_params_se_ignora(self):
+    def test_other_symbol_or_no_params_ignored(self):
         other = {"method": "updateTrades", "params": {"symbol": "NKYC/BTC"}}
         assert ws_message(other, "BTCB2/BTC", "frame") is None
         assert ws_message({"result": True, "id": 1}, "BTCB2/BTC", "frame") is None
         assert ws_message({"params": [1]}, "BTCB2/BTC", "frame") is None
 
-    def test_lo_que_no_es_un_objeto_es_error(self):
+    def test_non_object_is_error(self):
         with pytest.raises(VenueError, match=r"^NonKYC WS: mensaje inesperado '\[1, 2\]'$"):
             ws_message([1, 2], "BTCB2/BTC", "[1, 2]")
 
-    def test_el_error_del_venue_es_error(self):
+    def test_venue_error_is_error(self):
         msg = {"error": {"code": 2001, "message": "Symbol not found"}, "id": 1}
         with pytest.raises(VenueError, match=r"^NonKYC WS: 2001 Symbol not found$"):
             ws_message(msg, "BTCB2/BTC", "frame")

@@ -35,8 +35,8 @@ def load_market(hub, vid):
 
 
 @pytest.mark.spec("RF-33", "CA-19")
-class TestGrabar:
-    def test_apunta_spec_y_eventos_con_su_hora_y_venue(self, tmp_path):
+class TestRecord:
+    def test_notes_spec_and_events_with_time_and_venue(self, tmp_path):
         hub = hub_with("nk", "nx")
         rec, path = recorder(tmp_path, hub)
         load_market(hub, "nk")
@@ -51,22 +51,22 @@ class TestGrabar:
         assert [(r.t, r.venue) for r in rows] == [(T0 + 5, v) for v in "nk nk nk nk nx".split()]
         assert [r.event for r in rows] == [spec("nk"), snapshot, delta, trade, conn]
 
-    def test_el_fichero_es_solo_del_usuario(self, tmp_path):
+    def test_file_is_user_only(self, tmp_path):
         rec, path = recorder(tmp_path, hub_with("nk"))
         rec.close()
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
-    def test_nombre_con_la_hora_utc_del_arranque(self, tmp_path):
+    def test_name_with_startup_utc_time(self, tmp_path):
         assert recording_path(tmp_path, 1_792_497_600_000).name == "books-20261020T120000Z.jsonl"
 
-    def test_un_trade_descartado_por_el_hub_no_se_graba(self, tmp_path):
+    def test_trade_dropped_by_hub_is_not_recorded(self, tmp_path):
         hub = hub_with("nk")
         rec, path = recorder(tmp_path, hub)
         hub.apply("nk", Trade("nk", D("0.0073"), D("1"), "buy", T0))  # market not loaded
         rec.close()
         assert list(read_recording(path)) == []
 
-    def test_un_fallo_de_escritura_para_la_grabacion_y_nada_mas(self, tmp_path):
+    def test_write_failure_stops_recording_only(self, tmp_path):
         hub = hub_with("nk")
         rec, _ = recorder(tmp_path, hub)
 
@@ -86,7 +86,7 @@ class TestGrabar:
         assert hub.faults.recent[0].where == "recording"
         rec.close()
 
-    def test_tras_cerrar_no_escribe(self, tmp_path):
+    def test_after_closing_does_not_write(self, tmp_path):
         hub = hub_with("nk")
         rec, path = recorder(tmp_path, hub)
         rec.close()
@@ -106,29 +106,29 @@ def recorded(tmp_path, *venues):
 
 
 @pytest.mark.spec("RF-34", "CA-19")
-class TestLeer:
-    def test_scan_da_principio_final_y_specs(self, tmp_path):
+class TestRead:
+    def test_scan_gives_start_end_and_specs(self, tmp_path):
         info = scan_recording(recorded(tmp_path, "nk", "nx"))
         assert (info.first, info.last) == (T0 + 5, T0 + 5)
         assert info.specs == {"nk": spec("nk"), "nx": spec("nx")}
 
-    def test_sin_uno_de_los_venues_no_vale(self, tmp_path):
+    def test_one_venue_missing_is_invalid(self, tmp_path):
         with pytest.raises(RecordingError, match="nx"):
             scan_recording(recorded(tmp_path, "nk"))
 
-    def test_una_linea_mala_dice_cual(self, tmp_path):
+    def test_bad_line_says_which(self, tmp_path):
         path = recorded(tmp_path, "nk", "nx")
         with path.open("a") as out:
             out.write('{"t": 1, "venue": "nk", "kind": "book"}\n')
         with pytest.raises(RecordingError, match=":6"):
             scan_recording(path)
 
-    def test_otro_formato_no_se_lee(self, tmp_path):
+    def test_other_format_not_read(self, tmp_path):
         path = tmp_path / "x.jsonl"
         path.write_text('{"format":2}\n')
         with pytest.raises(RecordingError, match="formato"):
             scan_recording(path)
 
-    def test_un_fichero_que_no_existe_se_explica(self, tmp_path):
+    def test_missing_file_is_explained(self, tmp_path):
         with pytest.raises(RecordingError, match="no se puede leer"):
             scan_recording(tmp_path / "nada.jsonl")

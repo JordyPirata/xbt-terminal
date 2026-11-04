@@ -47,8 +47,8 @@ async def settle() -> None:
 
 
 @pytest.mark.spec("RNF-03")
-class TestVentanas:
-    async def test_la_481_espera_un_minuto(self, neoxa, clock):
+class TestWindows:
+    async def test_the_481st_waits_a_minute(self, neoxa, clock):
         await burst(neoxa, "market", 480)
         task = await pending(neoxa, "market")
         clock.t += 59.9
@@ -60,7 +60,7 @@ class TestVentanas:
         await settle()
         assert task.done()
 
-    async def test_ventana_deslizante(self, neoxa, clock):
+    async def test_sliding_window(self, neoxa, clock):
         await burst(neoxa, "market", 240)
         clock.t += 30
         await burst(neoxa, "market", 240)
@@ -72,7 +72,7 @@ class TestVentanas:
         await burst(neoxa, "market", 239)
         assert not (await pending(neoxa, "market")).done()
 
-    async def test_la_novena_orden_espera(self, neoxa, clock):
+    async def test_ninth_order_waits(self, neoxa, clock):
         await burst(neoxa, "order", 8)
         task = await pending(neoxa, "order")
         clock.t += 10.1
@@ -80,22 +80,22 @@ class TestVentanas:
         await settle()
         assert task.done()
 
-    async def test_cancelaciones_16_por_10s(self, neoxa):
+    async def test_cancels_16_per_10s(self, neoxa):
         await burst(neoxa, "cancel", 16)
         assert not (await pending(neoxa, "cancel")).done()
 
-    async def test_ordenes_y_polling_comparten_presupuesto(self, neoxa):
+    async def test_orders_and_polling_share_budget(self, neoxa):
         await burst(neoxa, "order", 8)
         await burst(neoxa, "private", 472)
         assert not (await pending(neoxa, "market")).done()
 
-    async def test_orden_bloqueada_no_frena_el_polling(self, neoxa):
+    async def test_blocked_order_does_not_hold_polling(self, neoxa):
         await burst(neoxa, "order", 8)
         order = await pending(neoxa, "order")
         await burst(neoxa, "market", 1)  # passes even with an order queued
         assert not order.done()
 
-    async def test_venue_sin_ventanas_de_ordenes(self, clock):
+    async def test_venue_without_order_windows(self, clock):
         lim = RateLimiter(general=(240, 60), clock=clock)
         await burst(lim, "order", 240)
         assert not (await pending(lim, "cancel")).done()
@@ -103,8 +103,8 @@ class TestVentanas:
 
 
 @pytest.mark.spec("RNF-03")
-class TestPrioridad:
-    async def test_cancelacion_adelanta_al_polling(self, neoxa, clock):
+class TestPriority:
+    async def test_cancel_overtakes_polling(self, neoxa, clock):
         await burst(neoxa, "market", 2)
         clock.t += 1
         await burst(neoxa, "market", 478)
@@ -124,7 +124,7 @@ class TestPrioridad:
         await settle()
         assert private.done() and market.done()
 
-    async def test_fifo_dentro_de_la_misma_prioridad(self, neoxa, clock):
+    async def test_fifo_within_same_priority(self, neoxa, clock):
         await burst(neoxa, "market", 480)
         first = await pending(neoxa, "market")
         second = await pending(neoxa, "market")
@@ -133,7 +133,7 @@ class TestPrioridad:
         await settle()
         assert first.done() and not second.done()
 
-    async def test_espera_cancelada_no_consume_hueco(self, neoxa, clock):
+    async def test_cancelled_wait_consumes_no_slot(self, neoxa, clock):
         await burst(neoxa, "market", 480)
         gone = await pending(neoxa, "cancel")
         gone.cancel()
@@ -144,12 +144,12 @@ class TestPrioridad:
         assert later.done()
 
 
-async def test_tipo_desconocido(neoxa):
+async def test_unknown_type(neoxa):
     with pytest.raises(ValueError):
         await neoxa.acquire("withdraw")
 
 
-async def test_temporizador_real_despierta_la_cola():
+async def test_real_timer_wakes_queue():
     lim = RateLimiter(general=(2, 0.05))
     await burst(lim, "market", 2)
     await asyncio.wait_for(lim.acquire("market"), 1)  # no manual dispatch()

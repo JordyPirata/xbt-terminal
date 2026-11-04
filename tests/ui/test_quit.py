@@ -26,8 +26,8 @@ async def opened(rig, pilot, n):
 
 
 @pytest.mark.spec("RNF-15", "RF-11")
-class TestEnVuelo:
-    async def test_un_worker_cancelado_al_salir_no_deja_el_envio_a_medias(self, tmp_path):
+class TestInFlight:
+    async def test_worker_cancelled_on_exit_leaves_no_half_send(self, tmp_path):
         """On exit, Textual cancels the workers: the send goes on and reaches the journal."""
         rig = Rig(tmp_path)
         slow(rig.venue, "place_limit", delay=0.2)
@@ -47,8 +47,8 @@ async def quit_message(rig, pilot):
 
 
 @pytest.mark.spec("RNF-15")
-class TestConfirmarAlSalir:
-    async def test_live_con_ordenes_abiertas_pide_confirmacion(self, tmp_path):
+class TestConfirmOnExit:
+    async def test_live_with_open_orders_asks_confirmation(self, tmp_path):
         rig = Rig(tmp_path)
         with_open_orders(rig, "live", 2)
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -65,7 +65,7 @@ class TestConfirmarAlSalir:
             await pilot.press("y")
             await until(pilot, lambda: not rig.app.is_running)
 
-    async def test_una_sola_orden_en_singular(self, tmp_path):
+    async def test_single_order_in_singular(self, tmp_path):
         rig = Rig(tmp_path)
         with_open_orders(rig, "live", 1)
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -74,7 +74,7 @@ class TestConfirmarAlSalir:
             await until(pilot, lambda: isinstance(rig.app.screen, ConfirmScreen))
             assert "1 orden abierta" in rig.app.screen.summary
 
-    async def test_live_sin_ordenes_sale_directo(self, tmp_path):
+    async def test_live_without_orders_exits_directly(self, tmp_path):
         rig = Rig(tmp_path)
         with_open_orders(rig, "live", 0)
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -82,7 +82,7 @@ class TestConfirmarAlSalir:
             await pilot.press("q")
             await until(pilot, lambda: not rig.app.is_running)
 
-    async def test_dry_run_con_ordenes_sale_directo(self, tmp_path):
+    async def test_dry_run_with_orders_exits_directly(self, tmp_path):
         """Simulated: they stay on no exchange."""
         rig = Rig(tmp_path)
         with_open_orders(rig, "dry-run", 2)

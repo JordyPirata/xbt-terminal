@@ -74,8 +74,8 @@ def same_book(a, b, n=50):
 
 
 @pytest.mark.spec("RF-31", "CA-16")
-class TestFotoAlConectar:
-    async def test_spec_book_velas_y_conexion(self, linked):
+class TestSnapshotOnConnect:
+    async def test_spec_book_candles_and_connection(self, linked):
         daemon, remote = linked
         for vid in ("nk", "nx"):
             mine, theirs = remote.market.state[vid], daemon.hub.state[vid]
@@ -86,7 +86,7 @@ class TestFotoAlConectar:
                 assert mine.candles[tf].candles == builder.candles
         assert remote.market.state["nk"].book.mid == daemon.hub.state["nk"].book.mid
 
-    async def test_un_venue_sin_cargar_no_esta_listo(self, tmp_path):
+    async def test_unloaded_venue_not_ready(self, tmp_path):
         async with Daemon(tmp_path) as d:
             d.hub.state["nx"].ready = False
             d.hub.state["nx"].error = "HTTP 503"
@@ -98,7 +98,7 @@ class TestFotoAlConectar:
             task.cancel()
             await remote.aclose()
 
-    async def test_el_venue_que_carga_despues_manda_otra_foto(self, tmp_path):
+    async def test_late_loading_venue_sends_another_snapshot(self, tmp_path):
         async with Daemon(tmp_path) as d:
             d.hub.state["nx"].ready = False
             remote = RemoteEngine(d.path, has_bot=False, retry_s=0.02)
@@ -115,8 +115,8 @@ class TestFotoAlConectar:
 
 
 @pytest.mark.spec("RF-31", "RF-02", "RF-03", "RF-14")
-class TestEventos:
-    async def test_book_nuevo(self, linked):
+class TestEvents:
+    async def test_new_book(self, linked):
         daemon, remote = linked
         seen = []
         remote.market.subscribe(lambda vid, what: seen.append((vid, what)))
@@ -125,7 +125,7 @@ class TestEventos:
         assert same_book(remote.market.state["nx"].book, daemon.hub.state["nx"].book)
         assert ("nx", "book") in seen
 
-    async def test_el_book_viaja_con_la_profundidad_acotada(self, tmp_path):
+    async def test_book_travels_with_bounded_depth(self, tmp_path):
         async with Daemon(tmp_path, book_depth=2) as d:
             bids = [(f"0.00{700 - i}", "1") for i in range(5)]
             d.hub.apply("nx", book("nx", bids, [("0.0074", "1")]))
@@ -137,13 +137,13 @@ class TestEventos:
             task.cancel()
             await remote.aclose()
 
-    async def test_muchos_cambios_seguidos_llegan_agrupados_y_queda_el_ultimo(self, linked):
+    async def test_many_changes_in_a_row_arrive_coalesced_keeping_the_last(self, linked):
         daemon, remote = linked
         for i in range(30):
             daemon.hub.apply("nx", book("nx", [(f"0.00{690 + i}", "1")], [("0.0074", "1")]))
         await until(lambda: remote.market.state["nx"].book.best_bid == D("0.00719"))
 
-    async def test_trade_mueve_velas_y_ultimo_trade(self, linked):
+    async def test_trade_moves_candles_and_last_trade(self, linked):
         daemon, remote = linked
         t = trade("nk", "0.0080", T0 + 2 * MIN + 1)
         daemon.hub.apply("nk", t)
@@ -152,7 +152,7 @@ class TestEventos:
         for tf, builder in remote.market.state["nk"].candles.items():
             assert builder.candles == theirs[tf].candles
 
-    async def test_un_trade_que_el_hub_descarta_no_viaja(self, linked):
+    async def test_trade_dropped_by_hub_does_not_travel(self, linked):
         daemon, remote = linked
         old = trade("nk", "0.0090", T0 - MIN)  # older than the history
         daemon.hub.apply("nk", old)
@@ -163,7 +163,7 @@ class TestEventos:
             daemon.hub.state["nk"].candles["1m"].candles
         )
 
-    async def test_conexion(self, linked):
+    async def test_connection(self, linked):
         daemon, remote = linked
         conn = ConnState("nk", "market", "rest", "reconnecting", None, NOW)
         daemon.hub.apply("nk", conn)
@@ -172,8 +172,8 @@ class TestEventos:
 
 
 @pytest.mark.spec("RF-31")
-class TestReconectar:
-    async def test_al_volver_el_daemon_llega_otra_foto(self, tmp_path):
+class TestReconnect:
+    async def test_daemon_return_brings_another_snapshot(self, tmp_path):
         async with Daemon(tmp_path) as d:
             remote = RemoteEngine(d.path, has_bot=False, retry_s=0.02)
             task = asyncio.create_task(remote.run())
@@ -186,7 +186,7 @@ class TestReconectar:
             task.cancel()
             await remote.aclose()
 
-    async def test_las_velas_avanzan_solas_en_el_cliente(self, linked):
+    async def test_candles_advance_alone_in_client(self, linked):
         _, remote = linked
         before = len(remote.market.state["nk"].candles["1m"].candles)
         remote.market.roll(T0 + 6 * MIN)

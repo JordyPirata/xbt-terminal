@@ -57,8 +57,8 @@ class Rig(Setup):
 
 
 @pytest.mark.spec("RNF-12", "RF-11")
-class TestEnvioIncierto:
-    async def test_no_es_un_fallo(self, tmp_path):
+class TestUncertainSend:
+    async def test_not_a_failure(self, tmp_path):
         s = Rig(tmp_path)
         s.lose_reply()
         result = await s.send(buy())
@@ -68,7 +68,7 @@ class TestEnvioIncierto:
         assert s.lines()[1]["data"] == {"error": "NonKYC: sin respuesta (ReadTimeout)"}
         assert list(s.orders.uncertain) == ["t-000001"]
 
-    async def test_un_rechazo_claro_sigue_siendo_fallo(self, tmp_path):
+    async def test_clear_rejection_stays_a_failure(self, tmp_path):
         s = Rig(tmp_path)
 
         async def boom(req):
@@ -81,8 +81,8 @@ class TestEnvioIncierto:
 
 
 @pytest.mark.spec("RNF-12", "RF-11")
-class TestReconciliar:
-    async def test_aparece_por_client_id(self, tmp_path):
+class TestReconcile:
+    async def test_shows_up_by_client_id(self, tmp_path):
         s = Rig(tmp_path)
         s.lose_reply()
         await s.send(buy())
@@ -94,7 +94,7 @@ class TestReconciliar:
         assert ack["data"] == {"order_id": "dry-nk-1", "status": "open", "reconciled": True}
         assert s.orders.uncertain == {}
 
-    async def test_la_reconciliada_cuenta_para_validar(self, tmp_path):
+    async def test_reconciled_counts_for_validating(self, tmp_path):
         """Once found, a sell crossing it is rejected (self_cross)."""
         s = Rig(tmp_path)
         s.lose_reply()
@@ -103,7 +103,7 @@ class TestReconciliar:
         result = await s.orders.prepare(sell(price="0.00724000"))
         assert isinstance(result, Rejected) and "self_cross" in result.codes
 
-    async def test_sin_rastro_sigue_incierta_hasta_60_s(self, tmp_path):
+    async def test_no_trace_stays_uncertain_until_60_s(self, tmp_path):
         s = Rig(tmp_path)
         s.lose_reply(create=False)
         await s.send(buy())
@@ -118,7 +118,7 @@ class TestReconciliar:
         assert err["data"]["reconciled"] is True and "no existe" in err["data"]["error"]
         assert s.orders.uncertain == {}
 
-    async def test_si_el_venue_no_responde_se_reintenta(self, tmp_path):
+    async def test_unresponsive_venue_is_retried(self, tmp_path):
         s = Rig(tmp_path)
         s.lose_reply()
         await s.send(buy())
@@ -137,10 +137,10 @@ class TestReconciliar:
 
 
 @pytest.mark.spec("RNF-12")
-class TestSinClientId:
+class TestWithoutClientId:
     """Neoxa (PA-09): by side, price and quantity, without already known orders."""
 
-    async def test_una_igual_ya_conocida_no_se_confunde(self, tmp_path):
+    async def test_equal_known_one_not_confused(self, tmp_path):
         s = Rig(tmp_path)
         s.venue.keeps_client_id = False
         first = await s.send(buy())
@@ -150,7 +150,7 @@ class TestSinClientId:
         (r,) = await s.orders.reconcile()
         assert r.outcome == "found" and "dry-nk-2" in r.message
 
-    async def test_una_igual_enviada_despues_por_la_terminal_no_se_confunde(self, tmp_path):
+    async def test_equal_one_sent_later_by_terminal_not_confused(self, tmp_path):
         s = Rig(tmp_path)
         s.venue.keeps_client_id = False
         s.lose_reply()
@@ -159,7 +159,7 @@ class TestSinClientId:
         (r,) = await s.orders.reconcile()
         assert r.outcome == "found" and "dry-nk-1" in r.message
 
-    async def test_dos_candidatas_sigue_incierta_y_avisa_una_vez(self, tmp_path):
+    async def test_two_candidates_stays_uncertain_and_warns_once(self, tmp_path):
         s = Rig(tmp_path)
         s.venue.keeps_client_id = False
         s.lose_reply()
@@ -174,8 +174,8 @@ class TestSinClientId:
 
 
 @pytest.mark.spec("RNF-12", "RF-07")
-class TestOrdenDoble:
-    async def test_la_pierna_incierta_queda_unknown_y_se_resuelve(self, tmp_path):
+class TestDoubleOrder:
+    async def test_uncertain_leg_stays_unknown_and_resolves(self, tmp_path):
         s = double.Setup(tmp_path)
         real = s.venues["nx"].place_limit
 
@@ -198,7 +198,7 @@ class TestOrdenDoble:
         ack = s.lines()[-1]
         assert ack["event"] == "order_ack" and ack["data"]["double"] == "d-000001"
 
-    async def test_la_pierna_que_no_existe_queda_rechazada(self, tmp_path):
+    async def test_missing_leg_is_rejected(self, tmp_path):
         s = double.Setup(tmp_path)
 
         async def lost(req):

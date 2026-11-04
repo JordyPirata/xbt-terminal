@@ -53,8 +53,8 @@ class Daemon:
 
 
 @pytest.mark.spec("RF-31", "RF-25", "CA-11")
-class TestResultados:
-    async def test_el_informe_lo_calcula_el_daemon(self, tmp_path):
+class TestResultList:
+    async def test_daemon_computes_the_report(self, tmp_path):
         jdir = tmp_path / "j"
         write(jdir, "20261022", plain_double("d-1", T0))
         results = ResultsService(jdir, clock=lambda: T0)
@@ -66,7 +66,7 @@ class TestResultados:
             assert [x.id for x in report.doubles] == ["d-1"]
             assert report == results.load("dia")
 
-    async def test_con_el_precio_del_token(self, tmp_path):
+    async def test_with_token_price(self, tmp_path):
         jdir = tmp_path / "j"
         rows = plain_double("d-1", T0)
         rows[2] = fill("nx", "buy", "0.01", "0.0050", fee="0.0025", asset="NKYC")
@@ -82,7 +82,7 @@ class TestResultados:
             assert summary.prices == (("NKYC", D("0.0001")),)
 
     @pytest.mark.spec("RF-32", "CA-17")
-    async def test_la_serie_del_valor_viaja_en_el_informe(self, tmp_path):
+    async def test_value_series_travels_in_the_report(self, tmp_path):
         jdir = tmp_path / "j"
         write(jdir, "20261022", [*plain_double("d-1", T0), value_row(T0, "1.5", nk="1", nx="0.5")])
         results = ResultsService(jdir, clock=lambda: T0)
@@ -92,13 +92,13 @@ class TestResultados:
             assert values == results.load("dia").values
             assert [v.value for v in values] == [D("1.5")]
 
-    async def test_sin_resultados_en_el_daemon(self, tmp_path):
+    async def test_no_results_in_daemon(self, tmp_path):
         async with Daemon(tmp_path) as d:
             await d.remote.results.refresh("dia")
             assert "resultados" in d.remote.results.error
             assert d.remote.results.load("dia").doubles == ()
 
-    async def test_un_fill_llega_al_cliente(self, tmp_path):
+    async def test_fill_reaches_client(self, tmp_path):
         async with Daemon(tmp_path) as d:
             seen = []
             d.remote.account.subscribe(lambda vid, what: seen.append((vid, what)))
@@ -108,8 +108,8 @@ class TestResultados:
 
 
 @pytest.mark.spec("RF-31", "RF-28", "CA-13")
-class TestDepositos:
-    async def test_las_filas_del_daemon(self, tmp_path):
+class TestDeposits:
+    async def test_daemon_rows(self, tmp_path):
         deposits = DepositService({"nk": FakeDepositor("nk"), "nx": FakeDepositor("nx")})
         async with Daemon(tmp_path, deposits=deposits) as d:
             assert d.remote.deposits.venues == ("nk", "nx")
@@ -119,17 +119,17 @@ class TestDepositos:
                 ("nx", "BTC", "nx-BTC"), ("nx", "BTCB2", "nx-BTCB2"),
             ]  # fmt: skip
 
-    async def test_el_error_de_un_venue_viaja_en_su_fila(self, tmp_path):
+    async def test_venue_error_travels_in_its_row(self, tmp_path):
         nk = FakeDepositor("nk", fail={"BTC": VenueError("NonKYC: HTTP 500")})
         async with Daemon(tmp_path, deposits=DepositService({"nk": nk})) as d:
             rows = await d.remote.deposits.load()
             assert rows[0] == DepositRow("nk", "BTC", None, "NonKYC: HTTP 500")
 
-    async def test_sin_keys_no_hay_venues(self, tmp_path):
+    async def test_no_keys_no_venues(self, tmp_path):
         async with Daemon(tmp_path) as d:
             assert d.remote.deposits.venues == ()
 
-    async def test_sin_daemon_cada_fila_lo_dice(self, tmp_path):
+    async def test_no_daemon_each_row_says_so(self, tmp_path):
         deposits = DepositService({"nk": FakeDepositor("nk")})
         async with Daemon(tmp_path, deposits=deposits) as d:
             await d.server.aclose()
@@ -139,8 +139,8 @@ class TestDepositos:
 
 
 @pytest.mark.spec("RF-31", "RF-29", "CA-14")
-class TestComisiones:
-    async def test_las_del_daemon(self, tmp_path):
+class TestFees:
+    async def test_daemon_orders(self, tmp_path):
         nk = FakeFees("nk", fail={"BTCB2": VenueError("NonKYC: HTTP 500")})
         rebalance = RebalanceService({"nk": nk, "nx": FakeFees("nx")})
         async with Daemon(tmp_path, rebalance=rebalance) as d:
@@ -150,7 +150,7 @@ class TestComisiones:
             assert fees[("nk", "BTCB2")] == "NonKYC: HTTP 500"
             assert fees == await rebalance.load()
 
-    async def test_sin_daemon(self, tmp_path):
+    async def test_no_daemon(self, tmp_path):
         rebalance = RebalanceService({"nk": FakeFees("nk")})
         async with Daemon(tmp_path, rebalance=rebalance) as d:
             await d.server.aclose()

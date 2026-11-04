@@ -62,8 +62,8 @@ def codes(request, context=None, limits=LIMITS) -> list[str]:
 
 
 @pytest.mark.spec("RF-10", "CA-04")
-class TestCadaRegla:
-    def test_orden_valida_no_viola_nada(self):
+class TestEachRule:
+    def test_valid_order_violates_nothing(self):
         assert codes(req("buy")) == []
         assert codes(req("sell")) == []
 
@@ -74,17 +74,17 @@ class TestCadaRegla:
             req(qty="0.05", price="1200.01"), limits=replace(LIMITS, max_mid_deviation_pct=D("50"))
         ) == ["order_size"]
 
-    def test_order_size_sigue_al_inventario(self):
+    def test_order_size_follows_inventory(self):
         assert codes(req(qty="0.06", price="1000"), ctx(inventory_value=D("399.99"))) == [
             "order_size"
         ]
         assert codes(req(qty="0.06", price="1000"), ctx(inventory_value=D("800"))) == []
 
-    def test_sin_inventario_calculable_se_rechaza(self):
+    def test_without_computable_inventory_rejected(self):
         """Fail closed: without balances or a venue's mid there is no cap to apply."""
         assert codes(req(), ctx(inventory_value=None)) == ["order_size"]
 
-    def test_inventario_cero(self):
+    def test_zero_inventory(self):
         assert codes(req(), ctx(inventory_value=D("0"))) == ["order_size"]
 
     def test_mid_deviation(self):
@@ -92,7 +92,7 @@ class TestCadaRegla:
         assert codes(req(price="949.99")) == ["mid_deviation"]
         assert codes(req("sell", price="1050.01")) == ["mid_deviation"]
 
-    def test_tick(self):
+    def test_tick_setting(self):
         assert codes(req(price="1000.005")) == ["tick"]
 
     def test_lot(self):
@@ -106,23 +106,23 @@ class TestCadaRegla:
         m = replace(MARKET, min_notional=D("20"))
         assert codes(req(qty="0.01", price="1000"), ctx(market=m)) == ["min_notional"]
 
-    def test_saldo_insuficiente_compra_incluye_fee(self):
+    def test_insufficient_balance_buy_includes_fee(self):
         # 0.05 × 1000 = 50 USDT + 0.2 % fee = 50.1 > 50.05
         poco = {"USDT": Balance("USDT", D("50.05")), "BTCB2": Balance("BTCB2", D("0"))}
         assert codes(req(qty="0.05"), ctx(balances=poco)) == ["insufficient_balance"]
 
-    def test_saldo_insuficiente_venta(self):
+    def test_insufficient_balance_sell(self):
         assert codes(
             req("sell", qty="0.05"),
             ctx(balances={"USDT": Balance("USDT", D("300")), "BTCB2": Balance("BTCB2", D("0.04"))}),
         ) == ["insufficient_balance"]
 
-    def test_sin_saldo_del_activo_cuenta_como_cero(self):
+    def test_no_asset_balance_counts_zero(self):
         assert codes(req("sell"), ctx(balances={"USDT": Balance("USDT", D("300"))})) == [
             "insufficient_balance"
         ]
 
-    def test_lo_bloqueado_en_ordenes_no_cuenta_como_disponible(self):
+    def test_locked_in_orders_is_not_available(self):
         bal = {
             "USDT": Balance("USDT", D("5"), locked=D("295")),
             "BTCB2": Balance("BTCB2", D("0.1")),
@@ -131,45 +131,45 @@ class TestCadaRegla:
 
 
 @pytest.mark.spec("RF-10", "CA-04")
-class TestCruceDeOrdenPropia:
-    def test_compra_que_alcanza_mi_ask(self):
+class TestOwnOrderCross:
+    def test_buy_reaching_my_ask(self):
         assert codes(req("buy", price="1000"), ctx(open_orders=(own("sell", "1000"),))) == [
             "self_cross"
         ]
 
-    def test_compra_por_debajo_de_mi_ask_no_cruza(self):
+    def test_buy_below_my_ask_does_not_cross(self):
         assert codes(req("buy", price="999.99"), ctx(open_orders=(own("sell", "1000"),))) == []
 
-    def test_venta_que_alcanza_mi_bid(self):
+    def test_sell_reaching_my_bid(self):
         assert codes(req("sell", price="1000"), ctx(open_orders=(own("buy", "1000.5"),))) == [
             "self_cross"
         ]
 
-    def test_se_compara_con_el_ask_mas_bajo(self):
+    def test_compares_with_lowest_ask(self):
         mine = (own("sell", "1030"), own("sell", "1010"))
         assert codes(req("buy", price="1015"), ctx(open_orders=mine)) == ["self_cross"]
 
-    def test_ordenes_de_otro_venue_o_terminadas_no_cuentan(self):
+    def test_other_venue_or_finished_orders_do_not_count(self):
         mine = (own("sell", "1000", venue="nx"), own("sell", "990", status="filled"))
         assert codes(req("buy", price="1000"), ctx(open_orders=mine)) == []
 
 
 @pytest.mark.spec("RF-10", "CA-04")
-class TestExposicionPorVenue:
+class TestVenueExposure:
     """PA-06 (a): custodied value after the order = USDT + BTCB2 × mid."""
 
-    def test_ya_por_encima_del_tope(self):
+    def test_already_above_cap(self):
         rico = {"USDT": Balance("USDT", D("450")), "BTCB2": Balance("BTCB2", D("0.06"))}
         assert codes(req(), ctx(balances=rico)) == ["venue_exposure"]
 
-    def test_cuenta_lo_bloqueado_en_ordenes(self):
+    def test_counts_what_is_locked_in_orders(self):
         bal = {
             "USDT": Balance("USDT", D("300"), locked=D("200")),
             "BTCB2": Balance("BTCB2", D("0.01")),
         }
         assert codes(req(), ctx(balances=bal)) == ["venue_exposure"]
 
-    def test_se_evalua_despues_de_la_orden(self):
+    def test_evaluated_after_the_order(self):
         # before: 499 USDT; buying 0.05 at 950 (mid 1000) adds 0.05 × 50 = 2.5 → 501.5
         bal = {"USDT": Balance("USDT", D("399")), "BTCB2": Balance("BTCB2", D("0.1"))}
         assert codes(req(qty="0.05", price="950"), ctx(balances=bal)) == ["venue_exposure"]
@@ -177,23 +177,23 @@ class TestExposicionPorVenue:
 
 
 @pytest.mark.spec("RF-10", "CA-04")
-class TestDatosViejos:
-    def test_sin_mid(self):
+class TestStaleData:
+    def test_no_mid(self):
         assert "stale_data" in codes(req(), ctx(best_ask=None))
 
-    def test_book_viejo(self):
+    def test_stale_book(self):
         assert codes(req(), ctx(book_ts=NOW - 15_001)) == ["stale_data"]
         assert codes(req(), ctx(book_ts=NOW - 15_000)) == []
 
-    def test_sin_book(self):
+    def test_without_book(self):
         assert "stale_data" in codes(req(), ctx(best_bid=None, best_ask=None, book_ts=None))
 
-    def test_book_cruzado(self):
+    def test_crossed_book(self):
         assert "stale_data" in codes(req(), ctx(best_bid=D("1002"), best_ask=D("1001")))
 
 
 @pytest.mark.spec("RF-10", "CA-04")
-def test_devuelve_todas_las_violaciones():
+def test_returns_all_violations():
     r = req("buy", qty="0.10005", price="1100.001")
     poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
     got = codes(r, ctx(open_orders=(own("sell", "1050"),), balances=poco))
@@ -208,7 +208,7 @@ def test_devuelve_todas_las_violaciones():
 
 
 @pytest.mark.spec("RF-10")
-def test_mensajes_legibles():
+def test_readable_messages():
     (v,) = check(req(qty="0.0601", price="1000"), ctx(), LIMITS)
     assert v.message == (
         "nocional 60.10000000 > 15 % del inventario total (400.00000000 USDT) = 60.00000000"
@@ -217,16 +217,16 @@ def test_mensajes_legibles():
     assert "inventario total" in v.message and "no se puede calcular" in v.message
 
 
-def test_peticion_de_otro_venue_es_error_de_programacion():
+def test_other_venue_request_is_programming_error():
     with pytest.raises(ValueError):
         check(req(venue="nx"), ctx(), LIMITS)
 
 
 @pytest.mark.spec("RF-10", "CA-04")
-class TestOrdenYTextoDeLasViolaciones:
+class TestViolationOrderAndText:
     """Pin the order and text of each violation (D-77: splitting `check` changes nothing)."""
 
-    def test_compra_con_casi_todo_mal(self):
+    def test_buy_with_almost_everything_wrong(self):
         poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
         context = ctx(book_ts=NOW - 20_000, open_orders=(own("sell", "1050"),), balances=poco)
         got = check(req("buy", qty="0.10005", price="1100.001"), context, LIMITS)
@@ -244,7 +244,7 @@ class TestOrdenYTextoDeLasViolaciones:
             ("insufficient_balance", "hace falta 110.27521025 USDT, disponible 100.00000000"),
         ]
 
-    def test_venta_con_casi_todo_mal(self):
+    def test_sell_with_almost_everything_wrong(self):
         rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
         market = replace(MARKET, min_qty=D("0.2"), min_notional=D("300"))
         context = ctx(market=market, open_orders=(own("buy", "950"),), balances=rico)
@@ -265,7 +265,7 @@ class TestOrdenYTextoDeLasViolaciones:
             ("venue_exposure", "valor en nk tras la orden 684.99575025 > tope 500 USDT"),
         ]
 
-    def test_sin_mid_ni_inventario(self):
+    def test_no_mid_or_inventory(self):
         """Without a mid neither deviation nor exposure is looked at."""
         rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
         context = ctx(best_ask=None, inventory_value=None, balances=rico)

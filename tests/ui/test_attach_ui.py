@@ -57,13 +57,13 @@ async def linked(rig, pilot):
 
 
 @pytest.mark.spec("RF-31", "CA-15")
-class TestObservar:
-    async def test_la_barra_dice_que_esta_conectada(self, tmp_path):
+class TestWatch:
+    async def test_bar_says_it_is_attached(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             assert "⇄ daemon" in bar(rig.app)
 
-    async def test_si_el_daemon_se_va_lo_dice_y_vuelve(self, tmp_path):
+    async def test_if_daemon_leaves_says_so_and_returns(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await rig.daemon.server.aclose()
@@ -72,14 +72,14 @@ class TestObservar:
             await rig.daemon.server.start()
             await until(pilot, lambda: "⇄ daemon" in bar(rig.app))
 
-    async def test_los_avisos_del_daemon_salen_en_pantalla(self, tmp_path):
+    async def test_daemon_notices_show_on_screen(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             rig.daemon.engine._say("⚠ pierna colgada en d-1: venta en Neoxa", error=True)
             await until(pilot, lambda: "pierna colgada" in rig.app.last_message)
             assert rig.app.last_error
 
-    async def test_inciertas_del_daemon_en_la_barra(self, tmp_path):
+    async def test_daemon_uncertain_in_the_bar(self, tmp_path):
         from ..services.test_uncertain import buy
 
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
@@ -91,7 +91,7 @@ class TestObservar:
 
 @pytest.mark.spec("RF-31", "RF-18", "CA-15")
 class TestBot:
-    async def test_bot_on_confirma_y_arma_el_del_daemon(self, tmp_path):
+    async def test_bot_on_confirms_and_arms_the_daemons(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await type_command(pilot, rig.app, "bot on")
@@ -101,7 +101,7 @@ class TestBot:
             await until(pilot, lambda: rig.daemon.bot.state.status == "armed")
             await until(pilot, lambda: "BOT armado" in bar(rig.app))
 
-    async def test_ctrl_b_lo_para(self, tmp_path):
+    async def test_ctrl_b_stops_it(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             rig.daemon.bot._set(BotState("armed"))
             await linked(rig, pilot)
@@ -109,7 +109,7 @@ class TestBot:
             await pilot.press("ctrl+b")
             await until(pilot, lambda: rig.daemon.bot.state.status == "off")
 
-    async def test_bot_status_con_el_texto_del_daemon(self, tmp_path):
+    async def test_bot_status_with_daemon_text(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await type_command(pilot, rig.app, "bot status")
@@ -117,8 +117,8 @@ class TestBot:
 
 
 @pytest.mark.spec("RF-31", "RF-06", "RF-08", "CA-16")
-class TestOpera:
-    async def test_una_orden_se_confirma_y_la_envia_el_daemon(self, tmp_path):
+class TestTrade:
+    async def test_order_confirmed_and_sent_by_daemon(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await type_command(pilot, rig.app, "buy nk 0.01 0.00725000")
@@ -128,7 +128,7 @@ class TestOpera:
             await until(pilot, lambda: rig.app.last_message.startswith("enviada"))
             assert rig.daemon.s.events()[-2:] == ["order_sent", "order_ack"]
 
-    async def test_la_rechaza_el_daemon(self, tmp_path):
+    async def test_daemon_rejects_it(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await type_command(pilot, rig.app, "buy nk 100 0.00725000")
@@ -136,7 +136,7 @@ class TestOpera:
             assert "rechazada" in rig.app.last_message
             assert not isinstance(rig.app.screen, ConfirmScreen)
 
-    async def test_cancelar_todo(self, tmp_path):
+    async def test_cancel_everything(self, tmp_path):
         from ..services.test_uncertain import buy
 
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
@@ -148,13 +148,13 @@ class TestOpera:
             await until(pilot, lambda: "cancelado" in rig.app.last_message)
             assert await rig.daemon.s.venue.open_orders() == []
 
-    async def test_la_tecla_o_abre_las_ordenes(self, tmp_path):
+    async def test_o_key_opens_orders(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await pilot.press("o")
             await until(pilot, lambda: isinstance(rig.app.screen, OrdersScreen))
 
-    async def test_sin_daemon_lo_dice(self, tmp_path):
+    async def test_no_daemon_says_so(self, tmp_path):
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await rig.daemon.server.aclose()
@@ -162,14 +162,14 @@ class TestOpera:
             await type_command(pilot, rig.app, "buy nk 0.01 0.00725000")
             await until(pilot, lambda: "sin conexión con el daemon" in rig.app.last_message)
 
-    async def test_depositos_del_daemon(self, tmp_path):
+    async def test_daemon_deposits(self, tmp_path):
         """The daemon's Rig has no deposit keys: it says so, without opening the window."""
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
             await linked(rig, pilot)
             await pilot.press("w")
             assert rig.app.last_error and "depósitos" in rig.app.last_message
 
-    async def test_resultados_del_daemon(self, tmp_path):
+    async def test_daemon_results(self, tmp_path):
         from xbt_terminal.ui.screens.results import ResultsScreen
 
         async with AttachRig(tmp_path) as rig, rig.app.run_test(size=(160, 45)) as pilot:
@@ -180,8 +180,8 @@ class TestOpera:
 
 
 @pytest.mark.spec("RF-31", "CA-15")
-class TestSalir:
-    async def test_salir_no_toca_el_daemon(self, tmp_path):
+class TestExit:
+    async def test_exiting_leaves_daemon_alone(self, tmp_path):
         async with AttachRig(tmp_path) as rig:
             rig.daemon.bot._set(BotState("armed"))
             async with rig.app.run_test(size=(160, 45)) as pilot:

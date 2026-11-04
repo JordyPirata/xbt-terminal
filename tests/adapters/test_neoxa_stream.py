@@ -119,7 +119,7 @@ def states(events):
 
 @pytest.mark.spec("RF-01")
 class TestWebSocket:
-    async def test_suscripcion_book_y_trades(self, rest):
+    async def test_book_and_trades_subscription(self, rest):
         server = FakeNeoxa("stay")
         events = await collect(server, got_last)
 
@@ -145,12 +145,12 @@ class TestWebSocket:
         assert trades[-2] == Trade("nx", D("0.00722875"), D("0.5"), "buy", 1792506600000)
         assert len(trades) == 22
 
-    async def test_responde_al_ping(self, rest):
+    async def test_answers_ping(self, rest):
         server = FakeNeoxa("drop")
         await collect(server, lambda evs: ("ws", "reconnecting") in states(evs))
         assert server.received[0][2] == "3"
 
-    async def test_lote_inicial_no_repite_trades_ya_vistos(self, rest):
+    async def test_initial_batch_repeats_no_seen_trades(self, rest):
         """After dropping and returning, the initial WS batch was already delivered (WS or REST)."""
         server = FakeNeoxa("drop", "stay")
         events = await collect(server, got_last)
@@ -160,16 +160,16 @@ class TestWebSocket:
 
 
 @pytest.mark.spec("RF-01", "RF-14")
-class TestReconexion:
+class TestReconnection:
     """Supervisor rules (D-11) with Neoxa's real protocol."""
 
-    async def test_una_caida_reconecta_por_ws(self, rest):
+    async def test_drop_reconnects_by_ws(self, rest):
         server = FakeNeoxa("drop", "stay")
         events = await collect(server, lambda evs: states(evs).count(("ws", "up")) == 2)
         assert states(events) == [("ws", "up"), ("ws", "reconnecting"), ("ws", "up")]
         assert not rest.calls  # a single failure does not start REST
 
-    async def test_tres_fallos_polling_y_vuelta_al_ws(self, rest):
+    async def test_three_failures_polling_and_back_to_ws(self, rest):
         server = FakeNeoxa("error", "error", "error", "stay")
         events = await collect(server, lambda evs: ("ws", "up") in states(evs))
         assert states(events) == [
@@ -183,7 +183,7 @@ class TestReconexion:
         rest_books = [e for e in events[i:] if isinstance(e, BookSnapshot)]
         assert rest_books and len(rest_books[0].bids) == 20  # the fixture's REST book
 
-    async def test_rest_caido_se_reporta(self):
+    async def test_rest_down_is_reported(self):
         server = FakeNeoxa("error", "error", "error", "stay")
         with respx.mock() as mock:
             mock.get(url__startswith=API).mock(side_effect=httpx.ConnectError("sin red"))
@@ -191,13 +191,13 @@ class TestReconexion:
         assert ("rest", "down") in states(events)
         assert ("rest", "up") not in states(events)
 
-    async def test_ws_mudo_cuenta_como_caida(self, rest):
+    async def test_mute_ws_counts_as_down(self, rest):
         """No frames during pingInterval + pingTimeout: the WS is deemed dead."""
         server = FakeNeoxa("silent", "stay")
         events = await collect(server, lambda evs: ("ws", "up") in states(evs))
         assert states(events) == [("ws", "reconnecting"), ("ws", "up")]
 
-    async def test_error_del_venue_antes_de_datos(self, rest):
+    async def test_venue_error_before_data(self, rest):
         """The error comes after subscribing and before the book: a failure, no up."""
         server = FakeNeoxa("error", "stay")
         events = await collect(server, lambda evs: ("ws", "up") in states(evs))
@@ -205,7 +205,7 @@ class TestReconexion:
 
 
 @pytest.mark.spec("RNF-24")
-async def test_resync_reconecta_y_llega_otro_book(rest):
+async def test_resync_reconnects_and_another_book_arrives(rest):
     """D-76: each Neoxa message is the whole book, so reconnecting is enough."""
     server = FakeNeoxa("stay", "stay")
     asked = []

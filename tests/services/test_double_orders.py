@@ -77,8 +77,8 @@ def dbl(qty="0.01", buy="0.00725000", sell="0.00726000"):
 
 
 @pytest.mark.spec("RF-07", "RF-10")
-class TestPreparar:
-    async def test_dos_piernas_y_un_resumen(self, tmp_path):
+class TestPrepare:
+    async def test_two_legs_and_a_summary(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare_double(dbl())
         assert isinstance(p, PendingDouble) and p.id == "d-000001"
@@ -93,7 +93,7 @@ class TestPreparar:
         assert "bruto +0.00000010 BTC (+10 sats)" in text and "neto -0.00000019 BTC" in text
         assert s.lines() == []
 
-    async def test_una_pierna_rechazada_no_envia_ninguna(self, tmp_path):
+    async def test_rejected_leg_sends_neither(self, tmp_path):
         s = Setup(tmp_path, nx_btcb2="0")  # Neoxa without BTCB2 to sell
         r = await s.orders.prepare_double(dbl())
         assert isinstance(r, DoubleRejected)
@@ -104,7 +104,7 @@ class TestPreparar:
         for venue in s.venues.values():
             assert await venue.open_orders() == []
 
-    async def test_las_dos_rechazadas(self, tmp_path):
+    async def test_both_rejected(self, tmp_path):
         s = Setup(tmp_path, nk_btc="0", nx_btcb2="0")
         r = await s.orders.prepare_double(dbl())
         assert isinstance(r, DoubleRejected)
@@ -112,8 +112,8 @@ class TestPreparar:
 
 
 @pytest.mark.spec("RF-07", "CA-03")
-class TestEnviar:
-    async def test_envia_las_dos_y_las_sigue(self, tmp_path):
+class TestSend:
+    async def test_sends_both_and_follows_them(self, tmp_path):
         s = Setup(tmp_path)
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
         assert isinstance(sent, DoubleSent)
@@ -126,7 +126,7 @@ class TestEnviar:
         assert {ln["data"]["double"] for ln in s.lines()} == {"d-000001"}
         assert s.orders.doubles["d-000001"] == st
 
-    async def test_al_confirmar_se_revalida_y_si_falla_no_sale_ninguna(self, tmp_path):
+    async def test_confirm_revalidates_and_on_failure_neither_goes(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare_double(dbl())
         s.book("nx", "0.00800000", "0.00810000")  # Neoxa's mid moves 10 %
@@ -135,7 +135,7 @@ class TestEnviar:
         assert s.events() == [("reject_local", "nx")]
         assert "d-000001" not in s.orders.doubles
 
-    async def test_error_al_enviar_una_pierna(self, tmp_path):
+    async def test_error_sending_a_leg(self, tmp_path):
         s = Setup(tmp_path)
 
         async def boom(req):
@@ -148,7 +148,7 @@ class TestEnviar:
         assert "PRICE_OUT_OF_BAND" in (st.sell.error or "")
         assert ("order_error", "nx") in s.events() and ("order_ack", "nk") in s.events()
 
-    async def test_los_cambios_de_orden_actualizan_la_pierna(self, tmp_path):
+    async def test_order_changes_update_the_leg(self, tmp_path):
         s = Setup(tmp_path)
         seen = []
         s.orders.subscribe_doubles(seen.append)
@@ -161,8 +161,8 @@ class TestEnviar:
 
 
 @pytest.mark.spec("RF-07", "CA-03")
-class TestPiernaColgada:
-    async def test_llena_y_la_otra_abierta_mas_de_n_segundos(self, tmp_path):
+class TestHangingLeg:
+    async def test_filled_and_other_open_over_n_seconds(self, tmp_path):
         s = Setup(tmp_path)
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
         order = await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
@@ -177,7 +177,7 @@ class TestPiernaColgada:
         assert line["data"]["legs"]["buy"]["filled"] == "0.01"
         assert s.orders.hanging["d-000001"].startswith("venta en Neoxa")
 
-    async def test_se_avisa_una_sola_vez(self, tmp_path):
+    async def test_warns_only_once(self, tmp_path):
         s = Setup(tmp_path)
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
         s.orders.on_private_event(
@@ -189,7 +189,7 @@ class TestPiernaColgada:
         assert s.orders.check_doubles() == []
         assert [ln["event"] for ln in s.lines()].count("hanging_leg") == 1
 
-    async def test_rechazada_al_enviar_y_la_otra_llena_es_inmediato(self, tmp_path):
+    async def test_rejected_on_send_with_other_filled_is_immediate(self, tmp_path):
         s = Setup(tmp_path)
 
         async def boom(req):
@@ -202,7 +202,7 @@ class TestPiernaColgada:
         )
         assert s.orders.check_doubles() == ["d-000001"]
 
-    async def test_las_dos_llenas_no_es_colgada(self, tmp_path):
+    async def test_both_filled_is_not_hanging(self, tmp_path):
         s = Setup(tmp_path)
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
         for venue, leg in (("nk", sent.state.buy), ("nx", sent.state.sell)):

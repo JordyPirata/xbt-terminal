@@ -26,30 +26,30 @@ def line(text: str, start: str) -> str:
 
 
 @pytest.mark.spec("RF-04")
-class TestCifras:
-    def test_mid_y_spread_por_venue(self):
+class TestFigures:
+    def test_mid_and_spread_per_venue(self):
         text = render_cross(NK, NX).plain
         nk, nx = line(text, "NonKYC"), line(text, "Neoxa")
         assert "mid 0.00729024" in nk and "spread 0.00002551 · 2551 sats · 0.35 %" in nk
         assert "mid 0.00739356" in nx and "spread 0.00007285 · 7285 sats · 0.99 %" in nx
 
-    def test_diferencia_de_mids(self):
+    def test_mid_difference(self):
         text = render_cross(NK, NX).plain
         assert "nx - nk  +0.00010333 · +10333 sats · +1.42 %" in text
 
-    def test_ruta_comprar_nk_vender_nx(self):
+    def test_route_buy_nk_sell_nx(self):
         route = line(render_cross(NK, NX).plain, "NonKYC").split("│")[1]
         assert "nk→nx" in route
         assert "bruto +0.00005415 · +5415 sats · +0.74 %" in route
         assert "neto +0.00002483 · +2483 sats · +0.34 %" in route
 
-    def test_ruta_comprar_nx_vender_nk(self):
+    def test_route_buy_nx_sell_nk(self):
         route = line(render_cross(NK, NX).plain, "Neoxa").split("│")[1]
         assert "nx→nk" in route
         assert "bruto -0.00015251 · -15251 sats · -2.05 %" in route
         assert "neto -0.00018192 · -18192 sats · -2.45 %" in route
 
-    def test_neto_positivo_resaltado(self):
+    def test_positive_net_highlighted(self):
         text = render_cross(NK, NX)
         styles = {text.plain[s.start : s.end]: str(s.style) for s in text.spans}
         positive = next(k for k in styles if k.startswith("neto +"))
@@ -59,8 +59,8 @@ class TestCifras:
 
 
 @pytest.mark.spec("RF-04")
-class TestDatosParciales:
-    def test_venue_sin_datos(self):
+class TestPartialData:
+    def test_venue_without_data(self):
         text = render_cross(NK, None).plain
         assert "mid 0.00729024" in line(text, "NonKYC")
         nx = line(text, "Neoxa")
@@ -68,14 +68,14 @@ class TestDatosParciales:
         assert "nx - nk  —" in text
         assert "bruto —" in text and "+5415" not in text
 
-    def test_falta_un_lado(self):
+    def test_side_missing(self):
         sin_ask_nk = Quote("nk", NK.best_bid, None, taker_fee=NK.taker_fee)
         text = render_cross(sin_ask_nk, NX).plain
         assert "mid —" in line(text, "NonKYC")
         assert "nk→nx  bruto —" in text  # no ask on nk, so it cannot buy there
         assert "nx→nk  bruto -0.00015251" in text  # selling on nk only needs its bid
 
-    def test_ninguno(self):
+    def test_none_at_all(self):
         text = render_cross(None, None).plain
         assert "0.0" not in text and text.count("—") >= 6
 
@@ -91,8 +91,8 @@ async def until(pilot, predicate, timeout=1.0):
 
 
 @pytest.mark.spec("RF-04", "RNF-02")
-class TestEnPantalla:
-    async def test_se_actualiza_con_los_books(self):
+class TestOnScreen:
+    async def test_updates_with_books(self):
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         hub = MarketHub(feeds, history=50, retry_s=0.01, clock=lambda: T0)
         app = local_app(hub, book_levels=15, timeframe="1m", mode="read-only")
@@ -109,7 +109,7 @@ class TestEnPantalla:
             feeds["nx"].push(BookDelta("nx", (Level(D("0.00735714"), D("0")),), (), T0, 2))
             await until(pilot, lambda: "nk→nx  bruto —" in panel.text)
 
-    async def test_sustituye_al_aviso_de_pendiente(self):
+    async def test_replaces_pending_notice(self):
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         app = local_app(MarketHub(feeds), book_levels=15, timeframe="1m", mode="dry-run")
         async with app.run_test(size=(160, 45)) as pilot:
@@ -119,7 +119,7 @@ class TestEnPantalla:
 
 
 @pytest.mark.spec("RF-24", "RF-04")
-async def test_descuento_de_fee_solo_en_el_panel():
+async def test_fee_discount_only_on_the_panel():
     """Neoxa with fees paid in its token (D-38): the panel computes the net with the taker
     at 50 %; the hub's spec, used by bot and RiskCheck, does not change."""
     feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}

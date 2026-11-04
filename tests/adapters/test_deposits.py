@@ -69,10 +69,10 @@ def neoxa(http, limiter=None, creds=CREDS):
 
 @pytest.mark.spec("RF-28", "CA-13")
 class TestNonKYC:
-    def test_cumple_depositor(self, http):
+    def test_fulfils_depositor(self, http):
         assert isinstance(nonkyc(http), Depositor)
 
-    async def test_btc_por_la_red_principal(self, http):
+    async def test_btc_on_main_network(self, http):
         limiter = Limiter()
         with respx.mock() as mock:
             route = mock.get(f"{NK_URL}/getdepositaddress/BTC-MAIN").respond(
@@ -85,7 +85,7 @@ class TestNonKYC:
         assert route.calls.last.request.headers["X-API-KEY"] == "fake-key"
         assert limiter.kinds == ["private"]
 
-    async def test_btcb2(self, http):
+    async def test_btcb2_address(self, http):
         payload = nk_payload("BTCB2", NK_BTCB2, "XBT (BTCB2 / Blake2b fork)", "0.001", 15)
         with respx.mock() as mock:
             mock.get(f"{NK_URL}/getdepositaddress/BTCB2").respond(json=payload)
@@ -94,7 +94,7 @@ class TestNonKYC:
             "BTCB2", NK_BTCB2, D("0.001"), 15,
         )  # fmt: skip
 
-    async def test_otro_ticker_en_la_respuesta_es_error(self, http):
+    async def test_other_ticker_in_response_is_error(self, http):
         with respx.mock() as mock:
             mock.get(f"{NK_URL}/getdepositaddress/BTCB2").respond(
                 json=nk_payload("BTC-MAIN", NK_BTC)
@@ -102,7 +102,7 @@ class TestNonKYC:
             with pytest.raises(VenueError, match="BTC-MAIN"):
                 await nonkyc(http).deposit_address("BTCB2")
 
-    async def test_direccion_vacia_es_error(self, http):
+    async def test_empty_address_is_error(self, http):
         with respx.mock() as mock:
             mock.get(f"{NK_URL}/getdepositaddress/BTC-MAIN").respond(
                 json=nk_payload("BTC-MAIN", "")
@@ -110,7 +110,7 @@ class TestNonKYC:
             with pytest.raises(VenueError, match="sin dirección"):
                 await nonkyc(http).deposit_address("BTC")
 
-    async def test_error_del_venue(self, http):
+    async def test_venue_error(self, http):
         with respx.mock() as mock:
             mock.get(f"{NK_URL}/getdepositaddress/BTC-MAIN").respond(
                 400, json={"error": {"code": 20010, "message": "Must use more specific ticker"}}
@@ -118,26 +118,26 @@ class TestNonKYC:
             with pytest.raises(VenueError, match="20010"):
                 await nonkyc(http).deposit_address("BTC")
 
-    async def test_sin_keys(self, http):
+    async def test_no_keys(self, http):
         with respx.mock() as mock:
             with pytest.raises(ReadOnlyError):
                 await nonkyc(http, creds=None).deposit_address("BTC")
             assert not mock.calls
 
-    async def test_activo_fuera_del_par(self, http):
+    async def test_asset_outside_the_pair(self, http):
         with pytest.raises(VenueError, match="USDT"):
             await nonkyc(http).deposit_address("USDT")
 
 
 @pytest.mark.spec("RF-28", "CA-13")
 class TestNeoxa:
-    def test_cumple_depositor(self, http):
+    def test_fulfils_depositor(self, http):
         assert isinstance(neoxa(http), Depositor)
 
     @pytest.mark.parametrize(
         ("asset", "chain", "address"), [("BTC", "bitcoin", NX_BTC), ("BTCB2", "btcb2", NX_BTCB2)]
     )
-    async def test_por_cadena(self, http, asset, chain, address):
+    async def test_by_chain(self, http, asset, chain, address):
         limiter = Limiter()
         with respx.mock() as mock:
             route = mock.get(f"{NX_URL}/deposits/addresses").respond(json=nx_payload())
@@ -146,7 +146,7 @@ class TestNeoxa:
         assert route.calls.last.request.headers["X-API-Key"] == "fake-key"
         assert limiter.kinds == ["private"]
 
-    async def test_cadena_cerrada(self, http):
+    async def test_closed_chain(self, http):
         payload = nx_payload()
         payload["closedChains"]["btcb2"] = "BTCB2 deposits are currently disabled."
         with respx.mock() as mock:
@@ -154,19 +154,19 @@ class TestNeoxa:
             with pytest.raises(VenueError, match="disabled"):
                 await neoxa(http).deposit_address("BTCB2")
 
-    async def test_sin_la_cadena(self, http):
+    async def test_without_the_chain(self, http):
         with respx.mock() as mock:
             mock.get(f"{NX_URL}/deposits/addresses").respond(json=nx_payload(bitcoin=None))
             with pytest.raises(VenueError, match="sin dirección"):
                 await neoxa(http).deposit_address("BTC")
 
-    async def test_direccion_vacia(self, http):
+    async def test_empty_address(self, http):
         with respx.mock() as mock:
             mock.get(f"{NX_URL}/deposits/addresses").respond(json=nx_payload(btcb2=" "))
             with pytest.raises(VenueError, match="sin dirección"):
                 await neoxa(http).deposit_address("BTCB2")
 
-    async def test_sin_keys(self, http):
+    async def test_no_keys(self, http):
         with respx.mock() as mock:
             with pytest.raises(ReadOnlyError):
                 await neoxa(http, creds=None).deposit_address("BTC")

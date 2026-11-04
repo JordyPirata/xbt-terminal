@@ -44,8 +44,8 @@ class Rig:
 
 
 @pytest.mark.spec("RNF-24", "CA-18")
-class TestContraste:
-    async def test_coincide_confirma_el_book(self, tmp_path):
+class TestBookCheck:
+    async def test_match_confirms_the_book(self, tmp_path):
         rig = Rig(tmp_path)
         rig.now += 300_000  # five minutes without changes
         assert await rig.hub.check_book("nk") is True
@@ -53,7 +53,7 @@ class TestContraste:
         assert st.checked_at == rig.now and not st.suspect
         assert "resync" not in rig.feeds["nk"].calls and rig.events("book_resync") == []
 
-    async def test_solo_cuenta_el_tope(self, tmp_path):
+    async def test_only_top_counts(self, tmp_path):
         """REST may come trimmed: the rest of the book is not compared."""
         rig = Rig(tmp_path)
         rig.feeds["nk"].rest_book = BookSnapshot(
@@ -68,7 +68,7 @@ class TestContraste:
             ("0.00720000", "0.00731000"),
         ],
     )
-    async def test_no_coincide_pide_book_nuevo_y_lo_apunta(self, tmp_path, bid, ask):
+    async def test_mismatch_asks_new_book_and_notes_it(self, tmp_path, bid, ask):
         rig = Rig(tmp_path)
         rig.feeds["nk"].rest_book = book("nk", bid, ask)
         assert await rig.hub.check_book("nk") is False
@@ -81,14 +81,14 @@ class TestContraste:
         }  # fmt: skip
         assert row["data"]["rest"] == {"bid": [bid, "1"], "ask": [ask, "0.5"]}
 
-    async def test_otra_cantidad_tampoco_coincide(self, tmp_path):
+    async def test_another_quantity_does_not_match_either(self, tmp_path):
         rig = Rig(tmp_path)
         rig.feeds["nk"].rest_book = BookSnapshot(
             "nk", (Level(D("0.00720000"), D("0.0021")),), (Level(D("0.00730000"), D("0.5")),), T0
         )
         assert await rig.hub.check_book("nk") is False
 
-    async def test_un_snapshot_nuevo_lo_repara(self, tmp_path):
+    async def test_new_snapshot_repairs(self, tmp_path):
         rig = Rig(tmp_path)
         rig.feeds["nk"].rest_book = book("nk", "0.00718273", "0.00730000")
         await rig.hub.check_book("nk")
@@ -97,7 +97,7 @@ class TestContraste:
         rig.hub.apply("nk", book("nk", "0.00718273", "0.00730000"))
         assert not rig.hub.state["nk"].suspect
 
-    async def test_un_contraste_que_coincide_tambien_lo_repara(self, tmp_path):
+    async def test_matching_check_also_repairs(self, tmp_path):
         rig = Rig(tmp_path)
         rig.feeds["nk"].rest_book = book("nk", "0.00718273", "0.00730000")
         await rig.hub.check_book("nk")
@@ -105,7 +105,7 @@ class TestContraste:
         assert await rig.hub.check_book("nk") is True
         assert not rig.hub.state["nk"].suspect
 
-    async def test_mensaje_durante_el_rest_no_cuenta(self, tmp_path):
+    async def test_message_during_rest_does_not_count(self, tmp_path):
         """The race would give a false mismatch; the message already gives freshness."""
         rig = Rig(tmp_path)
         feed = rig.feeds["nk"]
@@ -121,19 +121,19 @@ class TestContraste:
         assert st.checked_at is None and not st.suspect and rig.events("book_resync") == []
 
     @pytest.mark.parametrize("exc", [VenueError("NonKYC: HTTP 502"), httpx.ConnectError("sin red")])
-    async def test_rest_fallido_no_confirma(self, tmp_path, exc):
+    async def test_failed_rest_does_not_confirm(self, tmp_path, exc):
         rig = Rig(tmp_path)
         rig.feeds["nk"].rest_book = exc
         assert await rig.hub.check_book("nk") is None
         st = rig.hub.state["nk"]
         assert st.checked_at is None and not st.suspect
 
-    async def test_sin_book_no_se_contrasta(self, tmp_path):
+    async def test_without_book_no_check(self, tmp_path):
         rig = Rig(tmp_path)
         assert await rig.hub.check_book("nx") is None  # nx has no book yet
         assert "book" not in rig.feeds["nx"].calls
 
-    async def test_el_hub_contrasta_cada_book_check_s(self, tmp_path):
+    async def test_hub_checks_every_book_check_s(self, tmp_path):
         rig = Rig(tmp_path, book_check_s=0.01)
         task = asyncio.create_task(rig.hub.run())
         try:
@@ -144,7 +144,7 @@ class TestContraste:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
 
-    async def test_sin_book_check_s_no_contrasta(self, tmp_path):
+    async def test_without_book_check_s_no_check(self, tmp_path):
         rig = Rig(tmp_path)
         task = asyncio.create_task(rig.hub.run())
         await asyncio.sleep(0.05)

@@ -79,7 +79,7 @@ class TestDecide:
             ("todos los pares rinden", "0.00900000", "0.0001", Fire),
         ],
     )
-    def test_decide_con_50_niveles(self, case, nx_bid, qty, want):
+    def test_decide_with_50_levels(self, case, nx_bid, qty, want):
         views, state = deep_views(nx_bid, qty), arm(BotState())
         assert isinstance(decide(views, state, WALK, NOW), want)
         ms = median_ms(lambda: decide(views, state, WALK, NOW))
@@ -88,7 +88,7 @@ class TestDecide:
 
 
 @pytest.mark.spec("RNF-23", "RF-02")
-def test_top_de_un_book_de_1000_niveles():
+def test_top_of_1000_level_book():
     book = L2Book("nk")
     bids = tuple(Level(D("0.004") - D("0.00000001") * i, D(1)) for i in range(1000))
     asks = tuple(Level(D("0.0041") + D("0.00000001") * i, D(1)) for i in range(1000))
@@ -99,7 +99,7 @@ def test_top_de_un_book_de_1000_niveles():
 
 
 @pytest.mark.spec("RNF-23", "RF-19", "RF-20")
-async def test_de_un_cruce_a_prepare_double(tmp_path):
+async def test_from_cross_to_prepare_double(tmp_path):
     limits = replace(BOT, max_walk_pct={"nk": D("1"), "nx": D("1")})
     async with BotRig(tmp_path, limits=limits) as rig:
         sent: list[float] = []

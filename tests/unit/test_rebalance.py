@@ -45,8 +45,8 @@ def by_asset(p, asset):
 
 
 @pytest.mark.spec("RF-29", "CA-14")
-class TestCantidad:
-    def test_btcb2_del_venue_con_mas_porcentaje_iguala_al_satoshi(self):
+class TestQuantity:
+    def test_btcb2_from_higher_percent_venue_equalizes_to_the_satoshi(self):
         t = by_asset(plan({"nk": NK, "nx": NX}, FEES), "BTCB2")
         assert (t.source, t.dest) == ("nk", "nx")
         # NonKYC: fee deducted (assumption), the amount asked leaves
@@ -61,7 +61,7 @@ class TestCantidad:
         assert gap(t.amount) >= 0 > gap(t.amount + SAT)
         assert abs(t.after["nk"] - t.after["nx"]) < D("0.001")
 
-    def test_btc_del_venue_con_menos_porcentaje_iguala_al_satoshi(self):
+    def test_btc_from_lower_percent_venue_equalizes_to_the_satoshi(self):
         t = by_asset(plan({"nk": NK, "nx": NX}, FEES), "BTC")
         assert (t.source, t.dest) == ("nx", "nk")
         # Neoxa: the fee is on top, the amount asked arrives
@@ -75,12 +75,12 @@ class TestCantidad:
         assert gap(t.amount) >= 0 > gap(t.amount + SAT)
         assert abs(t.after["nk"] - t.after["nx"]) < D("0.01")  # 1 sat of BTC weighs more
 
-    def test_el_origen_es_el_de_mas_porcentaje_aunque_cambie_el_orden(self):
+    def test_origin_is_the_higher_percent_even_if_order_changes(self):
         p = plan({"nk": NX, "nx": NK}, {(("nx" if v == "nk" else "nk"), a): f
                                          for (v, a), f in FEES.items()})  # fmt: skip
         assert (by_asset(p, "BTCB2").source, by_asset(p, "BTC").source) == ("nx", "nk")
 
-    def test_porcentajes_antes_y_total(self):
+    def test_percentages_before_and_total(self):
         p = plan({"nk": NK, "nx": NX}, FEES)
         assert round(p.before["nk"], 2) == D("62.26")
         assert round(p.before["nx"], 2) == D("1.40")
@@ -89,24 +89,24 @@ class TestCantidad:
         ) * 100  # fmt: skip
         assert p.total_pct == total
 
-    def test_iguales_no_hace_falta(self):
+    def test_equal_needs_nothing(self):
         p = plan({"nk": NK, "nx": NK}, FEES)
         assert all(not t.viable and "no hace falta" in t.problem for t in p.transfers)
         assert p.best is None
 
 
 @pytest.mark.spec("RF-29", "CA-14")
-class TestCoste:
-    def test_coste_en_btc_al_mid_del_origen(self):
+class TestCost:
+    def test_cost_in_btc_at_origin_mid(self):
         p = plan({"nk": NK, "nx": NX}, FEES)
         assert by_asset(p, "BTCB2").cost_btc == D("0.0027") * NK.price
         assert by_asset(p, "BTC").cost_btc == D("0.0001")
 
-    def test_recomienda_la_viable_mas_barata(self):
+    def test_recommends_cheapest_viable(self):
         p = plan({"nk": NK, "nx": NX}, FEES)
         assert p.best is by_asset(p, "BTCB2")  # 1 485 sats against 10 000
 
-    def test_si_la_barata_no_es_viable_recomienda_la_otra(self):
+    def test_if_cheap_one_not_viable_recommends_other(self):
         fees = {**FEES, ("nk", "BTCB2"): fee("nk", "BTCB2", "0.0027", active=False)}
         p = plan({"nk": NK, "nx": NX}, fees)
         assert p.best is by_asset(p, "BTC")
@@ -119,35 +119,35 @@ class TestCoste:
 
 
 @pytest.mark.spec("RF-29", "CA-14")
-class TestNoViable:
-    def test_pasa_del_disponible(self):
+class TestNotViable:
+    def test_exceeds_available(self):
         busy = Holding(NK.btc, NK.btcb2, NK.btc_free, D("0.05"), NK.price)  # the rest in orders
         t = by_asset(plan({"nk": busy, "nx": NX}, FEES), "BTCB2")
         assert not t.viable and "disponible" in t.problem and "0.05" in t.problem
 
-    def test_bajo_el_minimo(self):
+    def test_below_minimum(self):
         fees = {**FEES, ("nx", "BTC"): fee("nx", "BTC", "0.0001", "0.01")}
         t = by_asset(plan({"nk": NK, "nx": NX}, fees), "BTC")
         assert not t.viable and "mínimo" in t.problem and "0.01" in t.problem
 
-    def test_la_comision_se_come_el_envio(self):
+    def test_fee_eats_the_transfer(self):
         # nearly equal: ~0.00185 BTCB2 would be needed and the fee is 0.0027
         close = Holding(NK.btc, D("0.299"), NK.btc_free, D("0.299"), NK.price)
         t = by_asset(plan({"nk": NK, "nx": close}, FEES), "BTCB2")
         assert not t.viable and "comisión" in t.problem
 
-    def test_retiro_cerrado(self):
+    def test_withdrawal_closed(self):
         fees = {**FEES, ("nx", "BTC"): fee("nx", "BTC", "0.0001", active=False)}
         t = by_asset(plan({"nk": NK, "nx": NX}, fees), "BTC")
         assert not t.viable and "cerrado" in t.problem
 
-    def test_sin_comision_se_calcula_con_cero_y_no_es_viable(self):
+    def test_missing_fee_computes_with_zero_and_not_viable(self):
         fees = {**FEES, ("nk", "BTCB2"): "NonKYC: HTTP 500"}
         t = by_asset(plan({"nk": NK, "nx": NX}, fees), "BTCB2")
         assert not t.viable and "HTTP 500" in t.problem
         assert t.fee is None and t.cost_btc is None and t.received == t.amount > 0
 
-    def test_sin_btc_en_ningun_venue(self):
+    def test_no_btc_on_any_venue(self):
         empty = {v: Holding(D(0), h.btcb2, D(0), h.btcb2_free, h.price)
                  for v, h in (("nk", NK), ("nx", NX))}  # fmt: skip
         p = plan(empty, FEES)
@@ -162,21 +162,21 @@ BAL = {
 
 @pytest.mark.spec("RF-29")
 class TestHoldings:
-    def test_totales_para_el_porcentaje_y_disponibles_para_enviar(self):
+    def test_totals_for_percent_and_available_for_sending(self):
         got = holdings(BAL, {"nk": D("0.0055"), "nx": D("0.0057")})
         assert got["nk"] == Holding(D("0.001"), D("0.3"), D("0.001"), D("0.2"), D("0.0055"))
         assert got["nx"] == Holding(D("0.004"), D("0.01"), D("0.003"), D("0.01"), D("0.0057"))
 
-    def test_sin_saldos_o_sin_mid_lo_dice(self):
+    def test_no_balances_or_mid_says_so(self):
         assert "nx" in holdings({**BAL, "nx": None}, {"nk": D("1"), "nx": D("1")})
         assert "nk" in holdings(BAL, {"nk": None, "nx": D("1")})
 
-    def test_hacen_falta_los_dos_venues(self):
+    def test_both_venues_needed(self):
         assert isinstance(plan({"nk": NK}, FEES), str)
 
 
 @pytest.mark.spec("RF-29", "CA-14")
-class TestComisionAparte:
+class TestFeeOnTop:
     """As on 2026-10-23: Neoxa with the BTCB2 and NonKYC without. Neoxa's web asks 0.2, 0.2
     arrives and 0.2001 is deducted (D-53)."""
 
@@ -185,14 +185,14 @@ class TestComisionAparte:
     NK_EMPTY = Holding(D("0.00261223"), D("0.00000708"), D("0.00261223"), D("0.00000708"),
                        D("0.00422892"))  # fmt: skip
 
-    def test_btcb2_de_neoxa_llega_lo_pedido_y_sale_con_la_comision(self):
+    def test_neoxa_btcb2_arrives_as_asked_and_leaves_with_the_fee(self):
         t = by_asset(plan({"nk": self.NK_EMPTY, "nx": self.NX_FULL}, FEES), "BTCB2")
         assert (t.source, t.dest) == ("nx", "nk")
         assert t.amount == D("0.14002494")  # the recomputation done by hand that day
         assert t.received == t.amount and t.debited == t.amount + D("0.0001")
         assert round(t.after["nx"], 2) == round(t.after["nk"], 2) == D("18.48")
 
-    def test_el_disponible_cuenta_la_comision(self):
+    def test_available_counts_the_fee(self):
         # with just enough for the amount but not the fee, it is not viable
         need = by_asset(plan({"nk": self.NK_EMPTY, "nx": self.NX_FULL}, FEES), "BTCB2").amount
         tight = Holding(self.NX_FULL.btc, self.NX_FULL.btcb2, self.NX_FULL.btc_free, need,
@@ -200,7 +200,7 @@ class TestComisionAparte:
         t = by_asset(plan({"nk": self.NK_EMPTY, "nx": tight}, FEES), "BTCB2")
         assert not t.viable and "disponible" in t.problem
 
-    def test_aparte_mayor_que_la_diferencia(self):
+    def test_on_top_fee_above_the_difference(self):
         fees = {**FEES, ("nk", "BTCB2"): fee("nk", "BTCB2", "0.0027", on_top=True)}
         close = Holding(NK.btc, D("0.299"), NK.btc_free, D("0.299"), NK.price)
         t = by_asset(plan({"nk": NK, "nx": close}, fees), "BTCB2")

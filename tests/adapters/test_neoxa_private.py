@@ -72,11 +72,11 @@ def req(side="buy", qty="0.01", price="0.00725000"):
 
 
 @pytest.mark.spec("RNF-09", "RF-12")
-class TestCredenciales:
-    def test_cumple_venue(self, limiter):
+class TestCredentials:
+    def test_fulfils_venue(self, limiter):
         assert isinstance(NeoxaVenue("BTCB2_BTC", limiter, credentials=CREDS), Venue)
 
-    async def test_sin_keys_no_se_llama_al_venue(self, limiter, api):
+    async def test_no_keys_venue_is_not_called(self, limiter, api):
         async with httpx.AsyncClient() as http:
             venue = make(http, limiter, creds=None)
             with pytest.raises(ReadOnlyError):
@@ -85,12 +85,12 @@ class TestCredenciales:
                 await venue.place_limit(req())
         assert not api.calls
 
-    async def test_cabeceras_planas(self, venue, api):
+    async def test_plain_headers(self, venue, api):
         await venue.balances()
         sent = api.calls.last.request
         assert sent.headers["X-API-Key"] == KEY and sent.headers["X-API-Secret"] == SECRET
 
-    async def test_un_error_no_muestra_el_secreto(self, venue, api):
+    async def test_error_does_not_show_secret(self, venue, api):
         api.get(f"{API}/balances").respond(401, json={"success": False, "error": "Invalid API key"})
         with pytest.raises(VenueError) as err:
             await venue.balances()
@@ -99,7 +99,7 @@ class TestCredenciales:
 
 
 @pytest.mark.spec("RF-05", "RNF-10")
-async def test_balances_solo_btc_y_btcb2(venue, api, limiter):
+async def test_balances_only_btc_and_btcb2(venue, api, limiter):
     """Neoxa's `total` does not include what is committed in orders (`in_orders`)."""
     bal = await venue.balances()
     assert bal == {
@@ -110,8 +110,8 @@ async def test_balances_solo_btc_y_btcb2(venue, api, limiter):
 
 
 @pytest.mark.spec("RF-08")
-class TestOrdenes:
-    async def test_abiertas(self, venue, api, limiter):
+class TestOrders:
+    async def test_open_orders_listed(self, venue, api, limiter):
         orders = await venue.open_orders()
         assert orders == [
             Order(
@@ -127,7 +127,7 @@ class TestOrdenes:
         assert (params["status"], params["pair"]) == ("active", "BTCB2_BTC")
         assert limiter.kinds == ["private"]
 
-    async def test_enviar_limite_con_numeros_exactos(self, venue, api, limiter):
+    async def test_send_limit_with_exact_numbers(self, venue, api, limiter):
         order = await venue.place_limit(req())
         body = api.calls.last.request.content.decode()
         assert body == '{"pair":"BTCB2_BTC","side":"buy","quantity":0.01,"price":0.00725000}'
@@ -137,7 +137,7 @@ class TestOrdenes:
         )  # fmt: skip
         assert limiter.kinds == ["order"]
 
-    async def test_rechazo_del_venue(self, venue, api):
+    async def test_venue_rejection(self, venue, api):
         api.post(f"{API}/order").respond(
             400,
             json={
@@ -149,7 +149,7 @@ class TestOrdenes:
         with pytest.raises(VenueError, match="PRICE_OUT_OF_BAND"):
             await venue.place_limit(req())
 
-    async def test_cancelar(self, venue, api, limiter):
+    async def test_cancel_order(self, venue, api, limiter):
         await venue.cancel("ORD-TEST0005-EEEE0005")
         sent = api.calls.last.request
         assert (sent.method, sent.url.path) == (
@@ -158,7 +158,7 @@ class TestOrdenes:
         )
         assert limiter.kinds == ["cancel"]
 
-    async def test_cancelar_todas_intenta_todas_aunque_falle_una(self, venue, api):
+    async def test_cancel_all_tries_all_even_if_one_fails(self, venue, api):
         def cancel(request):
             if request.url.path.endswith("ORD-TEST0002-BBBB0002"):
                 return httpx.Response(400, json={"success": False, "error": "Order not found"})
@@ -176,7 +176,7 @@ class TestOrdenes:
 
 @pytest.mark.spec("RF-09")
 class TestFills:
-    async def test_trades_propios_del_par(self, venue, api):
+    async def test_own_trades_of_the_pair(self, venue, api):
         fills = await venue.fetch_fills()
         assert [f.trade_id for f in fills] == [
             "TRD-TEST0001-00000001", "AMM-TEST0002-00000002", "TRD-TEST0003-00000003",
@@ -187,18 +187,18 @@ class TestFills:
         )  # fmt: skip
         assert (fills[1].fee, fills[1].fee_asset) == (D("0"), None)  # AMM: no fee
 
-    async def test_estado_final_desde_el_historial(self, venue, api):
+    async def test_final_state_from_history(self, venue, api):
         final = await venue.fetch_final("ORD-TEST0001-AAAA0001")
         assert final is not None and (final.status, final.filled) == ("cancelled", D("0"))
         assert await venue.fetch_final("ORD-NO-EXISTE") is None
 
-    async def test_el_historial_no_mezcla_otros_pares(self, venue, api):
+    async def test_history_mixes_no_other_pairs(self, venue, api):
         assert await venue.fetch_final("ORD-TEST0009-USDC0009") is None
 
 
 @pytest.mark.spec("RF-09", "RNF-04", "RNF-03")
-class TestStreamPrivado:
-    async def test_estado_y_ordenes_abiertas(self, venue, api):
+class TestPrivateStream:
+    async def test_state_and_open_orders(self, venue, api):
         async with aclosing(venue.private_stream()) as stream:
             events = [await anext(stream) for _ in range(3)]
         state = events[0]
@@ -209,7 +209,7 @@ class TestStreamPrivado:
             "ORD-TEST0001-AAAA0001",
         ]
 
-    async def test_respeta_cadencia_y_limitador(self, limiter, api):
+    async def test_respects_rate_and_limiter(self, limiter, api):
         async with httpx.AsyncClient() as http:
             venue = make(http, limiter, every=0.1)
             async with aclosing(venue.private_stream()) as stream:
@@ -219,7 +219,7 @@ class TestStreamPrivado:
         assert 3 <= len(polls) <= 5  # one at start and one every 0.1 s
         assert set(limiter.kinds) == {"private"}
 
-    async def test_fill_nuevo_entre_refrescos(self, limiter, api):
+    async def test_new_fill_between_refreshes(self, limiter, api):
         async with httpx.AsyncClient() as http:
             venue = make(http, limiter, every=0.05)
             async with aclosing(venue.private_stream()) as stream:
@@ -235,7 +235,7 @@ class TestStreamPrivado:
                         fill = await anext(stream)
         assert fill.trade_id == "TRD-TEST0099-00000099"
 
-    async def test_la_orden_enviada_conserva_su_client_id(self, limiter, api):
+    async def test_sent_order_keeps_client_id(self, limiter, api):
         """Neoxa keeps no client_id: the stream takes it from what the terminal sent."""
         placed = json.loads(fixture("order_placed.json"))
         placed["order"]["order_id"] = "ORD-TEST0001-AAAA0001"
@@ -248,7 +248,7 @@ class TestStreamPrivado:
         mine = next(e for e in events if getattr(e, "order_id", "") == "ORD-TEST0001-AAAA0001")
         assert mine.client_id == "t-abc123"
 
-    async def test_sin_keys_no_hay_stream(self, limiter):
+    async def test_no_keys_no_stream(self, limiter):
         venue = NeoxaVenue("BTCB2_BTC", limiter)
         with pytest.raises(ReadOnlyError):
             async with aclosing(venue.private_stream()) as stream:
@@ -256,13 +256,13 @@ class TestStreamPrivado:
 
 
 @pytest.mark.spec("RNF-12")
-class TestEnvioIncierto:
-    async def test_timeout_tras_conectar(self, venue, api):
+class TestUncertainSend:
+    async def test_timeout_after_connecting(self, venue, api):
         api.post(f"{API}/order").mock(side_effect=httpx.ReadTimeout("t"))
         with pytest.raises(UncertainError):
             await venue.place_limit(req())
 
-    async def test_sin_conectar_no_es_incierto(self, venue, api):
+    async def test_unconnected_is_not_uncertain(self, venue, api):
         api.post(f"{API}/order").mock(side_effect=httpx.ConnectError("c"))
         with pytest.raises(httpx.ConnectError):
             await venue.place_limit(req())
@@ -272,12 +272,12 @@ class TestEnvioIncierto:
         with pytest.raises(UncertainError, match="503"):
             await venue.place_limit(req())
 
-    async def test_2xx_sin_orden(self, venue, api):
+    async def test_2xx_without_order(self, venue, api):
         api.post(f"{API}/order").respond(json={"success": True})
         with pytest.raises(UncertainError):
             await venue.place_limit(req())
 
-    async def test_rechazo_claro(self, venue, api):
+    async def test_clear_rejection(self, venue, api):
         api.post(f"{API}/order").respond(400, json={"success": False, "error": "no"})
         with pytest.raises(VenueError) as info:
             await venue.place_limit(req())
@@ -285,11 +285,11 @@ class TestEnvioIncierto:
 
 
 @pytest.mark.spec("RNF-12")
-class TestOrdenesRecientes:
-    def test_no_guarda_el_client_id(self, venue):
+class TestRecentOrders:
+    def test_does_not_keep_client_id(self, venue):
         assert venue.keeps_client_id is False  # PA-09
 
-    async def test_activas_e_historial_del_par(self, venue, api, limiter):
+    async def test_active_and_history_of_the_pair(self, venue, api, limiter):
         orders = await venue.recent_orders(NOW - 60_000)
         assert [(o.order_id, o.status) for o in orders] == [
             ("ORD-TEST0002-BBBB0002", "partial"),
@@ -301,7 +301,7 @@ class TestOrdenesRecientes:
 
 
 @pytest.mark.spec("RF-24", "RNF-10")
-async def test_balances_con_token_de_fee(limiter, api):
+async def test_balances_with_fee_token(limiter, api):
     async with httpx.AsyncClient() as http:
         venue = NeoxaVenue(
             "BTCB2_BTC", limiter, http=http, credentials=CREDS, clock=lambda: NOW,

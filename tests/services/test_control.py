@@ -94,11 +94,11 @@ async def rig(tmp_path):
 
 
 @pytest.mark.spec("RF-31")
-class TestConectar:
-    async def test_socket_solo_para_el_usuario(self, rig):
+class TestConnect:
+    async def test_socket_user_only(self, rig):
         assert stat.S_IMODE(rig.path.stat().st_mode) == 0o600
 
-    async def test_hola_y_foto(self, rig):
+    async def test_hello_and_snapshot(self, rig):
         c = await Client.open(rig.path)
         hello = await c.recv()
         assert hello["type"] == "hello" and hello["mode"] == "dry-run" and hello["version"]
@@ -109,17 +109,17 @@ class TestConectar:
         assert snap.can_trade == {"nk": True, "nx": False}
         await c.close()
 
-    async def test_varias_conexiones_a_la_vez(self, rig):
+    async def test_several_connections_at_once(self, rig):
         a, b = await Client.open(rig.path), await Client.open(rig.path)
         assert (await a.recv())["type"] == (await b.recv())["type"] == "hello"
         await a.close()
         await b.close()
 
-    async def test_al_cerrar_borra_el_socket(self, tmp_path, rig):
+    async def test_closing_removes_socket(self, tmp_path, rig):
         await rig.server.aclose()
         assert not rig.path.exists()
 
-    async def test_un_socket_viejo_se_reemplaza(self, tmp_path, rig):
+    async def test_old_socket_replaced(self, tmp_path, rig):
         """The daemon holds the lock: a leftover socket belongs to a dead one."""
         await rig.server.aclose()
         rig.path.write_text("viejo")
@@ -130,8 +130,8 @@ class TestConectar:
 
 
 @pytest.mark.spec("RF-31", "RF-18")
-class TestOrdenes:
-    async def test_bot_on_y_off(self, rig):
+class TestOrders:
+    async def test_bot_on_and_off(self, rig):
         c = await Client.open(rig.path)
         await c.send({"cmd": "bot_on"})
         reply = await c.until("reply")
@@ -145,7 +145,7 @@ class TestOrdenes:
         assert rig.bot.state.status == "off"
         await c.close()
 
-    async def test_bot_on_rechazado_dice_por_que(self, rig):
+    async def test_refused_bot_on_says_why(self, rig):
         rig.bot._refusal = "en live el bot solo se arma con bot.enabled = true"
         c = await Client.open(rig.path)
         await c.send({"cmd": "bot_on"})
@@ -162,7 +162,7 @@ class TestOrdenes:
             b"no es json\n",
         ],
     )
-    async def test_lo_demas_se_rechaza_y_la_conexion_sigue(self, rig, raw):
+    async def test_rest_rejected_and_connection_stays(self, rig, raw):
         c = await Client.open(rig.path)
         await c.send(raw)
         assert (await c.until("error"))["error"]
@@ -174,8 +174,8 @@ class TestOrdenes:
 
 
 @pytest.mark.spec("RF-31")
-class TestEventos:
-    async def test_avisos_y_fallos(self, rig):
+class TestEvents:
+    async def test_notices_and_faults(self, rig):
         c = await Client.open(rig.path)
         await c.until("state")
         rig.engine._say("⚠ pierna colgada en d-1", error=True)
@@ -185,14 +185,14 @@ class TestEventos:
         assert "bug" in (await c.until("fault"))["message"]
         await c.close()
 
-    async def test_el_estado_se_repite_aunque_no_cambie(self, rig):
+    async def test_state_repeats_even_if_unchanged(self, rig):
         """The bar shows ages: the snapshot arrives at least every `every_s`."""
         c = await Client.open(rig.path)
         await c.until("state")
         await c.until("state", timeout=0.5)
         await c.close()
 
-    async def test_un_cliente_que_no_lee_se_desconecta(self, tmp_path):
+    async def test_non_reading_client_disconnected(self, tmp_path):
         """Its buffer fills, so does its queue, and it gets closed; the other goes on."""
         s = Rig(tmp_path)
         engine = Engine(s.hub, mode="dry-run", orders=s.orders, journal=s.journal)
@@ -224,7 +224,7 @@ class TestEventos:
 
 
 @pytest.mark.spec("RF-31", "CA-07")
-async def test_ningun_secreto_sale_por_el_socket(tmp_path):
+async def test_no_secret_leaves_by_socket(tmp_path):
     canary = Secret("k_CANARIO_socket")
     s = Rig(tmp_path)
     journal = Journal(tmp_path / "j", "dry-run", Redactor([canary]))

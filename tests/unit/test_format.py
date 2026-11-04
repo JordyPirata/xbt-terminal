@@ -14,51 +14,51 @@ from xbt_terminal.ui.format import (
 
 @pytest.mark.spec("RF-25")
 class TestSats:
-    def test_con_signo_por_defecto(self):
+    def test_signed_by_default(self):
         assert fmt_sats(D("0.00001234")) == "+1234"
         assert fmt_sats(D("-0.00000005")) == "-5"
         assert fmt_sats(D("0")) == "+0"
 
-    def test_sin_signo(self):
+    def test_unsigned(self):
         assert fmt_sats(D("0.00001234"), signed=False) == "1234"
 
-    def test_redondea_a_sats_enteros(self):
+    def test_rounds_to_whole_sats(self):
         assert fmt_sats(D("0.000000016")) == "+2"
 
-    def test_sin_valor(self):
+    def test_no_value(self):
         assert fmt_sats(None) == "—"
 
 
 @pytest.mark.spec("RF-29")
-def test_sats_con_miles_y_unidad():
+def test_sats_with_thousands_and_unit():
     assert fmt_sats_grouped(D("0.01234567")) == "1 234 567 sats"
     assert fmt_sats_grouped(D("0.00000999")) == "999 sats"
     assert fmt_sats_grouped(None) == "—"
 
 
 @pytest.mark.spec("RF-25", "RF-29")
-class TestPorcentaje:
-    def test_dos_decimales_con_signo_por_defecto(self):
+class TestPercentage:
+    def test_two_decimals_signed_by_default(self):
         assert fmt_pct(D("1.234")) == "+1.23 %"
         assert fmt_pct(D("-0.5")) == "-0.50 %"
 
-    def test_un_decimal_sin_signo(self):
+    def test_unsigned_decimal(self):
         assert fmt_pct(D("27.66"), decimals=1, signed=False) == "27.7 %"
 
-    def test_sin_valor(self):
+    def test_no_value(self):
         assert fmt_pct(None) == "—"
         assert fmt_pct(None, decimals=1, signed=False) == "—"
 
 
 @pytest.mark.spec("RF-29")
-def test_parte_del_inventario():
+def test_share_of_inventory():
     assert fmt_share(D("27.66")) == "27.7 %"
     assert fmt_share(D("-1")) == "-1.0 %"
     assert fmt_share(None) == "—"
 
 
 @pytest.mark.spec("RF-04")
-def test_precio_sats_y_porcentaje():
+def test_price_sats_and_percentage():
     assert (
         fmt_btc_sats_pct(D("0.00000123"), D("0.0385"), signed=True)
         == "+0.00000123 · +123 sats · +0.04 %"

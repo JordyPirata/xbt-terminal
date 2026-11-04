@@ -33,7 +33,7 @@ def total_open(rig):
 
 @pytest.mark.spec("RF-05")
 class TestBalances:
-    async def test_por_venue_e_inventario_total(self, tmp_path):
+    async def test_per_venue_and_total_inventory(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -47,7 +47,7 @@ class TestBalances:
             assert "BTC 0.01000000" in title and "XBT 1.00000000" in title
             assert "valor 0.01726000 BTC" in title  # + 0.005 + 0.5 × 0.00727 on Neoxa
 
-    async def test_saldo_con_mas_decimales_que_el_lote(self, tmp_path):
+    async def test_balance_with_more_decimals_than_lot(self, tmp_path):
         """NonKYC trades BTCB2 with 4 decimals, but the real balance may have 8."""
         rig = Rig(tmp_path)
         rig.venues["nk"]._fixed["BTCB2"] = Balance("BTCB2", D("0.09040708"))
@@ -56,7 +56,7 @@ class TestBalances:
             panel = rig.app.query_one(BalancesPanel)
             await until(pilot, lambda: "XBT 0.09040708" in panel.text)
 
-    async def test_una_orden_mueve_el_saldo_a_en_ordenes(self, tmp_path):
+    async def test_order_moves_balance_to_in_orders(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -65,7 +65,7 @@ class TestBalances:
             await place(rig, "nx", side="sell", qty="0.2", price="0.00730000")
             await until(pilot, lambda: "XBT 0.30000000 + 0.20000000" in panel.text, timeout=3)
 
-    async def test_un_fill_refresca_enseguida(self, tmp_path):
+    async def test_fill_refreshes_at_once(self, tmp_path):
         """RF-05: after a fill there is no waiting for the 10 s refresh."""
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -77,14 +77,14 @@ class TestBalances:
             await until(pilot, lambda: "XBT 0.51000000 ·" in panel.text, timeout=1.5)
             assert "+ 0.00000000" not in panel.text  # no orders, not shown (D-67)
 
-    async def test_solo_lectura_sin_panel(self, tmp_path):
+    async def test_read_only_no_panel(self, tmp_path):
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         app = local_app(MarketHub(feeds), book_levels=15, timeframe="1m", mode="read-only")
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
             assert not app.query_one(BalancesPanel).display
 
-    async def test_cabe_con_todo_a_160x45(self, tmp_path):
+    async def test_fits_with_everything_at_160x45(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -95,8 +95,8 @@ class TestBalances:
 
 
 @pytest.mark.spec("RF-08")
-class TestOrdenesAbiertas:
-    async def test_o_abre_la_lista(self, tmp_path):
+class TestOpenOrders:
+    async def test_o_opens_list(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -110,7 +110,7 @@ class TestOrdenesAbiertas:
             await pilot.press("escape")
             await until(pilot, lambda: not isinstance(rig.app.screen, OrdersScreen))
 
-    async def test_orders_de_un_venue(self, tmp_path):
+    async def test_orders_of_a_venue(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -121,7 +121,7 @@ class TestOrdenesAbiertas:
             await until(pilot, lambda: isinstance(rig.app.screen, OrdersScreen))
             assert rig.app.screen.order_ids == [b.order_id]
 
-    async def test_cancelar_la_seleccionada_con_confirmacion(self, tmp_path):
+    async def test_cancel_selected_with_confirmation(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -138,7 +138,7 @@ class TestOrdenesAbiertas:
             assert await rig.venues["nk"].open_orders() == []
             assert rig.events()[-2:] == ["cancel_sent", "cancel_ack"]
 
-    async def test_la_lista_se_actualiza_sola(self, tmp_path):
+    async def test_list_updates_by_itself(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -150,8 +150,8 @@ class TestOrdenesAbiertas:
 
 
 @pytest.mark.spec("RF-08", "CA-05")
-class TestCancelarTodo:
-    async def test_x_cancela_todo_tras_confirmar(self, tmp_path):
+class TestCancelAll:
+    async def test_x_cancels_all_after_confirming(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -167,7 +167,7 @@ class TestCancelarTodo:
                 assert await venue.open_orders() == []
 
     @pytest.mark.parametrize("key", ["n", "escape", "enter"])
-    async def test_por_defecto_no_cancela(self, tmp_path, key):
+    async def test_does_not_cancel_by_default(self, tmp_path, key):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -179,7 +179,7 @@ class TestCancelarTodo:
             await until(pilot, lambda: "no se canceló nada" in rig.app.last_message)
             assert len(await rig.venues["nk"].open_orders()) == 1
 
-    async def test_comandos_cancel(self, tmp_path):
+    async def test_cancel_commands(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -196,7 +196,7 @@ class TestCancelarTodo:
             await until(pilot, lambda: "cancelado" in rig.app.last_message, timeout=3)
             assert [len(await v.open_orders()) for v in rig.venues.values()] == [0, 0]
 
-    async def test_sin_ordenes_lo_dice_sin_dialogo(self, tmp_path):
+    async def test_no_orders_says_so_without_dialog(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -206,7 +206,7 @@ class TestCancelarTodo:
 
 
 @pytest.mark.spec("RF-07")
-async def test_d_empieza_una_orden_doble(tmp_path):
+async def test_d_starts_a_double_order(tmp_path):
     rig = Rig(tmp_path)
     async with rig.app.run_test(size=(160, 45)) as pilot:
         await pilot.press("d")
@@ -215,7 +215,7 @@ async def test_d_empieza_una_orden_doble(tmp_path):
 
 
 @pytest.mark.spec("RF-06", "RF-08")
-async def test_las_teclas_entre_corchetes_se_ven(tmp_path):
+async def test_bracketed_keys_are_visible(tmp_path):
     """Without markup=False, Rich eats "[y]" and the dialog does not say how to confirm."""
     from textual.widgets import Static
 
@@ -240,7 +240,7 @@ async def test_las_teclas_entre_corchetes_se_ven(tmp_path):
 @pytest.mark.parametrize(
     "text", ["login rechazado [1002]", "campo [red] fin", "suelto [/bold] fin"]
 )
-async def test_un_mensaje_con_corchetes_se_ve_tal_cual(tmp_path, text):
+async def test_bracketed_message_shown_as_is(tmp_path, text):
     """Venue errors may bring brackets: with markup, "[red]" vanishes and "[/bold]" raises
     MarkupError when drawing the notice."""
     from textual.content import Content

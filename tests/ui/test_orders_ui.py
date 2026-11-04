@@ -76,8 +76,8 @@ async def type_command(pilot, app, text):
 
 
 @pytest.mark.spec("RF-06", "RF-13")
-class TestOrdenConConfirmacion:
-    async def test_dialogo_con_nocional_y_confirmar(self, tmp_path):
+class TestOrderWithConfirmation:
+    async def test_dialog_with_notional_and_confirm(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -93,7 +93,7 @@ class TestOrdenConConfirmacion:
             assert rig.events() == ["order_sent", "order_ack"]
 
     @pytest.mark.spec("RF-17")
-    async def test_cantidad_porcentual(self, tmp_path):
+    async def test_percent_quantity(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -103,7 +103,7 @@ class TestOrdenConConfirmacion:
             assert "25 % de 0.00500000 BTC en NonKYC" in rig.app.screen.text
 
     @pytest.mark.parametrize("key", ["n", "escape", "enter"])
-    async def test_por_defecto_no_se_envia(self, tmp_path, key):
+    async def test_does_not_send_by_default(self, tmp_path, key):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -114,7 +114,7 @@ class TestOrdenConConfirmacion:
             assert rig.app.last_message == "orden cancelada, no se envió nada"
             assert await rig.venue.open_orders() == [] and rig.events() == []
 
-    async def test_rechazo_local_sin_dialogo(self, tmp_path):
+    async def test_local_rejection_without_dialog(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -124,7 +124,7 @@ class TestOrdenConConfirmacion:
             assert "25 % del inventario total" in rig.app.last_message
             assert rig.events() == ["reject_local"]
 
-    async def test_comando_mal_escrito(self, tmp_path):
+    async def test_malformed_command(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -132,7 +132,7 @@ class TestOrdenConConfirmacion:
             await until(pilot, lambda: "zz" in rig.app.last_message)
             assert rig.events() == []
 
-    async def test_el_campo_se_vacia_tras_enviar(self, tmp_path):
+    async def test_field_empties_after_sending(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -142,22 +142,22 @@ class TestOrdenConConfirmacion:
 
 
 @pytest.mark.spec("RF-06", "RF-03")
-class TestOtrosComandos:
-    async def test_tf_cambia_el_timeframe(self, tmp_path):
+class TestOtherCommands:
+    async def test_tf_changes_timeframe(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await type_command(pilot, rig.app, "tf 1h")
             await until(pilot, lambda: rig.app.timeframe == "1h")
 
     @pytest.mark.parametrize("key,prefix", [("b", "buy "), ("s", "sell ")])
-    async def test_atajos_b_y_s(self, tmp_path, key, prefix):
+    async def test_shortcuts_b_and_s(self, tmp_path, key, prefix):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.press(key)
             cmd = rig.app.query_one(CommandLine)
             await until(pilot, lambda: cmd.has_focus and cmd.value == prefix)
 
-    async def test_teclear_tras_el_atajo_no_borra_el_prefijo(self, tmp_path):
+    async def test_typing_after_shortcut_keeps_prefix(self, tmp_path):
         """Textual's select_on_focus replaced "buy " with the first key (D-18)."""
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -166,7 +166,7 @@ class TestOtrosComandos:
             await pilot.press("n", "k")
             await until(pilot, lambda: rig.app.query_one(CommandLine).value == "buy nk")
 
-    async def test_clic_en_la_linea_con_texto_y_teclear_no_lo_borra(self, tmp_path):
+    async def test_click_on_line_with_text_and_typing_keeps_it(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             cmd = rig.app.query_one(CommandLine)
@@ -176,7 +176,7 @@ class TestOtrosComandos:
             await pilot.press("end", "space", "1")
             await until(pilot, lambda: cmd.value == "buy nk 0.01 1")
 
-    async def test_escape_suelta_el_campo_y_vuelven_los_atajos(self, tmp_path):
+    async def test_escape_releases_field_and_shortcuts_return(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.press("b")
@@ -186,8 +186,8 @@ class TestOtrosComandos:
 
 
 @pytest.mark.spec("RF-13")
-class TestSoloLectura:
-    async def test_sin_keys_no_hay_comandos_de_orden(self, tmp_path):
+class TestReadOnly:
+    async def test_no_keys_no_order_commands(self, tmp_path):
         rig = Rig(tmp_path, mode="read-only")
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
@@ -199,7 +199,7 @@ class TestSoloLectura:
 
 
 @pytest.mark.spec("RF-03")
-async def test_al_arrancar_los_atajos_funcionan_en_dry_run(tmp_path):
+async def test_shortcuts_work_at_startup_in_dry_run(tmp_path):
     """The command line must not keep focus at startup."""
     rig = Rig(tmp_path)
     async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -210,7 +210,7 @@ async def test_al_arrancar_los_atajos_funcionan_en_dry_run(tmp_path):
 
 
 @pytest.mark.spec("RNF-11")
-async def test_el_dialogo_no_espera_a_la_red(tmp_path):
+async def test_dialog_does_not_wait_for_network(tmp_path):
     """D-18: with the account current, from Enter to dialog without slow requests."""
     import time
 
@@ -250,8 +250,8 @@ def lose_reply(venue, *, create=True):
 
 
 @pytest.mark.spec("RNF-12")
-class TestEnvioIncierto:
-    async def test_aviso_en_rojo_y_en_la_barra_mientras_siga_incierta(self, tmp_path):
+class TestUncertainSend:
+    async def test_red_notice_and_bar_while_uncertain(self, tmp_path):
         rig = Rig(tmp_path, reconcile_every_s=60)
         lose_reply(rig.venue, create=False)
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -264,7 +264,7 @@ class TestEnvioIncierto:
             await until(pilot, lambda: "1 incierta" in rig.app.query_one(StatusBar).text)
             assert rig.events() == ["order_sent", "order_unknown"]
 
-    async def test_al_reconciliarla_se_avisa_y_sale_de_la_barra(self, tmp_path):
+    async def test_reconciling_notifies_and_leaves_the_bar(self, tmp_path):
         rig = Rig(tmp_path, reconcile_every_s=0.05)
         lose_reply(rig.venue)
         async with rig.app.run_test(size=(160, 45)) as pilot:

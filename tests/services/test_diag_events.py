@@ -18,17 +18,17 @@ def messages(caplog, level=logging.DEBUG):
 
 
 @pytest.mark.spec("RNF-19")
-async def test_reconexion_del_ws(caplog):
+async def test_ws_reconnection(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
     venue = FakeVenue([WS_BOOK, "drop"], [WS_BOOK])
     await run(venue, lambda evs: count(evs, ("ws", "up")) == 2)
     text = "\n".join(messages(caplog))
     assert "Fake: WS down" in text and "caída" in text and "retrying in" in text
-    assert "Fake: WS conectado" in text
+    assert "Fake: WS connected" in text
 
 
 @pytest.mark.spec("RNF-19")
-async def test_respaldo_rest(caplog):
+async def test_rest_fallback(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
     venue = FakeVenue("fail", "fail", "fail", [WS_BOOK])
     await run(venue, lambda evs: count(evs, ("ws", "up")) == 1)
@@ -38,7 +38,7 @@ async def test_respaldo_rest(caplog):
 
 
 @pytest.mark.spec("RNF-19")
-async def test_carga_del_mercado(caplog):
+async def test_market_load(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
     feeds = {"nk": FakeFeed("nk", fail_market=1), "nx": FakeFeed("nx")}
     async with Hub(**feeds) as h:
@@ -49,18 +49,18 @@ async def test_carga_del_mercado(caplog):
 
 
 @pytest.mark.spec("RNF-19")
-async def test_cada_fallo_con_traceback(caplog):
+async def test_each_fault_with_traceback(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
     try:
         raise KeyError("bug")
     except KeyError as exc:
         Faults().report("market", exc, venue="nx")
     (record,) = [r for r in caplog.records if r.levelno == logging.ERROR]
-    assert "fallo en market (nx)" in record.getMessage() and record.exc_info is not None
+    assert "fault in market (nx)" in record.getMessage() and record.exc_info is not None
 
 
 @pytest.mark.spec("RNF-19")
-async def test_errores_de_la_cuenta_una_vez_por_racha(caplog):
+async def test_account_errors_once_per_streak(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
     account = AccountService({})  # no journal: the diagnostic log notes anyway
     for _ in range(3):

@@ -35,8 +35,8 @@ async def settled(rig):
 
 
 @pytest.mark.spec("RF-11", "RF-25")
-class TestPonerseAlDia:
-    async def test_una_fee_corregida_mientras_estaba_parada(self, tmp_path):
+class TestCatchUp:
+    async def test_fee_corrected_while_stopped(self, tmp_path):
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
@@ -50,7 +50,7 @@ class TestPonerseAlDia:
             }  # fmt: skip
             assert ("nk", "fill") in rig.seen
 
-    async def test_la_misma_fee_no_apunta_nada(self, tmp_path):
+    async def test_same_fee_notes_nothing(self, tmp_path):
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
@@ -59,7 +59,7 @@ class TestPonerseAlDia:
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
             assert len(rig.lines()) == n
 
-    async def test_la_ultima_correccion_es_la_que_cuenta(self, tmp_path):
+    async def test_last_correction_counts(self, tmp_path):
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
@@ -73,7 +73,7 @@ class TestPonerseAlDia:
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
             assert len(rig.lines()) == n
 
-    async def test_un_fill_nuestro_mientras_estaba_parada(self, tmp_path):
+    async def test_our_fill_while_stopped(self, tmp_path):
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
@@ -85,7 +85,7 @@ class TestPonerseAlDia:
             assert line["data"]["trade_id"] == "f-2" and line["data"]["recovered"] is True
             assert line["data"]["trade_ts"] == T0 + 7
 
-    async def test_lo_ajeno_no_se_apunta(self, tmp_path):
+    async def test_foreign_ones_not_noted(self, tmp_path):
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
@@ -94,7 +94,7 @@ class TestPonerseAlDia:
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
             assert len(rig.lines()) == n
 
-    async def test_en_dry_run_no(self, tmp_path):
+    async def test_not_in_dry_run(self, tmp_path):
         rig = Rig(tmp_path)
         rig.journal = Journal(rig.logs, "dry-run", Redactor([]))
         rig.account = AccountService(
@@ -108,7 +108,7 @@ class TestPonerseAlDia:
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
             assert len(rig.lines()) == n
 
-    async def test_un_pasado_no_es_un_fill_para_nadie_mas(self, tmp_path):
+    async def test_past_is_no_fill_for_anyone_else(self, tmp_path):
         async with Rig(tmp_path) as rig:
             seen = []
             rig.account.subscribe_events(lambda vid, ev: seen.append(ev))

@@ -35,13 +35,13 @@ def imported_layers(layer: str) -> dict[str, set[str]]:
 
 
 @pytest.mark.spec("RNF-09", "RNF-22")
-def test_core_solo_importa_core():
+def test_core_only_imports_core():
     bad = {f: deps - {"core"} for f, deps in imported_layers("core").items() if deps - {"core"}}
     assert bad == {}
 
 
 @pytest.mark.spec("RNF-09")
-def test_adapters_no_importa_services_ni_ui():
+def test_adapters_import_neither_services_nor_ui():
     bad = {
         f: deps & {"services", "ui"}
         for f, deps in imported_layers("adapters").items()
@@ -51,7 +51,7 @@ def test_adapters_no_importa_services_ni_ui():
 
 
 @pytest.mark.spec("RNF-09")
-def test_ui_no_importa_adapters():
+def test_ui_does_not_import_adapters():
     bad = {f for f, deps in imported_layers("ui").items() if "adapters" in deps}
     assert bad == set()
 
@@ -73,7 +73,7 @@ def services_imported(layer: str) -> dict[str, set[str]]:
 
 
 @pytest.mark.spec("RF-31")
-def test_ui_solo_importa_el_cliente_del_daemon():
+def test_ui_only_imports_daemon_client():
     """D-66: the screen is the client; from `services` only the remote face and the socket
     format, never what talks to venues."""
     bad = {

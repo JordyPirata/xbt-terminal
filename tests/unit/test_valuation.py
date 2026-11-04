@@ -53,8 +53,8 @@ def simple(at, total):
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestMuestra:
-    def test_total_y_desglose_por_venue(self):
+class TestSample:
+    def test_total_and_breakdown_per_venue(self):
         balances = {"nk": bal("0.1", "2"), "nx": bal("0.2", "4")}
         mids = {"nk": D("0.005"), "nx": D("0.006")}
         s = sample(inventory(balances, mids), mids, T0, EVERY)
@@ -66,17 +66,17 @@ class TestMuestra:
             VenueValue("nx", D("0.2"), D("4"), D("0.006"), D("0.224")),
         )
 
-    def test_sin_mid_no_hay_muestra(self):
+    def test_no_mid_no_sample(self):
         balances = {"nk": bal("0.1", "2"), "nx": bal("0.2", "4")}
         mids = {"nk": D("0.005"), "nx": None}
         assert sample(inventory(balances, mids), mids, T0, EVERY) is None
 
-    def test_sin_saldo_no_hay_muestra(self):
+    def test_no_balance_no_sample(self):
         mids = {"nk": D("0.005"), "nx": D("0.006")}
         inv = inventory({"nk": bal("0.1", "2"), "nx": None}, mids)
         assert sample(inv, mids, T0, EVERY) is None
 
-    def test_ida_y_vuelta_por_el_journal(self):
+    def test_round_trip_through_journal(self):
         balances = {"nk": bal("0.1", "2"), "nx": bal("0.2", "4")}
         mids = {"nk": D("0.005"), "nx": D("0.006")}
         s = sample(inventory(balances, mids), mids, T0, EVERY)
@@ -91,8 +91,8 @@ class TestMuestra:
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestSerie:
-    def test_solo_las_del_rango_y_en_orden(self):
+class TestSeries:
+    def test_only_those_in_range_in_order(self):
         rows = [
             value_row(T0 - 2 * EVERY, "1.0"),
             value_row(T0, "1.1"),
@@ -103,26 +103,26 @@ class TestSerie:
         assert [(s.ts, s.value) for s in got] == [(T0, D("1.1")), (T0 + EVERY, D("1.2"))]
         assert bad == 0
 
-    def test_una_fila_rota_se_cuenta(self):
+    def test_broken_row_counted(self):
         broken = vrow(T0, {"at": T0, "value": "nan?", "venues": {}})
         got, bad = series([broken, value_row(T0 + EVERY, "1")], None)
         assert len(got) == 1 and bad == 1
 
-    def test_viaja_en_el_report(self):
+    def test_travels_in_the_report(self):
         rows = [*plain_double("d-1", T0), value_row(T0, "1.5", nk="1", nx="0.5")]
         report = compute(rows, since_ms=T0)
         assert [s.value for s in report.values] == [D("1.5")]
         assert report.values[0].venues[0] == VenueValue("nk", D(1), D(0), D("0.005"), D(1))
         assert [d.id for d in report.doubles] == ["d-1"]
 
-    def test_fila_rota_suma_a_las_malas_del_resumen(self):
+    def test_broken_row_adds_to_summary_bad_ones(self):
         report = compute([row("value", T0, value="x")])
         assert report.summary.bad_rows == 1
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestResumen:
-    def test_primero_ultimo_cambio_maximo_minimo(self):
+class TestSummary:
+    def test_first_last_change_max_min(self):
         got = summarize(
             tuple(simple(T0 + i * EVERY, v) for i, v in enumerate(("1.0", "1.3", "0.8", "1.1")))
         )
@@ -133,28 +133,28 @@ class TestResumen:
         assert (got.high, got.low, got.count) == (D("1.3"), D("0.8"), 4)
         assert (got.since, got.until) == (T0, T0 + 3 * EVERY)
 
-    def test_sin_muestras(self):
+    def test_no_samples(self):
         assert summarize(()) is None
 
-    def test_primero_a_cero_sin_porcentaje(self):
+    def test_first_at_zero_without_percent(self):
         got = summarize((simple(T0, "0"), simple(T0 + EVERY, "1")))
         assert got is not None and got.change_pct is None
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestHuecos:
-    def test_un_hueco_de_mas_de_dos_intervalos_corta(self):
+class TestGaps:
+    def test_gap_over_two_intervals_cuts(self):
         s = [simple(T0 + i * EVERY, "1") for i in (0, 1, 2, 6, 7)]
         assert [len(seg) for seg in segments(s)] == [3, 2]
 
-    def test_dos_intervalos_justos_no_cortan(self):
+    def test_exactly_two_intervals_do_not_cut(self):
         s = [simple(T0, "1"), simple(T0 + 2 * EVERY, "1")]
         assert [len(seg) for seg in segments(s)] == [2]
 
-    def test_sin_muestras_sin_tramos(self):
+    def test_no_samples_no_stretches(self):
         assert segments(()) == []
 
-    def test_reducir_conserva_extremos_y_tamano(self):
+    def test_reduce_keeps_ends_and_size(self):
         s = tuple(simple(T0 + i * EVERY, str(i)) for i in range(1000))
         out = thin(s, 300)
         assert len(out) <= 300
@@ -171,19 +171,19 @@ def split(at, nk, nx):
 
 
 @pytest.mark.spec("RF-32", "CA-17")
-class TestUltimoTramo:
-    def test_desde_el_ultimo_salto_del_total(self):
+class TestLastStretch:
+    def test_from_the_last_total_jump(self):
         s = [
             simple(T0 + i * EVERY, v)
             for i, v in enumerate(("1.0", "1.001", "0.5", "0.501", "1.0", "1.002"))
         ]
         assert last_stretch(s) == tuple(s[4:])
 
-    def test_sin_saltos_es_todo(self):
+    def test_no_jumps_means_everything(self):
         s = [simple(T0 + i * EVERY, v) for i, v in enumerate(("1.0", "1.04", "1.0"))]
         assert last_stretch(s) == tuple(s)
 
-    def test_un_salto_por_venue_aunque_el_total_no_cambie(self):
+    def test_jump_per_venue_even_if_total_unchanged(self):
         # what left nk reaches nx in the same sample: the total does not move
         s = [
             split(T0, "0.6", "0.4"),
@@ -192,5 +192,5 @@ class TestUltimoTramo:
         ]
         assert last_stretch(s) == tuple(s[1:])
 
-    def test_vacio(self):
+    def test_empty(self):
         assert last_stretch(()) == ()

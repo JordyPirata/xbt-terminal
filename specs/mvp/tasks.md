@@ -245,21 +245,4 @@ exista, no se construye nada de ellas.
 - Tests: con semilla fija, la secuencia de esperas y cantidades es la esperada;
   la cantidad nunca baja del lote ni del mínimo del otro venue.
 
-### T-91 Limpieza de comentarios y código en inglés · `todo` · RNF-21 · D-81
-Va antes de T-88: lo que se escriba después ya nace en inglés. Sin cambio de
-comportamiento (D-77): ni la lógica, ni el journal, ni el protocolo del socket,
-ni los textos que ve el usuario.
-- Borrar los comentarios innecesarios de `src/`, `tests/` y `tools/`: los que
-  repiten el código. Se quedan los que explican un porqué o una trampa, con su
-  `D-NN` o `RF-NN`, ya traducidos.
-- Traducir al inglés comentarios, docstrings, mensajes de log (`diag.log`,
-  `client.log`) y nombres de test; las aserciones sobre logs cambian con ellos.
-- Siguen en español los mensajes de UI, errores y CLI, y las cadenas con que los
-  tests los comprueban.
-- `tests/unit/test_english.py` falla si aparece español en comentarios,
-  docstrings o nombres de test (acentos, `ñ`, `¿`, `¡` y palabras frecuentes).
-  Los textos para el usuario son cadenas normales y quedan fuera.
-- Actualizar las referencias a tests renombrados en `HANDOFF.md`.
-- Tests: la suite pasa sin cambiar ninguna lógica; `spec_trace` da lo mismo que
-  antes; `test_english.py` falla con un comentario en español de prueba.
-
+### T-91 Limpieza de comentarios y código en inglés · `done` · RNF-21 · D-81

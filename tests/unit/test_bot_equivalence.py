@@ -98,7 +98,7 @@ def _case(seed: int):
 
 @pytest.mark.spec("RF-19", "RF-20", "RF-26", "RNF-22", "RNF-23")
 @pytest.mark.parametrize("chunk", range(10))
-def test_misma_decision_que_el_oraculo(chunk):
+def test_same_decision_as_oracle(chunk):
     state = arm(BotState())
     fires = 0
     for seed in range(chunk * CASES // 10, (chunk + 1) * CASES // 10):
@@ -111,7 +111,7 @@ def test_misma_decision_que_el_oraculo(chunk):
 
 
 @pytest.mark.spec("RF-19", "RF-20", "RNF-22")
-def test_book_desordenado_misma_decision():
+def test_unsorted_book_same_decision():
     """Unsorted, no monotonicity: all pairs are tried, as before."""
     state = arm(BotState())
     for seed in range(600):

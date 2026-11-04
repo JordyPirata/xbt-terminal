@@ -14,23 +14,23 @@ DATE_MS = 1_792_634_847_000  # that second in epoch ms
 
 @pytest.mark.spec("RNF-16")
 class TestSkew:
-    def test_reloj_en_hora(self):
+    def test_clock_on_time(self):
         """`Date` truncates to the second: the middle of the second is taken."""
         assert skew_ms(DATE, DATE_MS + 400, DATE_MS + 600) == 0
 
     @pytest.mark.parametrize("off", [60_000, -60_000])
-    def test_reloj_local_desfasado(self, off):
+    def test_skewed_local_clock(self, off):
         local = DATE_MS + 500 - off
         assert skew_ms(DATE, local - 100, local + 100) == off
 
     @pytest.mark.parametrize("bad", [None, "", "ayer", "Thu, 99 Oct 2026 02:07:27 GMT"])
-    def test_sin_cabecera_legible(self, bad):
+    def test_unreadable_header(self, bad):
         assert skew_ms(bad, DATE_MS, DATE_MS) is None
 
 
 @pytest.mark.spec("RNF-16")
-class TestEnElAdaptador:
-    async def test_cada_respuesta_rest_lo_actualiza(self):
+class TestInAdapter:
+    async def test_each_rest_response_updates_it(self):
         now = [DATE_MS + 500 - 30_000]
         venue = FakeVenue(clock=lambda: now[0])
         assert venue.clock_skew_ms is None
@@ -41,7 +41,7 @@ class TestEnElAdaptador:
         await venue.timed(reply())
         assert venue.clock_skew_ms == 30_000
 
-    async def test_lo_que_no_es_una_respuesta_no_lo_toca(self):
+    async def test_non_response_leaves_it_alone(self):
         venue = FakeVenue()
 
         async def other():

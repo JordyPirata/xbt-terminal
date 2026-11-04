@@ -25,8 +25,8 @@ def events(s):
 
 
 @pytest.mark.spec("RNF-15", "RF-11")
-class TestEnVuelo:
-    async def test_un_envio_cancelado_a_medias_termina_igual(self, tmp_path):
+class TestInFlight:
+    async def test_send_cancelled_midway_still_finishes(self, tmp_path):
         s = Setup(tmp_path)
         pending = await s.orders.prepare(buy())
         slow(s.venue, "place_limit")
@@ -41,7 +41,7 @@ class TestEnVuelo:
         assert [o.order_id for o in await s.venue.open_orders()] == ["dry-nk-1"]
         assert s.orders.in_flight == 0
 
-    async def test_una_cancelacion_a_medias_termina_igual(self, tmp_path):
+    async def test_cancel_midway_still_finishes(self, tmp_path):
         s = Setup(tmp_path)
         await s.orders.confirm(await s.orders.prepare(buy()))
         plan = await s.orders.plan_cancel(CancelVenue("nk"))
@@ -55,6 +55,6 @@ class TestEnVuelo:
         assert events(s)[-2:] == ["cancel_sent", "cancel_ack"]
         assert await s.venue.open_orders() == []
 
-    async def test_sin_nada_en_vuelo_drain_vuelve_ya(self, tmp_path):
+    async def test_nothing_in_flight_drain_returns_at_once(self, tmp_path):
         s = Setup(tmp_path)
         await asyncio.wait_for(s.orders.drain(), 0.1)

@@ -64,7 +64,7 @@ class Rig:
 
 @pytest.mark.spec("RF-32", "CA-17")
 class TestRecorder:
-    async def test_en_cada_multiplo_del_intervalo(self, tmp_path):
+    async def test_on_each_interval_multiple(self, tmp_path):
         rig = Rig(tmp_path)
         with pytest.raises(asyncio.CancelledError):
             await rig.recorder.run()
@@ -77,24 +77,24 @@ class TestRecorder:
         assert s.value == D("0.334") and s.every_ms == EVERY_S * 1000
         assert [v.venue for v in s.venues] == ["nk", "nx"]
 
-    async def test_el_modo_va_en_la_fila(self, tmp_path):
+    async def test_mode_goes_in_the_row(self, tmp_path):
         rig = Rig(tmp_path)
         rig.recorder.record(T0)
         (row,) = rig.rows()
         assert row["event"] == "value" and row["mode"] == "live"
         assert json.dumps(row["data"]["value"]) == '"0.334"'  # Decimal as string
 
-    async def test_sin_mid_se_salta(self, tmp_path):
+    async def test_no_mid_is_skipped(self, tmp_path):
         rig = Rig(tmp_path, nx_mid=None)
         assert rig.recorder.record(T0) is None
         assert rig.rows() == []
 
-    async def test_sin_saldo_se_salta(self, tmp_path):
+    async def test_no_balance_is_skipped(self, tmp_path):
         rig = Rig(tmp_path, nx_bal=False)
         assert rig.recorder.record(T0) is None
         assert rig.rows() == []
 
-    async def test_un_fallo_no_para_el_muestreo(self, tmp_path):
+    async def test_failure_does_not_stop_sampling(self, tmp_path):
         rig = Rig(tmp_path)
         calls = []
 

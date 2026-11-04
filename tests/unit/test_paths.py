@@ -27,7 +27,7 @@ def mode_of(path) -> int:
 
 
 @pytest.mark.spec("RNF-20")
-def test_rutas_xdg_por_defecto(tmp_path):
+def test_default_xdg_paths(tmp_path):
     environ = {"XDG_CONFIG_HOME": str(tmp_path / "cfg"), "XDG_STATE_HOME": str(tmp_path / "st")}
     paths = resolve_paths(environ=environ)
     assert paths.config == tmp_path / "cfg" / "xbt" / "config.toml"
@@ -36,21 +36,21 @@ def test_rutas_xdg_por_defecto(tmp_path):
 
 
 @pytest.mark.spec("RNF-20")
-def test_sin_xdg_cuelga_de_home(tmp_path):
+def test_without_xdg_uses_home(tmp_path):
     paths = resolve_paths(environ={"HOME": str(tmp_path)})
     assert paths.config == tmp_path / ".config" / "xbt" / "config.toml"
     assert paths.data == tmp_path / ".local" / "state" / "xbt"
 
 
 @pytest.mark.spec("RNF-20")
-def test_xdg_relativo_se_ignora(tmp_path):
+def test_relative_xdg_ignored(tmp_path):
     """The XDG spec asks to ignore relative paths: they would depend on the cwd."""
     paths = resolve_paths(environ={"HOME": str(tmp_path), "XDG_STATE_HOME": "rel/state"})
     assert paths.data == tmp_path / ".local" / "state" / "xbt"
 
 
 @pytest.mark.spec("RNF-20")
-def test_los_flags_mandan_y_salen_absolutos(tmp_path, monkeypatch):
+def test_flags_rule_and_come_out_absolute(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     paths = resolve_paths(
         config="mi.toml", env="secretos.env", data_dir="datos", environ={"HOME": "/nadie"}
@@ -62,7 +62,7 @@ def test_los_flags_mandan_y_salen_absolutos(tmp_path, monkeypatch):
 
 
 @pytest.mark.spec("RNF-18")
-def test_directorio_de_datos_0700(tmp_path):
+def test_data_directory_0700(tmp_path):
     data = tmp_path / "a" / "datos"
     private_dir(data)
     assert mode_of(data) == 0o700
@@ -72,7 +72,7 @@ def test_directorio_de_datos_0700(tmp_path):
 
 
 @pytest.mark.spec("RNF-17")
-def test_segunda_instancia_rechazada(tmp_path):
+def test_second_instance_rejected(tmp_path):
     first = InstanceLock(tmp_path)
     first.acquire()
     with pytest.raises(AlreadyRunningError, match=str(os.getpid())) as exc:
@@ -85,7 +85,7 @@ def test_segunda_instancia_rechazada(tmp_path):
 
 
 @pytest.mark.spec("RNF-17", "RNF-18")
-def test_el_lock_crea_el_directorio_privado(tmp_path):
+def test_lock_creates_private_directory(tmp_path):
     data = tmp_path / "nuevo"
     with InstanceLock(data):
         assert mode_of(data) == 0o700
@@ -93,7 +93,7 @@ def test_el_lock_crea_el_directorio_privado(tmp_path):
 
 
 @pytest.mark.spec("RNF-18")
-def test_permisos_del_env(tmp_path):
+def test_env_permissions(tmp_path):
     path = env(tmp_path)
     path.chmod(0o600)
     assert env_permission_problem(path) is None
@@ -104,7 +104,7 @@ def test_permisos_del_env(tmp_path):
 
 
 @pytest.mark.spec("RNF-18")
-def test_env_abierto_rechaza_live(tmp_path):
+def test_open_env_rejects_live(tmp_path):
     path = env(tmp_path)
     path.chmod(0o644)
     with pytest.raises(ConfigError, match="chmod 600"):
@@ -112,7 +112,7 @@ def test_env_abierto_rechaza_live(tmp_path):
 
 
 @pytest.mark.spec("RNF-18")
-def test_env_abierto_avisa_en_dry_run(tmp_path):
+def test_open_env_warns_in_dry_run(tmp_path):
     path = env(tmp_path)
     path.chmod(0o644)
     settings = load_settings(EXAMPLE, path, live=False)

@@ -65,13 +65,13 @@ def api():
 
 
 @pytest.mark.spec("RNF-09")
-def test_cumple_la_interfaz_comun(limiter):
+def test_fulfils_the_common_interface(limiter):
     assert isinstance(make(limiter, None), MarketData)
 
 
 @pytest.mark.spec("RNF-09", "RNF-10")
 class TestMarket:
-    async def test_reglas_del_par(self, venue, api):
+    async def test_pair_rules(self, venue, api):
         m = await venue.market()
         assert (m.venue, m.symbol, m.base, m.quote) == ("nk", "BTCB2/BTC", "BTCB2", "BTC")
         assert m.tick_size == D("0.00000001") and m.lot_size == D("0.0001")
@@ -79,7 +79,7 @@ class TestMarket:
         assert m.min_notional == D("0.000012609180967214268")
         assert (m.maker_fee, m.taker_fee) == (D("0.002"), D("0.002"))  # from the config (PA-04)
 
-    async def test_min_quote_inactivo(self, venue, api):
+    async def test_inactive_min_quote(self, venue, api):
         api.get(f"{REST_URL}/market/getbysymbol/BTCB2_BTC").respond(
             text=fixture("market.json").replace(
                 '"isMinQuoteActive":true', '"isMinQuoteActive":false'
@@ -87,7 +87,7 @@ class TestMarket:
         )
         assert (await venue.market()).min_notional == D("0")
 
-    async def test_mercado_que_no_existe(self, limiter, api):
+    async def test_nonexistent_market(self, limiter, api):
         api.get(f"{REST_URL}/market/getbysymbol/BTCB2_XMR").respond(
             400,
             json={"error": {"code": 2001, "message": "Market not found", "description": "x"}},
@@ -96,7 +96,7 @@ class TestMarket:
             with pytest.raises(VenueError, match="Market not found"):
                 await make(limiter, http, "BTCB2/XMR").market()
 
-    async def test_venue_devuelve_otro_simbolo(self, venue, api):
+    async def test_venue_returns_other_symbol(self, venue, api):
         """Defence in depth (RNF-10): never trade a pair other than asked."""
         api.get(f"{REST_URL}/market/getbysymbol/BTCB2_BTC").respond(
             text=fixture("market.json").replace('"symbol":"BTCB2/BTC"', '"symbol":"BTCB2/USDT"')
@@ -104,7 +104,7 @@ class TestMarket:
         with pytest.raises(VenueError, match="USDT"):
             await venue.market()
 
-    async def test_mercado_pausado_o_inactivo(self, venue, api):
+    async def test_paused_or_inactive_market(self, venue, api):
         api.get(f"{REST_URL}/market/getbysymbol/BTCB2_BTC").respond(
             text=fixture("market.json").replace('"isActive":true', '"isActive":false')
         )
@@ -114,7 +114,7 @@ class TestMarket:
 
 @pytest.mark.spec("RF-01", "RF-02")
 class TestBook:
-    async def test_snapshot_en_decimal(self, venue, api):
+    async def test_snapshot_in_decimal(self, venue, api):
         snap = await venue.book_snapshot(20)
         params = api.calls.last.request.url.params
         assert (params["symbol"], params["limit"]) == ("BTCB2/BTC", "20")
@@ -126,7 +126,7 @@ class TestBook:
         assert snap.bids[-1] == Level(D("0.00644898"), D("0.0162"))
         assert not any(lv.amm for lv in snap.bids + snap.asks)
 
-    async def test_orden_de_niveles(self, venue, api):
+    async def test_level_order(self, venue, api):
         snap = await venue.book_snapshot(20)
         bids, asks = [lv.price for lv in snap.bids], [lv.price for lv in snap.asks]
         assert bids == sorted(bids, reverse=True)
@@ -135,7 +135,7 @@ class TestBook:
 
 @pytest.mark.spec("RF-01")
 class TestTrades:
-    async def test_cronologicos_y_en_decimal(self, venue, api):
+    async def test_chronological_and_decimal(self, venue, api):
         trades = await venue.recent_trades(20)
         params = api.calls.last.request.url.params
         assert (params["symbol"], params["limit"]) == ("BTCB2/BTC", "20")
@@ -146,7 +146,7 @@ class TestTrades:
         assert newest.ts == 1792508948406
         assert (oldest.side, oldest.qty, oldest.ts) == ("buy", D("0.0139"), 1792508026567)
 
-    async def test_limite_maximo_de_la_api(self, venue, api):
+    async def test_api_maximum_limit(self, venue, api):
         await venue.recent_trades(5000)
         assert api.calls.last.request.url.params["limit"] == str(MAX_TRADES)
 
@@ -162,7 +162,7 @@ class TestCandles:
             ("1d", "1440", 86_400_000),
         ],
     )
-    async def test_velas_del_venue(self, venue, api, tf, resolution, step):
+    async def test_venue_candles(self, venue, api, tf, resolution, step):
         candles = await venue.candles(tf, 5)
         params = api.calls.last.request.url.params
         assert params["symbol"] == "BTCB2/BTC" and params["resolution"] == resolution
@@ -170,7 +170,7 @@ class TestCandles:
         assert len(candles) == 5 and all(c.ts_open % step == 0 for c in candles)
         assert [c.ts_open for c in candles] == sorted(c.ts_open for c in candles)
 
-    async def test_valores_exactos(self, venue, api):
+    async def test_exact_values(self, venue, api):
         first = (await venue.candles("5m", 5))[0]
         assert first.ts_open == 1792507500000
         assert (first.open, first.high, first.low, first.close, first.volume) == (
@@ -181,7 +181,7 @@ class TestCandles:
             D("3.212"),
         )
 
-    async def test_1m_se_construye_con_trades(self, venue, api):
+    async def test_1m_built_from_trades(self, venue, api):
         """NonKYC has no 1m candles (D-10): they come from the latest trades."""
         candles = await venue.candles("1m", 500)
         assert api.calls.last.request.url.path.endswith("/market/trades")
@@ -194,11 +194,11 @@ class TestCandles:
         assert sum(c.volume for c in candles) == sum(t.qty for t in trades)
         assert candles[0].open == trades[0].price and candles[-1].close == trades[-1].price
 
-    async def test_1m_respeta_el_limite(self, venue, api):
+    async def test_1m_respects_the_limit(self, venue, api):
         candles = await venue.candles("1m", 3)
         assert len(candles) == 3
 
-    async def test_1m_con_el_tope_de_trades_descarta_la_primera(self, venue, api):
+    async def test_1m_at_trade_cap_drops_the_first(self, venue, api):
         """With 500 trades the oldest candle may be cut in half."""
         trades = [
             {
@@ -220,8 +220,8 @@ class TestCandles:
 
 
 @pytest.mark.spec("RF-01")
-class TestErrores:
-    async def test_error_del_venue(self, venue, api):
+class TestErrors:
+    async def test_venue_error(self, venue, api):
         api.get(f"{REST_URL}/market/orderbook").respond(
             400, json={"error": {"code": 2001, "message": "Market not found"}}
         )
@@ -233,19 +233,19 @@ class TestErrores:
         with pytest.raises(VenueError, match="429"):
             await venue.recent_trades(20)
 
-    async def test_no_es_json(self, venue, api):
+    async def test_not_json(self, venue, api):
         api.get(f"{REST_URL}/market/orderbook").respond(502, text="<html>Bad gateway</html>")
         with pytest.raises(VenueError, match="502"):
             await venue.book_snapshot(20)
 
-    async def test_campo_que_falta(self, venue, api):
+    async def test_missing_field(self, venue, api):
         api.get(f"{REST_URL}/market/trades").respond(json=[{"id": "x", "type": "buy"}])
         with pytest.raises(VenueError):
             await venue.recent_trades(20)
 
 
 @pytest.mark.spec("RNF-05")
-async def test_toda_peticion_pasa_por_el_limitador(venue, api, limiter):
+async def test_every_request_passes_limiter(venue, api, limiter):
     await venue.market()
     await venue.book_snapshot(20)
     await venue.recent_trades(20)
@@ -256,7 +256,7 @@ async def test_toda_peticion_pasa_por_el_limitador(venue, api, limiter):
 
 
 @pytest.mark.spec("RF-14")
-async def test_las_peticiones_miden_latencia(venue, api):
+async def test_requests_measure_latency(venue, api):
     assert venue.state("rest", "up").latency_ms is None
     await venue.book_snapshot(20)
     assert venue.state("rest", "up").latency_ms > 0

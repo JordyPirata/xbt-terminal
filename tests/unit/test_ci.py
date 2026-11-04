@@ -17,7 +17,7 @@ STEPS = [
 
 
 @pytest.mark.spec("RNF-21")
-def test_el_workflow_ejecuta_los_cuatro_pasos_en_orden():
+def test_workflow_runs_the_four_steps_in_order():
     text = WORKFLOW.read_text(encoding="utf-8")
     positions = [text.find(step) for step in STEPS]
     assert -1 not in positions, dict(zip(STEPS, positions, strict=True))
@@ -25,7 +25,7 @@ def test_el_workflow_ejecuta_los_cuatro_pasos_en_orden():
 
 
 @pytest.mark.spec("RNF-21")
-def test_el_workflow_corre_en_cada_push_y_pr():
+def test_workflow_runs_on_each_push_and_pr():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "push:" in text
     assert "pull_request:" in text

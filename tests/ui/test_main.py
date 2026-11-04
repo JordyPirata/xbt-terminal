@@ -42,7 +42,7 @@ def engine_for(tmp_path, live=False, env_path=None, conf=EXAMPLE):
 
 
 @pytest.mark.spec("RNF-09", "RF-13", "RF-30")
-async def test_construye_el_motor_desde_la_config(tmp_path):
+async def test_builds_engine_from_config(tmp_path):
     settings, engine = engine_for(tmp_path, env_path=tmp_path / "no-existe.env")
     venues = engine.hub._venues
     assert isinstance(venues["nk"], NonKYCVenue) and venues["nk"].symbol == "BTCB2/BTC"
@@ -54,7 +54,7 @@ async def test_construye_el_motor_desde_la_config(tmp_path):
 
 
 @pytest.mark.spec("RF-13")
-async def test_dry_run_solo_opera_en_los_venues_con_keys(tmp_path):
+async def test_dry_run_only_trades_venues_with_keys(tmp_path):
     _, engine = engine_for(tmp_path)
     assert engine.mode == "dry-run" and engine.orders is not None
     assert engine.orders.can_trade("nk") and not engine.orders.can_trade("nx")
@@ -62,7 +62,7 @@ async def test_dry_run_solo_opera_en_los_venues_con_keys(tmp_path):
 
 
 @pytest.mark.spec("RNF-16")
-async def test_el_desfase_solo_bloquea_en_live(tmp_path):
+async def test_skew_only_blocks_in_live(tmp_path):
     _, engine = engine_for(tmp_path)
     assert not engine.orders._live and engine._max_skew_s == 5
     await engine.hub.aclose()
@@ -72,14 +72,14 @@ async def test_el_desfase_solo_bloquea_en_live(tmp_path):
 
 
 @pytest.mark.spec("RNF-24")
-async def test_el_hub_contrasta_el_book_y_lo_apunta(tmp_path):
+async def test_hub_checks_book_and_notes_it(tmp_path):
     _, engine = engine_for(tmp_path)
     assert engine.hub._book_check_s == 5 and engine.hub._journal is engine.orders._journal
     await engine.hub.aclose()
 
 
 @pytest.mark.spec("RNF-14")
-async def test_un_registro_de_fallos_para_todos(tmp_path):
+async def test_one_fault_registry_for_all(tmp_path):
     """Hub, account and orders report to the same one, with the journal: the bar counts all."""
     _, engine = engine_for(tmp_path)
     faults = engine.hub.faults
@@ -89,7 +89,7 @@ async def test_un_registro_de_fallos_para_todos(tmp_path):
 
 
 @pytest.mark.spec("RF-13", "RF-07")
-async def test_dry_run_cuenta_simulada(tmp_path):
+async def test_dry_run_simulated_account(tmp_path):
     """Dry-run: real balances and simulated orders (D-16); the account reads the same
     DryRunVenues as orders, to follow the legs (D-15)."""
     _, engine = engine_for(tmp_path, env_path=env(tmp_path, nx=True))
@@ -104,7 +104,7 @@ async def test_dry_run_cuenta_simulada(tmp_path):
 
 
 @pytest.mark.spec("RF-13", "RF-30")
-async def test_solo_lectura_sin_ordenes_ni_cuenta(tmp_path):
+async def test_read_only_no_orders_or_account(tmp_path):
     _, engine = engine_for(tmp_path, env_path=tmp_path / "no-existe.env")
     assert engine.orders is None and engine.account is None and engine.bot is None
     assert engine.deposits is None and engine.rebalance is None
@@ -112,7 +112,7 @@ async def test_solo_lectura_sin_ordenes_ni_cuenta(tmp_path):
 
 
 @pytest.mark.spec("RF-06", "RF-05", "RF-09")
-async def test_live_opera_con_los_venues_reales(tmp_path):
+async def test_live_trades_real_venues(tmp_path):
     _, engine = engine_for(tmp_path, live=True)
     assert engine.mode == "live" and engine.orders is not None
     assert engine.orders.can_trade("nk") and not engine.orders.can_trade("nx")
@@ -124,7 +124,7 @@ async def test_live_opera_con_los_venues_reales(tmp_path):
 
 
 @pytest.mark.spec("RF-12")
-async def test_los_adaptadores_reciben_solo_sus_keys(tmp_path):
+async def test_adapters_get_only_their_keys(tmp_path):
     settings, engine = engine_for(tmp_path)
     nk, nx = engine.hub._venues["nk"], engine.hub._venues["nx"]
     assert nk._credentials is settings.credentials["nk"] and nx._credentials is None
@@ -133,7 +133,7 @@ async def test_los_adaptadores_reciben_solo_sus_keys(tmp_path):
 
 
 @pytest.mark.spec("RF-18")
-async def test_el_bot_comparte_ordenes_cuenta_y_journal(tmp_path):
+async def test_bot_shares_orders_account_and_journal(tmp_path):
     _, engine = engine_for(tmp_path, env_path=env(tmp_path, nx=True))
     bot = engine.bot
     assert bot is not None and bot.state.status == "off"
@@ -144,7 +144,7 @@ async def test_el_bot_comparte_ordenes_cuenta_y_journal(tmp_path):
 
 
 @pytest.mark.spec("RF-18")
-async def test_bot_en_live(tmp_path):
+async def test_bot_in_live(tmp_path):
     _, engine = engine_for(tmp_path, live=True, env_path=env(tmp_path, nx=True))
     assert engine.bot._live and "enabled" in engine.bot.refusal()  # the example has it off
     await engine.hub.aclose()
@@ -157,7 +157,7 @@ def conf_with(tmp_path, old, new):
 
 
 @pytest.mark.spec("RF-24")
-async def test_el_descuento_llega_al_panel_y_no_al_bot(tmp_path):
+async def test_discount_reaches_panel_not_bot(tmp_path):
     conf = conf_with(
         tmp_path, 'symbol  = "BTCB2_BTC"', 'symbol  = "BTCB2_BTC"\nfee_discount_pct = "50"'
     )
@@ -168,7 +168,7 @@ async def test_el_descuento_llega_al_panel_y_no_al_bot(tmp_path):
 
 
 @pytest.mark.spec("RF-24")
-async def test_el_token_de_fee_llega_al_venue_y_al_bot(tmp_path):
+async def test_fee_token_reaches_venue_and_bot(tmp_path):
     conf = conf_with(
         tmp_path,
         'symbol  = "BTCB2/BTC"',
@@ -183,7 +183,7 @@ async def test_el_token_de_fee_llega_al_venue_y_al_bot(tmp_path):
 
 
 @pytest.mark.spec("RF-25")
-async def test_sin_token_de_fee_resultados_no_piden_precios(tmp_path):
+async def test_no_fee_token_results_ask_no_prices(tmp_path):
     _, engine = engine_for(tmp_path)
     assert engine.results._pricers == {}
     await engine.hub.aclose()
@@ -191,14 +191,14 @@ async def test_sin_token_de_fee_resultados_no_piden_precios(tmp_path):
 
 @pytest.mark.spec("RF-25")
 @pytest.mark.parametrize("live", [False, True])
-async def test_resultados_leen_el_directorio_del_journal(tmp_path, live):
+async def test_results_read_journal_directory(tmp_path, live):
     _, engine = engine_for(tmp_path, live=live)
     assert engine.results is not None and engine.results.directory == tmp_path / "logs"
     await engine.hub.aclose()
 
 
 @pytest.mark.spec("RF-26", "RF-27")
-async def test_el_ratio_de_inventario_llega_al_bot_y_al_panel(tmp_path):
+async def test_inventory_ratio_reaches_bot_and_panel(tmp_path):
     settings, engine = engine_for(tmp_path)
     target = settings.config.inventory
     assert target is not None
@@ -209,7 +209,7 @@ async def test_el_ratio_de_inventario_llega_al_bot_y_al_panel(tmp_path):
 
 @pytest.mark.spec("RF-28")
 @pytest.mark.parametrize("live", [False, True])
-async def test_depositos_con_los_venues_con_keys(tmp_path, live):
+async def test_deposits_with_venues_with_keys(tmp_path, live):
     """In any mode, only venues with keys; the real adapters, not the dry-run ones (only
     read)."""
     _, engine = engine_for(tmp_path, live=live)
@@ -220,7 +220,7 @@ async def test_depositos_con_los_venues_con_keys(tmp_path, live):
 
 @pytest.mark.spec("RF-29")
 @pytest.mark.parametrize("live", [False, True])
-async def test_reequilibrio_con_los_venues_con_keys(tmp_path, live):
+async def test_rebalance_with_venues_with_keys(tmp_path, live):
     """Like deposits: real adapters of venues with keys (read only)."""
     settings, engine = engine_for(tmp_path, live=live)
     assert engine.rebalance is not None and engine.rebalance.venues == ("nk",)
@@ -265,7 +265,7 @@ def served(monkeypatch):
 
 
 @pytest.mark.spec("RF-30", "RNF-17", "RNF-19", "RNF-20")
-def test_daemon_corre_el_motor_sin_pantalla(xdg, served, monkeypatch, capsys):
+def test_daemon_runs_engine_without_screen(xdg, served, monkeypatch, capsys):
     _, data = xdg
     monkeypatch.setattr(XbtApp, "run", lambda app: pytest.fail("el daemon no abre Textual"))
     main()
@@ -283,13 +283,13 @@ def test_daemon_corre_el_motor_sin_pantalla(xdg, served, monkeypatch, capsys):
 
 
 @pytest.mark.spec("RNF-20")
-def test_daemon_con_directorio_de_datos(xdg, served, tmp_path, monkeypatch):
+def test_daemon_with_data_directory(xdg, served, tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--data-dir", "datos"])
     main()
     assert served["engine"].journal.directory == tmp_path / "otro" / "datos"
 
 
-def test_daemon_sin_config_explica_que_hacer(xdg):
+def test_daemon_without_config_explains_what_to_do(xdg):
     conf, _ = xdg
     (conf / "config.toml").unlink()
     with pytest.raises(SystemExit, match=str(conf / "config.toml")) as exc:
@@ -297,7 +297,7 @@ def test_daemon_sin_config_explica_que_hacer(xdg):
     assert "config.example.toml" in str(exc.value)
 
 
-def test_daemon_con_config_invalida_no_arranca(xdg):
+def test_daemon_with_invalid_config_does_not_start(xdg):
     conf, _ = xdg
     text = (conf / "config.toml").read_text()
     (conf / "config.toml").write_text(
@@ -308,7 +308,7 @@ def test_daemon_con_config_invalida_no_arranca(xdg):
 
 
 @pytest.mark.spec("RF-30", "RNF-17")
-def test_daemon_con_otra_instancia_no_arranca(xdg, served):
+def test_daemon_with_another_instance_does_not_start(xdg, served):
     _, data = xdg
     with InstanceLock(data), pytest.raises(SystemExit, match="daemon"):
         main()
@@ -316,7 +316,7 @@ def test_daemon_con_otra_instancia_no_arranca(xdg, served):
 
 
 @pytest.mark.spec("RNF-18")
-def test_daemon_live_con_env_abierto_no_arranca(xdg, served, monkeypatch):
+def test_live_daemon_with_open_env_does_not_start(xdg, served, monkeypatch):
     conf, _ = xdg
     (conf / ".env").chmod(0o644)
     monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--live"])
@@ -326,7 +326,7 @@ def test_daemon_live_con_env_abierto_no_arranca(xdg, served, monkeypatch):
 
 
 @pytest.mark.spec("RF-30", "RNF-18")
-def test_daemon_avisa_por_stderr(xdg, served, capsys):
+def test_daemon_warns_on_stderr(xdg, served, capsys):
     conf, _ = xdg
     (conf / ".env").chmod(0o644)
     main()
@@ -334,7 +334,7 @@ def test_daemon_avisa_por_stderr(xdg, served, capsys):
 
 
 @pytest.mark.spec("RF-30", "RF-13")
-def test_daemon_sin_keys_arranca_en_solo_lectura(xdg, served):
+def test_daemon_without_keys_starts_read_only(xdg, served):
     """It is the only way left to watch the market without keys (D-66)."""
     conf, _ = xdg
     (conf / ".env").write_text("")
@@ -344,7 +344,7 @@ def test_daemon_sin_keys_arranca_en_solo_lectura(xdg, served):
 
 
 @pytest.mark.spec("RF-30", "RF-31")
-def test_daemon_con_ruta_de_socket_larga_no_arranca(xdg, served, monkeypatch, tmp_path):
+def test_daemon_with_long_socket_path_does_not_start(xdg, served, monkeypatch, tmp_path):
     long = tmp_path / ("x" * 120) / "xbt.sock"
     monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--socket", str(long)])
     with pytest.raises(SystemExit, match=r"demasiado larga.*--socket"):
@@ -353,14 +353,14 @@ def test_daemon_con_ruta_de_socket_larga_no_arranca(xdg, served, monkeypatch, tm
 
 
 @pytest.mark.spec("RF-30", "RF-31")
-def test_daemon_con_otro_socket(xdg, served, monkeypatch, tmp_path):
+def test_daemon_with_another_socket(xdg, served, monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--socket", str(tmp_path / "s")])
     main()
     assert served["socket"] == tmp_path / "s"
 
 
 @pytest.mark.spec("RF-30", "RNF-20")
-def test_daemon_con_los_flags_de_siempre(xdg, served, monkeypatch, tmp_path):
+def test_daemon_with_the_usual_flags(xdg, served, monkeypatch, tmp_path):
     conf, _ = xdg
     other = tmp_path / "otra.toml"
     other.write_text((conf / "config.toml").read_text())
@@ -414,7 +414,7 @@ def connected(monkeypatch, tmp_path):
 
 @pytest.mark.spec("RF-31", "RNF-17", "CA-16")
 @pytest.mark.parametrize("argv", [["xbt"], ["xbt", "attach"]])
-def test_el_cliente_abre_la_tui_del_daemon(connected, monkeypatch, capsys, argv):
+def test_client_opens_the_daemon_tui(connected, monkeypatch, capsys, argv):
     monkeypatch.setattr(sys, "argv", argv)
     main()
     app, data = connected["app"], connected["data"]
@@ -433,7 +433,7 @@ def test_el_cliente_abre_la_tui_del_daemon(connected, monkeypatch, capsys, argv)
 
 
 @pytest.mark.spec("RF-31")
-def test_el_cliente_sin_daemon_no_arranca(monkeypatch, tmp_path):
+def test_client_without_daemon_does_not_start(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["xbt", "--socket", str(tmp_path / "no")])
     with pytest.raises(SystemExit, match="no hay daemon escuchando"):
         main()
@@ -441,14 +441,14 @@ def test_el_cliente_sin_daemon_no_arranca(monkeypatch, tmp_path):
 
 @pytest.mark.spec("RF-31")
 @pytest.mark.parametrize("argv", [["xbt", "--live"], ["xbt", "attach", "--live"]])
-def test_el_cliente_no_lleva_live(monkeypatch, argv):
+def test_client_takes_no_live(monkeypatch, argv):
     monkeypatch.setattr(sys, "argv", argv)
     with pytest.raises(SystemExit, match="el modo es el del daemon"):
         main()
 
 
 @pytest.mark.spec("RF-31", "RNF-20")
-def test_el_cliente_busca_el_socket_en_su_data_dir(connected, monkeypatch, tmp_path):
+def test_client_finds_socket_in_its_data_dir(connected, monkeypatch, tmp_path):
     data = tmp_path / "datos"
     data.mkdir()
     connected["data"] = data
@@ -459,7 +459,7 @@ def test_el_cliente_busca_el_socket_en_su_data_dir(connected, monkeypatch, tmp_p
 
 
 @pytest.mark.spec("RF-30", "RF-31")
-def test_la_ayuda_explica_los_subcomandos(monkeypatch, capsys):
+def test_help_explains_subcommands(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["xbt", "--help"])
     with pytest.raises(SystemExit):
         main()
@@ -469,7 +469,7 @@ def test_la_ayuda_explica_los_subcomandos(monkeypatch, capsys):
 
 
 @pytest.mark.spec("RF-30", "RF-31")
-def test_un_subcomando_desconocido_no_arranca(monkeypatch, capsys):
+def test_unknown_subcommand_does_not_start(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["xbt", "servidor"])
     with pytest.raises(SystemExit):
         main()
@@ -484,23 +484,23 @@ class TestReplayFlags:
     def argv(self, monkeypatch, *args):
         monkeypatch.setattr(sys, "argv", ["xbt", *args])
 
-    def test_replay_con_live_no_arranca(self, xdg, served, tmp_path, monkeypatch):
+    def test_replay_with_live_does_not_start(self, xdg, served, tmp_path, monkeypatch):
         self.argv(monkeypatch, "daemon", "--replay", "x", "--live", "--data-dir", "d")
         with pytest.raises(SystemExit, match="--live"):
             main()
         assert "engine" not in served
 
-    def test_replay_con_record_no_arranca(self, xdg, served, monkeypatch):
+    def test_replay_with_record_does_not_start(self, xdg, served, monkeypatch):
         self.argv(monkeypatch, "daemon", "--replay", "x", "--record", "--data-dir", "d")
         with pytest.raises(SystemExit, match="--record"):
             main()
 
-    def test_replay_exige_directorio_de_datos(self, xdg, served, monkeypatch):
+    def test_replay_requires_data_directory(self, xdg, served, monkeypatch):
         self.argv(monkeypatch, "daemon", "--replay", "x")
         with pytest.raises(SystemExit, match="--data-dir"):
             main()
 
-    def test_replay_con_fichero_malo_lo_dice(self, xdg, served, tmp_path, monkeypatch):
+    def test_replay_with_bad_file_says_so(self, xdg, served, tmp_path, monkeypatch):
         conf, _ = xdg
         text = (conf / "config.toml").read_text()
         (conf / "config.toml").write_text(
@@ -512,21 +512,21 @@ class TestReplayFlags:
         with pytest.raises(SystemExit, match=r"mala\.jsonl"):
             main()
 
-    def test_replay_sin_seccion_lo_dice(self, xdg, served, tmp_path, monkeypatch):
+    def test_replay_without_section_says_so(self, xdg, served, tmp_path, monkeypatch):
         good = tmp_path / "g.jsonl"
         good.write_text(FIXTURE_LINE)
         self.argv(monkeypatch, "daemon", "--replay", str(good), "--data-dir", "d")
         with pytest.raises(SystemExit, match=r"\[replay\]"):
             main()
 
-    def test_report_sin_replay_lo_dice(self, xdg, monkeypatch):
+    def test_report_without_replay_says_so(self, xdg, monkeypatch):
         self.argv(monkeypatch, "report")
         with pytest.raises(SystemExit, match="--replay"):
             main()
 
 
 @pytest.mark.spec("RF-33")
-def test_daemon_con_record_graba_en_el_directorio_de_datos(xdg, served, monkeypatch):
+def test_daemon_with_record_records_in_the_data_directory(xdg, served, monkeypatch):
     _, data = xdg
     monkeypatch.setattr(sys, "argv", ["xbt", "daemon", "--record"])
     main()
@@ -534,7 +534,7 @@ def test_daemon_con_record_graba_en_el_directorio_de_datos(xdg, served, monkeypa
 
 
 @pytest.mark.spec("RF-33")
-def test_daemon_sin_record_no_graba(xdg, served):
+def test_daemon_without_record_does_not_record(xdg, served):
     _, data = xdg
     main()
     assert not list(data.glob("books-*.jsonl"))

@@ -37,8 +37,8 @@ def screen(app) -> ResultsScreen:
 
 
 @pytest.mark.spec("RF-25", "CA-11")
-class TestPantalla:
-    async def test_tecla_r_abre_con_el_dia_y_esc_cierra(self, tmp_path):
+class TestScreen:
+    async def test_r_key_opens_with_day_and_esc_closes(self, tmp_path):
         write(tmp_path, "20261022", plain_double("d-1", T0))
         write(tmp_path, "20261020", plain_double("d-0", T0 - 2 * DAY))
         app = make_app(tmp_path)
@@ -52,7 +52,7 @@ class TestPantalla:
             await pilot.press("escape")
             await until(pilot, lambda: not isinstance(app.screen, ResultsScreen))
 
-    async def test_teclas_cambian_el_rango(self, tmp_path):
+    async def test_keys_change_range(self, tmp_path):
         write(tmp_path, "20261022", plain_double("d-1", T0))
         write(tmp_path, "20261020", plain_double("d-0", T0 - 2 * DAY))
         app = make_app(tmp_path)
@@ -68,7 +68,7 @@ class TestPantalla:
             await until(pilot, lambda: screen(app).range == "dia")
             assert len(screen(app).report.doubles) == 1
 
-    async def test_comando_con_rango(self, tmp_path):
+    async def test_command_with_range(self, tmp_path):
         write(tmp_path, "20261020", plain_double("d-0", T0 - 2 * DAY))
         rig = Rig(tmp_path / "rig", results=ResultsService(tmp_path, clock=lambda: T0))
         app = rig.app  # in dry-run: in read-only the command line is off
@@ -78,7 +78,7 @@ class TestPantalla:
             assert screen(app).range == "7d"
             assert len(screen(app).report.doubles) == 1
 
-    async def test_tabla_con_colgada_y_sin_dobles(self, tmp_path):
+    async def test_table_with_hanging_and_no_doubles(self, tmp_path):
         rows = plain_double("d-1", T0)[:3]  # sell unfilled
         write(tmp_path, "20261022", rows)
         app = make_app(tmp_path)
@@ -88,7 +88,7 @@ class TestPantalla:
             assert screen(app).row_count() == 1
             assert "1 sin fills" in screen(app).summary_text()
 
-    async def test_un_fill_nuevo_recalcula(self, tmp_path):
+    async def test_new_fill_recomputes(self, tmp_path):
         rows = plain_double("d-1", T0)
         write(tmp_path, "20261022", rows[:3])
         app = make_app(tmp_path)
@@ -100,7 +100,7 @@ class TestPantalla:
             app._on_account("nk", "fill")
             await until(pilot, lambda: screen(app).report.summary.closed == 1)
 
-    async def test_sin_servicio_avisa(self, tmp_path):
+    async def test_no_service_warns(self, tmp_path):
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         hub = MarketHub(feeds, history=50, retry_s=0.01, clock=lambda: T0)
         app = local_app(hub, book_levels=15, timeframe="1m", mode="read-only", clock=lambda: T0)
@@ -112,7 +112,7 @@ class TestPantalla:
 
 
 @pytest.mark.spec("RF-24", "RF-25")
-def test_el_resumen_avisa_de_las_fees_en_token(tmp_path):
+def test_summary_warns_of_token_fees(tmp_path):
     from ..unit.test_results import fill
 
     rows = plain_double("d-1", T0)
@@ -124,7 +124,7 @@ def test_el_resumen_avisa_de_las_fees_en_token(tmp_path):
 
 
 @pytest.mark.spec("RF-24", "RF-25")
-async def test_al_abrir_pide_el_precio_y_resta_la_fee(tmp_path):
+async def test_on_open_asks_price_and_subtracts_fee(tmp_path):
     """D-65: 0.0025 NKYC at 0.0001 BTC = 25 sats less than the 200 without the fee."""
     from xbt_terminal.core.models import D
 

@@ -73,8 +73,8 @@ def sell(qty="0.01", price="0.00725000", venue="nk"):
 
 
 @pytest.mark.spec("RF-06", "RF-11", "RF-13")
-class TestOrdenValida:
-    async def test_prepara_con_nocional_y_fee(self, tmp_path):
+class TestValidOrder:
+    async def test_prepares_with_notional_and_fee(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare(buy())
         assert isinstance(p, Pending)
@@ -84,7 +84,7 @@ class TestOrdenValida:
         assert "NonKYC" in p.summary
         assert s.lines() == []  # nothing to the journal until confirmed
 
-    async def test_confirmar_envia_y_registra_sent_y_ack(self, tmp_path):
+    async def test_confirm_sends_and_records_sent_and_ack(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare(buy())
         result = await s.orders.confirm(p)
@@ -97,7 +97,7 @@ class TestOrdenValida:
         assert sent["data"] == {"side": "buy", "qty": "0.01", "price": "0.00725000"}
         assert ack["data"] == {"order_id": "dry-nk-1", "status": "open"}
 
-    async def test_al_confirmar_se_vuelve_a_validar(self, tmp_path):
+    async def test_confirm_validates_again(self, tmp_path):
         """The market may move with the dialog open: fail closed."""
         s = Setup(tmp_path)
         p = await s.orders.prepare(buy())
@@ -107,7 +107,7 @@ class TestOrdenValida:
         assert await s.venue.open_orders() == []
         assert [ln["event"] for ln in s.lines()] == ["reject_local"]
 
-    async def test_error_del_venue_queda_como_order_error(self, tmp_path):
+    async def test_venue_error_stays_as_order_error(self, tmp_path):
         s = Setup(tmp_path)
 
         async def boom(req):
@@ -126,7 +126,7 @@ def codes(result):
 
 
 @pytest.mark.spec("CA-04", "RF-10", "RF-11")
-class TestRechazos:
+class TestRejections:
     """Each RF-10 rule rejects in dry-run, leaves `reject_local` and sends nothing."""
 
     async def check(self, s, cmd, code):
@@ -144,7 +144,7 @@ class TestRechazos:
         assert isinstance(await s.orders.prepare(buy(qty="0.2974")), Pending)  # 0.00215615
         await self.check(s, buy(qty="0.2975"), "order_size")  # 0.00215688
 
-    async def test_order_size_suma_los_dos_venues(self, tmp_path):
+    async def test_order_size_adds_both_venues(self, tmp_path):
         """A venue without keys does not count; with both, the cap rises."""
         from xbt_terminal.adapters.dryrun import DryRunVenue
 
@@ -154,7 +154,7 @@ class TestRechazos:
         s.orders._venues["nx"] = DryRunVenue(s.hub._venues["nx"], bal, clock=lambda: NOW)
         assert isinstance(await s.orders.prepare(buy(qty="0.5")), Pending)  # 0.003625 < 0.0043125
 
-    async def test_order_size_sin_mid_del_otro_venue(self, tmp_path):
+    async def test_order_size_without_other_venue_mid(self, tmp_path):
         """Without a venue's mid there is no total inventory: reject (fail closed)."""
         from xbt_terminal.adapters.dryrun import DryRunVenue
 
@@ -177,7 +177,7 @@ class TestRechazos:
         )
         await self.check(s, buy(price="0.00727000"), "self_cross")
 
-    async def test_tick(self, tmp_path):
+    async def test_tick_setting(self, tmp_path):
         await self.check(Setup(tmp_path), buy(price="0.007250001"), "tick")
 
     async def test_lot(self, tmp_path):
@@ -191,7 +191,7 @@ class TestRechazos:
         s.hub.state["nk"].spec = replace(spec("nk"), min_notional=D("0.001"))
         await self.check(s, buy(), "min_notional")
 
-    async def test_stale_sin_book(self, tmp_path):
+    async def test_stale_without_book(self, tmp_path):
         s = Setup(tmp_path)
         s.hub.state["nk"].book.valid = False
         await self.check(s, buy(), "stale_data")
@@ -199,16 +199,16 @@ class TestRechazos:
     async def test_insufficient_balance(self, tmp_path):
         await self.check(Setup(tmp_path, btc="0.00001"), buy(), "insufficient_balance")
 
-    async def test_venue_sin_keys(self, tmp_path):
+    async def test_venue_without_keys(self, tmp_path):
         result = await self.check(Setup(tmp_path), buy(venue="nx"), "read_only")
         assert "sin keys" in result.message
 
-    async def test_mercado_sin_cargar(self, tmp_path):
+    async def test_market_not_loaded(self, tmp_path):
         s = Setup(tmp_path)
         s.hub.state["nk"].spec = None
         await self.check(s, buy(), "stale_data")
 
-    async def test_mensaje_con_importes_en_btc(self, tmp_path):
+    async def test_message_with_btc_amounts(self, tmp_path):
         """The :.2f inherited from USDT showed 0.00 BTC (D-13)."""
         s = Setup(tmp_path, limits=replace(LIMITS, max_order_pct=D("1")))
         result = await s.orders.prepare(buy(qty="0.02"))
@@ -216,47 +216,47 @@ class TestRechazos:
 
 
 @pytest.mark.spec("RF-10", "CA-04", "RNF-16", "RNF-24", "CA-18")
-class TestFrescura:
+class TestFreshness:
     """A quiet book only counts if confirmed by the REST check (D-76); a live connection
     is no longer enough (D-13 corrected)."""
 
-    async def test_book_quieto_confirmado_por_el_rest_vale(self, tmp_path):
+    async def test_quiet_book_confirmed_by_rest_counts(self, tmp_path):
         s = Setup(tmp_path, book_ts=NOW - 300_000)  # 5 min without changes, like NonKYC
         s.hub.state["nk"].checked_at = NOW - 4_000
         assert isinstance(await s.orders.prepare(buy()), Pending)
 
-    async def test_book_quieto_con_latido_reciente_ya_no_vale(self, tmp_path):
+    async def test_quiet_book_with_recent_heartbeat_no_longer_counts(self, tmp_path):
         """That is how d-9820a4 fired: WS connected, no book changes for 2 h."""
         s = Setup(tmp_path, book_ts=NOW - 300_000)
         s.hub_now = NOW
         s.hub.apply("nk", ConnState("nk", "market", "ws", "up", 150.0, NOW))
         assert "stale_data" in codes(await s.orders.prepare(buy()))
 
-    async def test_contraste_viejo_no_vale(self, tmp_path):
+    async def test_old_check_does_not_count(self, tmp_path):
         """With REST failing there are no confirmations: stale at stale_after_s."""
         s = Setup(tmp_path, book_ts=NOW - 300_000)
         s.hub.state["nk"].checked_at = NOW - 16_000
         assert "stale_data" in codes(await s.orders.prepare(buy()))
 
-    async def test_book_en_duda_no_vale_aunque_sea_reciente(self, tmp_path):
+    async def test_book_in_doubt_is_invalid_even_if_recent(self, tmp_path):
         s = Setup(tmp_path)
         s.hub.state["nk"].checked_at = NOW
         s.hub.state["nk"].suspect = True  # the last check did not match
         assert "stale_data" in codes(await s.orders.prepare(buy()))
 
-    async def test_book_quieto_sin_estado_no_vale(self, tmp_path):
+    async def test_quiet_book_without_state_does_not_count(self, tmp_path):
         s = Setup(tmp_path, book_ts=NOW - 300_000)
         assert "stale_data" in codes(await s.orders.prepare(buy()))
 
 
 @pytest.mark.spec("RF-10", "RF-13")
-class TestCuentaIlegible:
+class TestUnreadableAccount:
     """D-16: if balances or orders cannot be read when validating, it rejects (no raise)."""
 
     @pytest.mark.parametrize(
         "exc", [VenueError("NonKYC: HTTP 429: Too many requests"), httpx.ConnectError("sin red")]
     )
-    async def test_saldos_ilegibles(self, tmp_path, exc):
+    async def test_unreadable_balances(self, tmp_path, exc):
         s = Setup(tmp_path)
 
         async def boom():
@@ -268,7 +268,7 @@ class TestCuentaIlegible:
         assert "no se pudieron leer" in result.message
         assert s.lines()[-1]["event"] == "reject_local"
 
-    async def test_ordenes_ilegibles_al_confirmar(self, tmp_path):
+    async def test_unreadable_orders_on_confirm(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare(buy())
 
@@ -317,43 +317,43 @@ def cached(tmp_path, *, age_ms=0, btc="0.005", orders=()):
 
 
 @pytest.mark.spec("RNF-11", "RF-10")
-class TestValidacionConCache:
+class TestCachedValidation:
     """D-18: with the account current, the venue is not asked on preparing or confirming."""
 
-    async def test_cache_fresca_sin_peticiones(self, tmp_path):
+    async def test_fresh_cache_without_requests(self, tmp_path):
         s = cached(tmp_path, age_ms=29_000)
         p = await s.orders.prepare(buy())
         assert isinstance(p, Pending)
         await s.orders._validate(p.req)  # what confirm does before sending
         assert s.counter.calls == []
 
-    async def test_la_cache_manda_en_las_reglas(self, tmp_path):
+    async def test_cache_rules_the_checks(self, tmp_path):
         s = cached(tmp_path, btc="0.00001")  # the venue has 0.005; the account, almost nothing
         assert "insufficient_balance" in codes(await s.orders.prepare(buy()))
 
-    async def test_cache_vieja_pregunta_al_venue(self, tmp_path):
+    async def test_old_cache_asks_the_venue(self, tmp_path):
         s = cached(tmp_path, age_ms=30_001)
         assert isinstance(await s.orders.prepare(buy()), Pending)
         assert sorted(s.counter.calls) == ["balances", "open_orders"]
 
-    async def test_sin_saldos_cargados_pregunta_al_venue(self, tmp_path):
+    async def test_no_loaded_balances_asks_venue(self, tmp_path):
         s = cached(tmp_path)
         s.account.state["nk"].balances = None
         await s.orders.prepare(buy())
         assert "balances" in s.counter.calls
 
-    async def test_las_ordenes_de_la_cuenta_cuentan(self, tmp_path):
+    async def test_account_orders_count(self, tmp_path):
         mine = Order("nk", "x-1", None, "sell", D("0.00726000"), D("0.01"), D("0"), "open", NOW)
         s = cached(tmp_path, orders=[mine])
         assert "self_cross" in codes(await s.orders.prepare(buy(price="0.00727000")))
 
-    async def test_una_orden_recien_enviada_cuenta_aunque_la_cuenta_no_la_vea(self, tmp_path):
+    async def test_just_sent_order_counts_even_unseen_by_account(self, tmp_path):
         s = cached(tmp_path)
         sent = await s.orders.confirm(await s.orders.prepare(sell(price="0.00726000")))
         assert isinstance(sent, Sent) and s.account.state["nk"].orders == {}
         assert "self_cross" in codes(await s.orders.prepare(buy(price="0.00727000")))
 
-    async def test_cuando_la_cuenta_la_ve_terminada_deja_de_contar(self, tmp_path):
+    async def test_when_account_sees_it_finished_it_stops_counting(self, tmp_path):
         s = cached(tmp_path)
         sent = await s.orders.confirm(await s.orders.prepare(sell(price="0.00726000")))
         s.orders.on_private_event("nk", replace(sent.order, status="cancelled"))
@@ -361,7 +361,7 @@ class TestValidacionConCache:
 
 
 @pytest.mark.spec("RF-10")
-async def test_saldo_insuficiente_con_8_decimales(tmp_path):
+async def test_insufficient_balance_with_8_decimals(tmp_path):
     """notional × (1 + fee) comes with many decimals; the message rounds to 8."""
     s = Setup(tmp_path, btc="0.00001")
     result = await s.orders.prepare(buy(qty="0.0137", price="0.00725001"))
@@ -374,10 +374,10 @@ def pct(side, value, price="0.00725000", venue="nk"):
 
 
 @pytest.mark.spec("RF-17", "RF-10")
-class TestCantidadPorcentual:
+class TestPercentQuantity:
     """D-21. Balances 0.005 BTC and 0.5 BTCB2; inventory 0.008625 BTC, cap 0.00215625."""
 
-    async def test_compra_con_el_25_del_btc(self, tmp_path):
+    async def test_buy_with_25_of_btc(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare(pct("buy", "25"))
         assert isinstance(p, Pending)
@@ -385,48 +385,48 @@ class TestCantidadPorcentual:
         assert "BUY 0.1720 XBT" in p.summary
         assert "25 % de 0.00500000 BTC en NonKYC" in p.summary
 
-    async def test_venta_con_el_20_del_btcb2(self, tmp_path):
+    async def test_sell_with_20_of_btcb2(self, tmp_path):
         p = await Setup(tmp_path).orders.prepare(pct("sell", "20"))
         assert isinstance(p, Pending) and p.req.qty == D("0.1")
         assert "20 % de 0.50000000 XBT en NonKYC" in p.summary
 
-    async def test_confirmar_envia_la_cantidad_fijada(self, tmp_path):
+    async def test_confirm_sends_the_fixed_quantity(self, tmp_path):
         s = Setup(tmp_path)
         p = await s.orders.prepare(pct("buy", "25"))
         assert isinstance(await s.orders.confirm(p), Sent)
         assert s.lines()[0]["data"]["qty"] == "0.1720"
 
-    async def test_las_reglas_se_aplican_igual(self, tmp_path):
+    async def test_rules_apply_the_same(self, tmp_path):
         s = Setup(tmp_path)
         result = await s.orders.prepare(pct("buy", "50"))  # 0.0025 BTC > cap 0.00215625
         assert "order_size" in codes(result)
         last = s.lines()[-1]
         assert last["event"] == "reject_local" and last["data"]["qty"] == "0.3441"
 
-    async def test_sin_saldo_se_rechaza(self, tmp_path):
+    async def test_no_balance_rejected(self, tmp_path):
         s = Setup(tmp_path, btcb2="0")
         result = await s.orders.prepare(pct("sell", "100"))
         assert codes(result) == {"insufficient_balance"}
         assert "100 % de 0.00000000 XBT" in result.message and "lote" in result.message
         assert s.lines()[-1]["event"] == "reject_local"
 
-    async def test_lote_fino_sin_notacion_cientifica(self, tmp_path):
+    async def test_fine_lot_without_scientific_notation(self, tmp_path):
         s = Setup(tmp_path, btcb2="0")
         s.hub.state["nk"].spec = replace(spec("nk"), lot_size=D("1E-8"), min_qty=D("1E-8"))
         result = await s.orders.prepare(pct("sell", "100"))
         assert "un lote (0.00000001 XBT)" in result.message
 
-    async def test_venue_sin_keys(self, tmp_path):
+    async def test_venue_without_keys(self, tmp_path):
         assert "read_only" in codes(
             await Setup(tmp_path).orders.prepare(pct("buy", "25", venue="nx"))
         )
 
-    async def test_mercado_sin_cargar(self, tmp_path):
+    async def test_market_not_loaded(self, tmp_path):
         s = Setup(tmp_path)
         s.hub.state["nk"].spec = None
         assert "stale_data" in codes(await s.orders.prepare(pct("buy", "25")))
 
-    async def test_saldos_ilegibles(self, tmp_path):
+    async def test_unreadable_balances(self, tmp_path):
         s = Setup(tmp_path)
 
         async def boom():
@@ -435,7 +435,7 @@ class TestCantidadPorcentual:
         s.venue.balances = boom
         assert "venue_error" in codes(await s.orders.prepare(pct("buy", "25")))
 
-    async def test_usa_los_saldos_de_la_cuenta(self, tmp_path):
+    async def test_uses_account_balances(self, tmp_path):
         s = cached(tmp_path, btc="0.002")  # the venue has 0.005; the account, 0.002
         p = await s.orders.prepare(pct("buy", "25"))
         assert isinstance(p, Pending) and p.req.qty == D("0.0688")

@@ -15,22 +15,22 @@ def order(oid="o-1", *, client_id=None, side="buy", qty="0.01", price="0.00725",
 
 
 @pytest.mark.spec("RNF-12")
-class TestPorClientId:
-    def test_solo_la_del_mismo_client_id(self):
+class TestByClientId:
+    def test_only_same_client_id(self):
         req = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-abc123")
         mine = order("a", client_id="t-abc123", venue="nk", ts=SENT - 10 * WINDOW_MS)
         other = order("b", client_id=None, venue="nk")
         assert candidates(req, [mine, other], SENT, frozenset(), by_client_id=True) == [mine]
 
-    def test_una_conocida_al_enviar_no_cuenta(self):
+    def test_known_at_send_does_not_count(self):
         req = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-abc123")
         mine = order("a", client_id="t-abc123", venue="nk")
         assert candidates(req, [mine], SENT, frozenset({"a"}), by_client_id=True) == []
 
 
 @pytest.mark.spec("RNF-12")
-class TestSinClientId:
-    def test_lado_precio_y_cantidad_iguales_en_la_ventana(self):
+class TestWithoutClientId:
+    def test_same_side_price_and_quantity_in_window(self):
         same = order("a", qty="0.0100", price="0.007250", ts=SENT + 2_000)
         assert candidates(REQ, [same], SENT, frozenset(), by_client_id=False) == [same]
 
@@ -45,18 +45,18 @@ class TestSinClientId:
             {"ts": SENT - WINDOW_MS - 1},
         ],
     )
-    def test_lo_que_no_coincide_no_cuenta(self, kw):
+    def test_mismatch_does_not_count(self, kw):
         assert candidates(REQ, [order(**kw)], SENT, frozenset(), by_client_id=False) == []
 
-    def test_desfase_de_reloj_hacia_atras_dentro_de_la_ventana(self):
+    def test_clock_skew_backwards_within_the_window(self):
         early = order("a", ts=SENT - WINDOW_MS)
         assert candidates(REQ, [early], SENT, frozenset(), by_client_id=False) == [early]
 
-    def test_varias_candidatas_se_devuelven_todas(self):
+    def test_all_candidates_returned(self):
         a, b = order("a"), order("b", status="filled")
         assert candidates(REQ, [a, b], SENT, frozenset(), by_client_id=False) == [a, b]
 
-    def test_la_misma_orden_dos_veces_cuenta_una(self):
+    def test_same_order_twice_counts_once(self):
         """Active and history may bring the same one: the last of the list counts."""
         a, a_later = order("a"), order("a", status="filled", ts=SENT + 1)
         assert candidates(REQ, [a, a_later], SENT, frozenset(), by_client_id=False) == [a_later]

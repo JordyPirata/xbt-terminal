@@ -40,8 +40,8 @@ async def until(predicate, timeout=2.0):
 
 
 @pytest.mark.spec("RF-30")
-class TestCorrer:
-    async def test_arranca_avisa_y_para_al_pedirlo(self, tmp_path):
+class TestRun:
+    async def test_starts_notifies_and_stops_when_asked(self, tmp_path):
         s = Rig(tmp_path)
         bot = FakeBot()
         engine = engine_for(s, bot=bot)
@@ -53,7 +53,7 @@ class TestCorrer:
         await asyncio.wait_for(daemon, 1)
         assert bot.disarmed
 
-    async def test_los_avisos_de_error_van_al_journal(self, tmp_path):
+    async def test_error_notices_go_to_journal(self, tmp_path):
         s = Rig(tmp_path)
         s.hub._venues["nk"].clock_skew_ms = 9_000
         engine = engine_for(s, max_clock_skew_s=5)
@@ -69,8 +69,8 @@ class TestCorrer:
 
 
 @pytest.mark.spec("RF-30", "RNF-15")
-class TestParar:
-    async def test_el_envio_en_vuelo_llega_al_journal(self, tmp_path):
+class TestStopping:
+    async def test_send_in_flight_reaches_journal(self, tmp_path):
         s = Rig(tmp_path)
         gate = asyncio.Event()
         real = s.venue.place_limit
@@ -92,7 +92,7 @@ class TestParar:
         await sending
         assert s.events() == ["order_sent", "order_ack"]
 
-    async def test_en_live_con_ordenes_abiertas_lo_apunta(self, tmp_path):
+    async def test_live_with_open_orders_notes_it(self, tmp_path):
         s = Rig(tmp_path)
         venue = FakePrivate()
         venue.push(order("o-1"), order("o-2"))
@@ -106,7 +106,7 @@ class TestParar:
         (line,) = [ln for ln in s.lines() if ln["event"] == "notice"]
         assert "2 órdenes abiertas" in line["data"]["text"]
 
-    async def test_en_dry_run_no_avisa_de_abiertas(self, tmp_path):
+    async def test_dry_run_does_not_warn_of_open_orders(self, tmp_path):
         s = Rig(tmp_path)
         venue = FakePrivate()
         venue.push(order("o-1"))
@@ -121,7 +121,7 @@ class TestParar:
 
 
 @pytest.mark.spec("RF-30", "RF-31")
-async def test_abre_el_socket_y_lo_cierra_al_parar(tmp_path):
+async def test_opens_socket_and_closes_on_stop(tmp_path):
     s = Rig(tmp_path)
     path = tmp_path / "xbt.sock"
     stop = asyncio.Event()

@@ -21,18 +21,18 @@ from xbt_terminal.core.models import D
 
 
 @pytest.mark.spec("RF-06")
-class TestOrdenSimple:
+class TestSimpleOrder:
     def test_buy(self):
         assert parse("buy nk 0.01 850") == PlaceOrder("nk", "buy", D("0.01"), D("850"))
 
     def test_sell(self):
         assert parse("sell nx 0.5 900.25") == PlaceOrder("nx", "sell", D("0.5"), D("900.25"))
 
-    def test_conserva_los_decimales_escritos(self):
+    def test_keeps_written_decimals(self):
         cmd = parse("buy nk 0.0100 850.00")
         assert str(cmd.qty) == "0.0100" and str(cmd.price) == "850.00"
 
-    def test_mayusculas_y_espacios(self):
+    def test_uppercase_and_spaces(self):
         assert parse("  BUY   NK 0.01   850 ") == PlaceOrder("nk", "buy", D("0.01"), D("850"))
 
     @pytest.mark.parametrize(
@@ -50,19 +50,19 @@ class TestOrdenSimple:
             ("buy nk 0.01 850 900", "uso"),
         ],
     )
-    def test_errores(self, text, match):
+    def test_errors(self, text, match):
         with pytest.raises(CommandError, match=match):
             parse(text)
 
 
 @pytest.mark.spec("RF-17")
-class TestCantidadPorcentual:
-    def test_porcentaje(self):
+class TestPercentQuantity:
+    def test_percentage(self):
         assert parse("buy nx 25% 0.00725") == PlaceOrder(
             "nx", "buy", Percent(D("25")), D("0.00725")
         )
 
-    def test_venta_con_decimales_y_100(self):
+    def test_sell_with_decimals_and_100(self):
         assert parse("sell nk 12.5% 0.0073").qty == Percent(D("12.5"))
         assert parse("SELL NK 100% 0.0073").qty == Percent(D("100"))
 
@@ -79,27 +79,27 @@ class TestCantidadPorcentual:
             ("buy nk 0.01 25%", "precio"),
         ],
     )
-    def test_errores(self, text, match):
+    def test_errors(self, text, match):
         with pytest.raises(CommandError, match=match):
             parse(text)
 
-    def test_la_doble_no_admite_porcentaje(self):
+    def test_double_takes_no_percentage(self):
         with pytest.raises(CommandError, match="cantidad"):
             parse("dbl 25% nk 850 nx 900")
 
 
 @pytest.mark.spec("RF-07")
-class TestOrdenDoble:
-    def test_dbl(self):
+class TestDoubleOrder:
+    def test_dbl_command(self):
         assert parse("dbl 0.01 nk 850 nx 900") == DoubleOrder(
             qty=D("0.01"), buy_venue="nk", buy_price=D("850"), sell_venue="nx", sell_price=D("900")
         )
 
-    def test_en_la_otra_direccion(self):
+    def test_in_the_other_direction(self):
         cmd = parse("dbl 0.02 nx 880 nk 905")
         assert (cmd.buy_venue, cmd.sell_venue) == ("nx", "nk")
 
-    def test_mismo_venue_en_las_dos_piernas(self):
+    def test_same_venue_on_both_legs(self):
         with pytest.raises(CommandError, match="venues distintos"):
             parse("dbl 0.01 nk 850 nk 900")
 
@@ -112,18 +112,18 @@ class TestOrdenDoble:
             "dbl -1 nk 850 nx 900",
         ],
     )
-    def test_errores(self, text):
+    def test_errors(self, text):
         with pytest.raises(CommandError):
             parse(text)
 
 
 @pytest.mark.spec("RF-08")
-class TestOrdenesYCancelacion:
-    def test_orders(self):
+class TestOrdersAndCancelling:
+    def test_orders_command(self):
         assert parse("orders") == ListOrders(None)
         assert parse("orders nx") == ListOrders("nx")
 
-    def test_cancel_por_id_respeta_mayusculas(self):
+    def test_cancel_by_id_keeps_case(self):
         assert parse("cancel AbC-123") == CancelOrder("AbC-123")
 
     def test_cancel_venue(self):
@@ -134,13 +134,13 @@ class TestOrdenesYCancelacion:
         assert parse("cancel all") == CancelAll()
 
     @pytest.mark.parametrize("text", ["cancel", "cancel a b", "orders zz", "orders nk nx"])
-    def test_errores(self, text):
+    def test_errors(self, text):
         with pytest.raises(CommandError):
             parse(text)
 
 
 @pytest.mark.spec("RF-03")
-def test_timeframe():
+def test_timeframe_command():
     assert parse("tf 5m") == SetTimeframe("5m")
     assert parse("tf 4h") == SetTimeframe("4h")
     assert parse("TF 1D") == SetTimeframe("1d")
@@ -151,19 +151,19 @@ def test_timeframe():
 @pytest.mark.parametrize(
     "text,match", [("", "vacío"), ("   ", "vacío"), ("market nk 1", "desconocido")]
 )
-def test_comando_vacio_o_desconocido(text, match):
+def test_empty_or_unknown_command(text, match):
     with pytest.raises(CommandError, match=match):
         parse(text)
 
 
 @pytest.mark.spec("RF-15")
 @pytest.mark.parametrize("text", ["help", "HELP", "?"])
-def test_ayuda(text):
+def test_help_command(text):
     assert parse(text) == ShowHelp()
 
 
 @pytest.mark.spec("RF-15")
-def test_ayuda_sin_argumentos():
+def test_help_without_arguments():
     with pytest.raises(CommandError, match="uso: help"):
         parse("help buy")
 
@@ -172,48 +172,48 @@ def test_ayuda_sin_argumentos():
 @pytest.mark.parametrize(
     ("text", "action"), [("bot on", "on"), ("BOT Off", "off"), ("bot status", "status")]
 )
-def test_bot(text, action):
+def test_bot_command(text, action):
     assert parse(text) == BotCommand(action)
 
 
 @pytest.mark.spec("RF-18")
 @pytest.mark.parametrize("text", ["bot", "bot start", "bot on now"])
-def test_bot_mal_escrito(text):
+def test_malformed_bot(text):
     with pytest.raises(CommandError, match=r"bot on\|off\|status"):
         parse(text)
 
 
 @pytest.mark.spec("RF-25")
 class TestResults:
-    def test_sin_rango_es_el_dia(self):
+    def test_no_range_means_day(self):
         assert parse("results") == ShowResults("dia")
 
     @pytest.mark.parametrize("arg", ["dia", "7d", "todo", "TODO"])
-    def test_rangos(self, arg):
+    def test_ranges(self, arg):
         assert parse(f"results {arg}") == ShowResults(arg.lower())
 
     @pytest.mark.parametrize("text", ["results ayer", "results dia 7d"])
-    def test_errores(self, text):
+    def test_errors(self, text):
         with pytest.raises(CommandError):
             parse(text)
 
 
 @pytest.mark.spec("RF-28")
 class TestDeposit:
-    def test_sin_argumentos(self):
+    def test_without_arguments(self):
         assert parse("deposit") == ShowDeposits()
 
-    def test_con_argumentos_es_error(self):
+    def test_with_arguments_is_error(self):
         with pytest.raises(CommandError):
             parse("deposit nk")
 
 
 @pytest.mark.spec("RF-29")
 class TestRebalance:
-    def test_sin_argumentos(self):
+    def test_without_arguments(self):
         assert parse("rebalance") == ShowRebalance()
 
-    def test_con_argumentos_es_error(self):
+    def test_with_arguments_is_error(self):
         with pytest.raises(CommandError):
             parse("rebalance nk")
 
@@ -248,7 +248,7 @@ class TestRebalance:
         ("? x", "uso: help"),
     ],
 )
-def test_texto_exacto_de_cada_error(text, message):
+def test_exact_text_of_each_error(text, message):
     """Pin the error messages (D-77: splitting `parse` changes nothing)."""
     with pytest.raises(CommandError) as exc:
         parse(text)
@@ -256,7 +256,7 @@ def test_texto_exacto_de_cada_error(text, message):
 
 
 @pytest.mark.spec("RF-06", "RF-07")
-def test_valores_elegidos_en_minusculas():
+def test_chosen_values_lowercase():
     assert parse("TF 1H") == SetTimeframe("1h")
     assert parse("Bot STATUS") == BotCommand("status")
     assert parse("results 7D") == ShowResults("7d")

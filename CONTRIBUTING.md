@@ -29,7 +29,7 @@ una versión nueva de la spec lo abra.
 
    ```python
    @pytest.mark.spec("RF-10", "CA-04")
-   def test_rechaza_cruce_de_orden_propia(): ...
+   def test_rejects_own_order_cross(): ...
    ```
 
 4. **Código.** Lo mínimo para que pasen los tests.

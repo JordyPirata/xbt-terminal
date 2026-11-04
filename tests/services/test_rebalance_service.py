@@ -27,12 +27,12 @@ class FakeFees:
 
 
 @pytest.mark.spec("RF-29", "CA-14")
-class TestCarga:
-    async def test_una_por_venue_y_activo(self):
+class TestLoad:
+    async def test_one_per_venue_and_asset(self):
         got = await RebalanceService({"nk": FakeFees("nk"), "nx": FakeFees("nx")}).load()
         assert {k: v.fee for k, v in got.items()} == {k: D(v) for k, v in FEES.items()}
 
-    async def test_el_error_queda_en_su_activo(self):
+    async def test_error_stays_in_its_asset(self):
         nk = FakeFees("nk", fail={"BTC": VenueError("NonKYC: HTTP 500")})
         nx = FakeFees("nx", fail={"BTCB2": httpx.ConnectTimeout("")})
         got = await RebalanceService({"nk": nk, "nx": nx}).load()
@@ -40,7 +40,7 @@ class TestCarga:
         assert got[("nx", "BTCB2")] == "ConnectTimeout"  # never empty (D-51)
         assert isinstance(got[("nk", "BTCB2")], WithdrawalFee)
 
-    async def test_sin_cache(self):
+    async def test_without_cache(self):
         nk = FakeFees("nk")
         svc = RebalanceService({"nk": nk})
         await svc.load()

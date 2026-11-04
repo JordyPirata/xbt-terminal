@@ -51,8 +51,8 @@ async def opened(app, pilot):
 
 
 @pytest.mark.spec("RF-29", "CA-14")
-class TestPantalla:
-    async def test_tecla_e_muestra_el_plan_y_esc_cierra(self):
+class TestScreen:
+    async def test_e_key_shows_plan_and_esc_closes(self):
         app = make_app(service(), {"nk": NK, "nx": NX}, bot_limits=LIMITS)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
@@ -66,7 +66,7 @@ class TestPantalla:
             await pilot.press("escape")
             await until(pilot, lambda: not isinstance(app.screen, RebalanceScreen))
 
-    async def test_no_viable_dice_por_que(self):
+    async def test_not_viable_says_why(self):
         app = make_app(service(BTCB2=VenueError("NonKYC: HTTP 500")), {"nk": NK, "nx": NX})
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
@@ -75,7 +75,7 @@ class TestPantalla:
             assert "HTTP 500" in xbt
             assert s.plan.best is not None and s.plan.best.asset == "BTC"
 
-    async def test_aviso_si_el_total_esta_fuera_de_la_banda(self):
+    async def test_warns_if_total_is_outside_band(self):
         target = InventoryTarget(D("50"), D("10"))  # the total is at 25.5 %
         app = make_app(service(), {"nk": NK, "nx": NX}, inventory_target=target)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -83,7 +83,7 @@ class TestPantalla:
             s = await opened(app, pilot)
             assert "fuera de la banda" in s.text() and "no lo cambia" in s.text()
 
-    async def test_sin_aviso_si_el_total_esta_en_la_banda(self):
+    async def test_no_warning_if_total_in_band(self):
         target = InventoryTarget(D("25"), D("10"))
         app = make_app(service(), {"nk": NK, "nx": NX}, inventory_target=target)
         async with app.run_test(size=(160, 45)) as pilot:
@@ -91,7 +91,7 @@ class TestPantalla:
             s = await opened(app, pilot)
             assert "fuera de la banda" not in s.text()
 
-    async def test_reabrir_y_r_vuelven_a_pedir(self):
+    async def test_reopening_and_r_ask_again(self):
         nk = FakeFees("nk")
         app = make_app(RebalanceService({"nk": nk, "nx": FakeFees("nx")}), {"nk": NK, "nx": NX})
         async with app.run_test(size=(160, 45)) as pilot:
@@ -104,14 +104,14 @@ class TestPantalla:
             await pilot.press("r")
             await until(pilot, lambda: len(nk.calls) == 6)
 
-    async def test_comando_rebalance(self, tmp_path):
+    async def test_rebalance_command(self, tmp_path):
         rig = Rig(tmp_path, rebalance=service())
         rig.app.rebalance_holdings = lambda: {"nk": NK, "nx": NX}  # type: ignore[method-assign]
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await type_command(pilot, rig.app, "rebalance")
             await opened(rig.app, pilot)
 
-    async def test_sin_saldos_lo_dice(self):
+    async def test_no_balances_says_so(self):
         app = make_app(service(), "nx: sin saldos")
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
@@ -119,7 +119,7 @@ class TestPantalla:
             await until(pilot, lambda: "sin saldos" in screen(app).text())
             assert screen(app).plan is None
 
-    async def test_sin_keys_lo_dice(self):
+    async def test_no_keys_says_so(self):
         app = make_app(None)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
@@ -129,11 +129,11 @@ class TestPantalla:
 
 
 @pytest.mark.spec("RF-29")
-class TestSaldosDeLaApp:
-    def test_sin_cuenta(self):
+class TestAppBalances:
+    def test_without_account(self):
         assert "saldos" in make_app(service()).rebalance_holdings()
 
-    async def test_con_la_cuenta_y_los_mids(self, tmp_path):
+    async def test_with_account_and_mids(self, tmp_path):
         from xbt_terminal.services.account import AccountService
 
         from .test_orders_ui import ready

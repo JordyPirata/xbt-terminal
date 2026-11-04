@@ -26,7 +26,7 @@ def decode(lines: list[str]) -> list[list[int]]:
 
 @pytest.mark.spec("RF-28", "CA-13")
 class TestQr:
-    def test_coincide_modulo_a_modulo_con_segno(self):
+    def test_matches_segno_module_by_module(self):
         lines = qr_lines(ADDRESS)
         qr = segno.make(ADDRESS, error="l", micro=False)
         expected = [list(r) for r in qr.matrix_iter(border=2)]
@@ -35,9 +35,9 @@ class TestQr:
         # odd number of rows: the half row left over is light margin
         assert got[len(expected) :] in ([], [[0] * len(expected[0])])
 
-    def test_tamano_para_una_direccion_bc1q(self):
+    def test_size_for_a_bc1q_address(self):
         lines = qr_lines(ADDRESS)
         assert len(lines) == 17 and {len(ln) for ln in lines} == {33}
 
-    def test_otra_direccion_otro_qr(self):
+    def test_other_address_other_qr(self):
         assert qr_lines(ADDRESS) != qr_lines(ADDRESS[:-1] + "x")

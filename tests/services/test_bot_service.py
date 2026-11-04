@@ -140,8 +140,8 @@ async def rig(tmp_path):
 
 
 @pytest.mark.spec("RF-19", "RF-20", "RF-23", "CA-08")
-class TestDisparo:
-    async def test_un_cruce_una_sola_doble(self, rig):
+class TestFire:
+    async def test_one_cross_one_double(self, rig):
         assert rig.bot.arm() is None
         rig.books()
         await rig.until(lambda: rig.bot.state.status == "cooldown")
@@ -162,7 +162,7 @@ class TestDisparo:
         assert states == ["armed", "firing", "cooldown"]
         assert len(rig.events("order_sent")) == 2 and len(rig.events("cancel_sent")) == 2
 
-    async def test_tras_el_enfriamiento_vuelve_a_disparar(self, rig):
+    async def test_fires_again_after_cooldown(self, rig):
         rig.bot.arm()
         rig.books()
         await rig.until(lambda: rig.bot.state.status == "cooldown")
@@ -170,7 +170,7 @@ class TestDisparo:
         rig.books()
         await rig.until(lambda: len(rig.orders.doubles) == 2)
 
-    async def test_las_dos_llenas_enfria(self, rig):
+    async def test_both_filled_cools_down(self, rig):
         rig.bot.arm()
         rig.bot._limits = replace(BOT, fill_timeout_ms=2_000)
         rig.books()
@@ -182,22 +182,22 @@ class TestDisparo:
         await rig.until(lambda: rig.bot.state.status == "cooldown")
         assert rig.events("cancel_sent") == []
 
-    async def test_sin_cruce_no_dispara(self, rig):
+    async def test_without_cross_does_not_fire(self, rig):
         rig.bot.arm()
         rig.books(nx=("0.00700500", "0.00730000"))  # net < 0.5 %
         await asyncio.sleep(0.1)
         assert rig.orders.doubles == {} and rig.bot.state.status == "armed"
         assert rig.bot.last_skip.reason == "below_threshold"
 
-    async def test_apagado_no_dispara(self, rig):
+    async def test_off_does_not_fire(self, rig):
         rig.books()
         await asyncio.sleep(0.1)
         assert rig.orders.doubles == {} and rig.bot.state.status == "off"
 
 
 @pytest.mark.spec("RF-19", "CA-08")
-class TestBloqueos:
-    async def test_book_viejo(self, rig):
+class TestBlocks:
+    async def test_stale_book(self, rig):
         rig.books()
         await rig.until(lambda: rig.hub.state["nx"].book.valid)
         rig.clock.now += 16_000  # more than stale_after_s
@@ -207,7 +207,7 @@ class TestBloqueos:
         assert rig.bot.last_skip.reason == "blocked" and "book viejo" in rig.bot.last_skip.detail
 
     @pytest.mark.spec("RNF-24", "CA-18")
-    async def test_ws_conectado_sin_cambios_y_rest_distinto(self, rig):
+    async def test_ws_connected_unchanged_and_rest_different(self, rig):
         """d-9820a4: NonKYC's WS stayed "up" without sending changes and the bid the bot saw
         was gone. With the check, it does not fire until the new book."""
         rig.books()
@@ -232,7 +232,7 @@ class TestBloqueos:
         await rig.until(lambda: len(rig.orders.doubles) == 1)
 
     @pytest.mark.spec("RNF-24", "CA-18")
-    async def test_book_quieto_confirmado_dispara_pasado_stale_after_s(self, rig):
+    async def test_quiet_confirmed_book_fires_past_stale_after_s(self, rig):
         rig.books()
         await rig.until(lambda: rig.hub.state["nx"].book.valid)
         rig.clock.now += 300_000
@@ -246,14 +246,14 @@ class TestBloqueos:
         rig.bot.arm()
         await rig.until(lambda: len(rig.orders.doubles) == 1)
 
-    async def test_fallo_del_venue(self, rig):
+    async def test_venue_failure(self, rig):
         rig.hub.state["nx"].error = "RuntimeError: bug"
         rig.bot.arm()
         rig.books()
         await asyncio.sleep(0.1)
         assert rig.orders.doubles == {} and "nx" in rig.bot.last_skip.detail
 
-    async def test_cuenta_con_error_sin_texto(self, rig):
+    async def test_account_with_error_without_text(self, rig):
         """D-51: on 2026-10-23 the bot fired with balances failing because the account error
         was "" (ConnectTimeout without text)."""
         rig.bot.arm()
@@ -263,21 +263,21 @@ class TestBloqueos:
         assert rig.orders.doubles == {}
         assert rig.bot.last_skip.reason == "blocked" and "nx" in rig.bot.last_skip.detail
 
-    async def test_mercado_con_error_sin_texto(self, rig):
+    async def test_market_with_error_without_text(self, rig):
         rig.hub.state["nk"].error = ""
         rig.bot.arm()
         rig.books()
         await asyncio.sleep(0.1)
         assert rig.orders.doubles == {} and "nk" in rig.bot.last_skip.detail
 
-    async def test_orden_incierta_abierta(self, rig):
+    async def test_uncertain_order_open(self, rig):
         rig.orders.uncertain["t-x"] = object()  # any uncertain order blocks
         rig.bot.arm()
         rig.books()
         await asyncio.sleep(0.1)
         assert rig.orders.doubles == {} and rig.bot.last_skip.reason == "uncertain_open"
 
-    async def test_otra_doble_sin_terminar(self, rig):
+    async def test_another_unfinished_double(self, rig):
         """A manual double open: the bot does not send another on top (one at a time)."""
         buy = OrderRequest("nk", "buy", D("1"), D("0.007"), "c-1")
         sell = OrderRequest("nx", "sell", D("1"), D("0.0072"), "c-2")
@@ -290,7 +290,7 @@ class TestBloqueos:
 
 
 @pytest.mark.spec("RF-19")
-async def test_en_live_sin_desfase_medido_no_dispara(tmp_path):
+async def test_live_without_measured_skew_does_not_fire(tmp_path):
     async with BotRig(tmp_path, live=True) as rig:
         assert rig.bot.arm() is None
         rig.books()
@@ -299,7 +299,7 @@ async def test_en_live_sin_desfase_medido_no_dispara(tmp_path):
 
 
 @pytest.mark.spec("RF-18")
-async def test_en_live_hace_falta_enabled(tmp_path):
+async def test_live_needs_enabled(tmp_path):
     async with BotRig(tmp_path, live=True, enabled=False) as rig:
         assert "enabled" in rig.bot.arm()
         assert rig.bot.state.status == "off"
@@ -308,7 +308,7 @@ async def test_en_live_hace_falta_enabled(tmp_path):
 
 
 @pytest.mark.spec("RF-18", "RF-20")
-async def test_la_confirmacion_muestra_el_recorrido_del_book(tmp_path):
+async def test_confirmation_shows_book_walk(tmp_path):
     async with BotRig(tmp_path) as rig:
         assert "recorre" not in rig.bot.summary
     walk = replace(BOT, max_walk_pct={"nk": D("0.8"), "nx": D("0")})
@@ -318,8 +318,8 @@ async def test_la_confirmacion_muestra_el_recorrido_del_book(tmp_path):
 
 
 @pytest.mark.spec("RF-21", "CA-09")
-class TestParada:
-    async def test_pierna_rechazada_por_el_venue(self, rig):
+class TestStop:
+    async def test_leg_rejected_by_venue(self, rig):
         async def refuse(req):
             raise VenueError("Neoxa: [400] rechazada")
 
@@ -332,7 +332,7 @@ class TestParada:
         (halt,) = [e for e in rig.events("bot_state") if e["data"]["status"] == "halted"]
         assert "rechazada" in halt["data"]["reason"]
 
-    async def test_pierna_sin_conexion_dice_no_enviada(self, rig):
+    async def test_unconnected_leg_says_not_sent(self, rig):
         """D-51: unconnected, the order never left; the stop must not say "rechazada"."""
 
         async def offline(req):
@@ -348,7 +348,7 @@ class TestParada:
             "no enviada, sin conexión (ConnectTimeout)"
         )
 
-    async def test_pierna_incierta(self, rig):
+    async def test_uncertain_leg(self, rig):
         async def unclear(req):
             raise UncertainError("Neoxa: sin respuesta clara (ReadTimeout)")
 
@@ -359,7 +359,7 @@ class TestParada:
         assert rig.bot.state.reason.startswith("uncertain")
         assert (await rig.open_orders())["nk"] == []
 
-    async def test_llenado_desigual_es_pierna_colgada(self, rig):
+    async def test_unequal_fill_is_hanging_leg(self, rig):
         rig.bot.arm()
         rig.bot._limits = replace(BOT, fill_timeout_ms=300)
         rig.books()
@@ -375,7 +375,7 @@ class TestParada:
         await asyncio.sleep(0.1)
         assert len(rig.orders.doubles) == 1  # stopped until re-armed by hand
 
-    async def test_rechazos_de_riesgo_seguidos(self, tmp_path):
+    async def test_consecutive_risk_rejections(self, tmp_path):
         risk = replace(RISK, max_venue_exposure=D("0.0001"))
         async with BotRig(tmp_path, risk=risk, limits=replace(BOT, cooldown_s=2)) as rig:
             rig.bot.arm()
@@ -387,7 +387,7 @@ class TestParada:
             assert "3 disparos rechazados" in rig.bot.state.reason
             assert rig.events("order_sent") == []
 
-    async def test_un_bug_para_el_bot(self, rig):
+    async def test_bug_stops_bot(self, rig):
         def broken(now):
             raise RuntimeError("bug en el bot")
 
@@ -403,7 +403,7 @@ class TestParada:
 
 
 @pytest.mark.spec("RF-22", "RF-23")
-async def test_los_contadores_se_rehacen_del_journal(tmp_path):
+async def test_counters_rebuilt_from_journal(tmp_path):
     async with BotRig(tmp_path) as rig:
         rig.bot.arm()
         rig.books()
@@ -417,10 +417,10 @@ async def test_los_contadores_se_rehacen_del_journal(tmp_path):
 
 
 @pytest.mark.spec("RF-22")
-class TestTopeDiario:
+class TestDailyCap:
     """T-46 (D-54): the daily cap stops the bot even when no shot uses it up."""
 
-    async def test_queda_menos_de_un_lote(self, tmp_path):
+    async def test_less_than_a_lot_left(self, tmp_path):
         # the first shot spends 10 × 0.007014 = 0.07014 BTC and leaves 0.0000005, less than a
         # 0.0001 lot at that price
         limits = replace(BOT, max_daily_btc=D("0.0701405"))
@@ -435,7 +435,7 @@ class TestTopeDiario:
             assert len(rig.orders.doubles) == 1
             assert rig.events("bot_state")[-1]["data"]["status"] == "halted"
 
-    async def test_rearmar_el_mismo_dia_con_el_tope_gastado(self, rig):
+    async def test_rearming_same_day_with_cap_spent(self, rig):
         rig.bot.arm()
         rig.books()
         await rig.until(lambda: rig.bot.state.status == "cooldown")
@@ -449,7 +449,7 @@ class TestTopeDiario:
         assert "day_cap" in rig.bot.status_text()
         assert len(rig.orders.doubles) == 1
 
-    async def test_tras_reiniciar_con_el_tope_gastado(self, tmp_path):
+    async def test_after_restart_with_cap_spent(self, tmp_path):
         async with BotRig(tmp_path) as rig:
             rig.bot.arm()
             rig.books()
@@ -466,7 +466,7 @@ class TestTopeDiario:
 
 
 @pytest.mark.spec("RF-18", "RF-22")
-async def test_apagar_mientras_dispara_lo_deja_apagado(tmp_path):
+async def test_turning_off_while_firing_leaves_it_off(tmp_path):
     """Seen for real (2026-10-22 03:34): bot off with a double in flight, and on closing
     it the bot went to cooldown and then re-armed by itself."""
     async with BotRig(tmp_path, limits=replace(BOT, cooldown_s=2)) as rig:
@@ -485,7 +485,7 @@ async def test_apagar_mientras_dispara_lo_deja_apagado(tmp_path):
 
 
 @pytest.mark.spec("RF-21")
-async def test_apagado_mientras_dispara_y_acaba_mal_queda_parado(tmp_path):
+async def test_turned_off_while_firing_and_ending_badly_stays_halted(tmp_path):
     async def refuse(req):
         await asyncio.sleep(0.05)  # gives time to turn it off with the double in flight
         raise VenueError("Neoxa: [400] rechazada")
@@ -501,7 +501,7 @@ async def test_apagado_mientras_dispara_y_acaba_mal_queda_parado(tmp_path):
 
 
 @pytest.mark.spec("RF-26", "CA-12")
-class TestRatioDeInventario:
+class TestInventoryRatio:
     """Rig balances: 1 BTC + 1000 BTCB2 per venue, ~87 % of the value in BTCB2."""
 
     def rig_with(self, tmp_path, target):
@@ -513,7 +513,7 @@ class TestRatioDeInventario:
         )  # fmt: skip
         return rig
 
-    async def test_no_dispara_si_empeora_un_venue_y_lo_dice(self, tmp_path):
+    async def test_does_not_fire_if_it_worsens_a_venue_and_says_so(self, tmp_path):
         async with self.rig_with(tmp_path, InventoryTarget(D("25"), D("10"))) as rig:
             rig.bot.arm()
             rig.books()  # buying on NonKYC takes it even further from 25 %
@@ -523,7 +523,7 @@ class TestRatioDeInventario:
             assert "nk: XBT" in rig.bot.status_text()
             assert rig.orders.doubles == {}
 
-    async def test_sin_objetivo_dispara(self, tmp_path):
+    async def test_no_target_fires(self, tmp_path):
         async with self.rig_with(tmp_path, None) as rig:
             rig.bot.arm()
             rig.books()
@@ -536,10 +536,10 @@ THIN_BOOKS = {"nk": ("0.00690000", "0.00700000"), "nx": ("0.00705000", "0.007300
 
 
 @pytest.mark.spec("RF-19", "RF-24")
-class TestFeeConToken:
+class TestFeeWithToken:
     """Net of the thin cross: 0.31 % with the full fee, 0.36 % with NKYC (D-63)."""
 
-    async def test_con_token_dispara(self, tmp_path):
+    async def test_with_token_fires(self, tmp_path):
         tokens = {"nk": NKYC}
         nkyc = {"NKYC": Balance("NKYC", D("4.5"))}
         async with BotRig(tmp_path, limits=THIN, fee_tokens=tokens, nk_extra=nkyc) as rig:
@@ -549,7 +549,7 @@ class TestFeeConToken:
             await rig.until(lambda: rig.orders.doubles)
             assert "NonKYC fee con NKYC" in rig.bot.status_text()
 
-    async def test_bajo_el_minimo_fee_completa(self, tmp_path):
+    async def test_below_minimum_full_fee(self, tmp_path):
         tokens = {"nk": NKYC}
         nkyc = {"NKYC": Balance("NKYC", D("0.5"), D("9"))}  # locked does not count
         async with BotRig(tmp_path, limits=THIN, fee_tokens=tokens, nk_extra=nkyc) as rig:
@@ -560,7 +560,7 @@ class TestFeeConToken:
             assert rig.bot.last_skip.reason == "below_threshold"
             assert "NonKYC fee completa: 0.5 NKYC < 1" in rig.bot.status_text()
 
-    async def test_sin_token_configurado_fee_completa(self, tmp_path):
+    async def test_no_configured_token_full_fee(self, tmp_path):
         nkyc = {"NKYC": Balance("NKYC", D("4.5"))}
         async with BotRig(tmp_path, limits=THIN, nk_extra=nkyc) as rig:
             rig.bot.arm()
@@ -571,11 +571,11 @@ class TestFeeConToken:
 
 
 @pytest.mark.spec("RF-19", "RF-23", "CA-08")
-class TestMovimientoBrusco:
+class TestSharpMove:
     """D-71: the bot measures each venue's mid in a window and does not fire after a jump
     above `max_move_pct`; the move goes in `bot_fire`."""
 
-    async def test_tras_un_salto_espera_a_que_salga_de_la_ventana(self, tmp_path):
+    async def test_after_jump_waits_for_it_to_leave_window(self, tmp_path):
         limits = replace(BOT, max_move_pct=D("1"), move_window_ms=2000)
         async with BotRig(tmp_path, limits=limits) as rig:
             rig.books(nx=("0.00690000", "0.00705000"))  # no cross, mid 0.006975
@@ -591,7 +591,7 @@ class TestMovimientoBrusco:
             (fire,) = rig.events("bot_fire")
             assert fire["data"]["move"] == {"nk": "0", "nx": "0"}
 
-    async def test_salto_tras_un_book_quieto_cuenta(self, tmp_path):
+    async def test_jump_after_quiet_book_counts(self, tmp_path):
         """D-72: if the book has been quiet longer than the window, the mid ruling when the
         window began still counts (d-60003f fired with move 0)."""
         limits = replace(BOT, max_move_pct=D("1"), move_window_ms=2000)
@@ -605,7 +605,7 @@ class TestMovimientoBrusco:
             assert rig.bot.last_skip.detail.startswith("nx: mid 3.94 %")
             assert not rig.orders.doubles
 
-    async def test_sin_filtro_dispara_y_apunta_el_movimiento(self, rig):
+    async def test_without_filter_fires_and_notes_move(self, rig):
         rig.books(nx=("0.00690000", "0.00705000"))
         await rig.until(lambda: rig.hub.state["nx"].book.mid == D("0.006975"))
         rig.bot.arm()
@@ -632,7 +632,7 @@ def fills_on_place(venue, qty):
 
 
 @pytest.mark.spec("RF-07", "RF-20", "RF-21", "RF-23", "CA-08")
-class TestPrimeraPierna:
+class TestFirstLeg:
     """With `lead_venue` (D-75), that venue's leg goes first and the other only for what
     it filled. Rig route: buy on NonKYC, sell on Neoxa."""
 
@@ -648,7 +648,7 @@ class TestPrimeraPierna:
         (double,) = rig.orders.doubles.values()
         return rig, double
 
-    async def test_llena_y_sale_la_otra(self, tmp_path):
+    async def test_fills_and_the_other_goes(self, tmp_path):
         rig, double = await self.fire(tmp_path, D("10"))
         try:
             await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
@@ -663,7 +663,7 @@ class TestPrimeraPierna:
         finally:
             await rig.__aexit__(None, None, None)
 
-    async def test_en_parte_cancela_el_resto_y_la_otra_va_por_lo_lleno(self, tmp_path):
+    async def test_partial_cancels_rest_and_other_goes_for_filled(self, tmp_path):
         rig, double = await self.fire(tmp_path, D("4"))
         try:
             await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
@@ -678,7 +678,7 @@ class TestPrimeraPierna:
         finally:
             await rig.__aexit__(None, None, None)
 
-    async def test_sin_llenar_no_sale_la_otra(self, tmp_path):
+    async def test_unfilled_other_stays(self, tmp_path):
         rig, double = await self.fire(tmp_path, D("0"))
         try:
             await rig.until(lambda: rig.bot.state.status == "cooldown")
@@ -694,7 +694,7 @@ class TestPrimeraPierna:
         finally:
             await rig.__aexit__(None, None, None)
 
-    async def test_sin_llenar_no_cuenta_como_fallo(self, tmp_path):
+    async def test_unfilled_is_not_a_failure(self, tmp_path):
         limits = replace(LEAD, max_consecutive_failures=1, cooldown_s=2)
         rig, _ = await self.fire(tmp_path, D("0"), limits)
         try:
@@ -707,7 +707,7 @@ class TestPrimeraPierna:
         finally:
             await rig.__aexit__(None, None, None)
 
-    async def test_rechazada_no_sale_la_otra(self, tmp_path):
+    async def test_rejected_other_stays(self, tmp_path):
         async def refuse(req):
             raise VenueError("Neoxa: [400] rechazada")
 
@@ -722,7 +722,7 @@ class TestPrimeraPierna:
             assert [e["venue"] for e in rig.events("order_sent")] == ["nx"]
             assert rig.bot.state.reason.startswith("rejected")
 
-    async def test_la_cancelacion_falla_porque_ya_lleno(self, tmp_path):
+    async def test_cancel_fails_because_already_filled(self, tmp_path):
         """As on 2026-10-27 17:23: "Cannot cancel order with status: filled"."""
         def setup(rig):
             nx = rig.venues["nx"]
@@ -742,7 +742,7 @@ class TestPrimeraPierna:
         finally:
             await rig.__aexit__(None, None, None)
 
-    async def test_lo_lleno_bajo_el_lote_es_colgada(self, tmp_path):
+    async def test_filled_below_lot_is_hanging(self, tmp_path):
         rig, double = await self.fire(tmp_path, D("0.00005"))  # NonKYC lot: 0.0001
         try:
             await rig.until(lambda: rig.bot.state.status == "halted")

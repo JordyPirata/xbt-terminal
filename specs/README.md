@@ -46,7 +46,7 @@ se renumeran; si un requerimiento se elimina, queda tachado con su ID.
 
    ```python
    @pytest.mark.spec("RF-10", "CA-04")
-   def test_rechaza_cruce_de_orden_propia(): ...
+   def test_rejects_own_order_cross(): ...
    ```
 
 4. **Implementar** lo mínimo para que pasen. Nada que no esté en la tarea.

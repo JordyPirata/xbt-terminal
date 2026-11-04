@@ -34,8 +34,8 @@ async def settle():
 
 
 @pytest.mark.spec("RNF-13", "RF-10")
-class TestMismoVenue:
-    async def test_la_segunda_cuenta_la_que_esta_en_vuelo(self, tmp_path):
+class TestSameVenue:
+    async def test_second_counts_the_one_in_flight(self, tmp_path):
         s = Rig(tmp_path)
         first = await s.orders.prepare(buy(price="0.00725000"))
         second = await s.orders.prepare(sell(price="0.00724000"))
@@ -51,7 +51,7 @@ class TestMismoVenue:
         assert isinstance(rb, Rejected) and "self_cross" in rb.codes
         assert s.events() == ["order_sent", "order_ack", "reject_local"]
 
-    async def test_una_incierta_cuenta_como_abierta(self, tmp_path):
+    async def test_uncertain_counts_as_open(self, tmp_path):
         """It may exist on the venue: until known, it counts (when in doubt, do not send)."""
         s = Rig(tmp_path)
         s.lose_reply(create=False)
@@ -59,7 +59,7 @@ class TestMismoVenue:
         result = await s.orders.prepare(sell(price="0.00724000"))
         assert isinstance(result, Rejected) and "self_cross" in result.codes
 
-    async def test_resuelta_como_inexistente_deja_de_contar(self, tmp_path):
+    async def test_resolved_as_missing_stops_counting(self, tmp_path):
         s = Rig(tmp_path)
         s.lose_reply(create=False)
         await s.send(buy(price="0.00725000"))
@@ -69,7 +69,7 @@ class TestMismoVenue:
         assert r.outcome == "missing"
         assert isinstance(await s.send(sell(price="0.00724000")), Sent)
 
-    async def test_incierta_y_encontrada_no_cuenta_dos_veces(self, tmp_path):
+    async def test_uncertain_and_found_does_not_count_twice(self, tmp_path):
         """With the order already on the venue and the same client_id, only once."""
         s = Rig(tmp_path)
         s.lose_reply()
@@ -79,8 +79,8 @@ class TestMismoVenue:
 
 
 @pytest.mark.spec("RNF-13")
-class TestVenuesDistintos:
-    async def test_no_se_bloquean_entre_si(self, tmp_path):
+class TestDifferentVenues:
+    async def test_do_not_block_each_other(self, tmp_path):
         s = double.Setup(tmp_path)
         gate = asyncio.Event()
         slow(s.venues["nk"], gate)
@@ -92,7 +92,7 @@ class TestVenuesDistintos:
         gate.set()
         assert isinstance(await stuck, Sent)
 
-    async def test_orden_doble_espera_a_los_dos_venues(self, tmp_path):
+    async def test_double_order_waits_for_both_venues(self, tmp_path):
         s = double.Setup(tmp_path)
         gate = asyncio.Event()
         slow(s.venues["nx"], gate)

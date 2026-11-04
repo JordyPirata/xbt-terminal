@@ -11,8 +11,8 @@ from .test_orders_ui import Rig, ready, type_command, until
 
 
 @pytest.mark.spec("RNF-14", "RF-14")
-class TestFallos:
-    async def test_un_bug_en_un_venue_no_cierra_la_terminal(self, tmp_path):
+class TestFailures:
+    async def test_venue_bug_does_not_close_terminal(self, tmp_path):
         rig = Rig(tmp_path)
         rig.feeds["nx"] = rig.hub._venues["nx"] = Buggy("nx")  # fails once
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -23,7 +23,7 @@ class TestFallos:
             await until(pilot, lambda: rig.hub.state["nx"].ready)  # retried
             assert rig.app.is_running
 
-    async def test_journal_lleno_tras_enviar(self, tmp_path):
+    async def test_journal_full_after_sending(self, tmp_path):
         rig = Rig(tmp_path)
         full_disk(rig.app.orders._journal, "order_ack")
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -37,7 +37,7 @@ class TestFallos:
             await until(pilot, lambda: "✖ 1 fallo" in rig.app.query_one(StatusBar).text)
             assert rig.app.is_running
 
-    async def test_sin_journal_no_se_envia_y_lo_dice(self, tmp_path):
+    async def test_without_journal_not_sent_and_says_so(self, tmp_path):
         rig = Rig(tmp_path)
         full_disk(rig.app.orders._journal, "order_sent")
         async with rig.app.run_test(size=(160, 45)) as pilot:
@@ -49,7 +49,7 @@ class TestFallos:
             assert "error del venue" not in rig.app.last_message
             assert await rig.venue.open_orders() == []
 
-    async def test_un_bug_al_preparar_no_cierra_la_terminal(self, tmp_path):
+    async def test_bug_on_prepare_does_not_close_terminal(self, tmp_path):
         rig = Rig(tmp_path)
 
         async def boom(cmd):
@@ -63,7 +63,7 @@ class TestFallos:
             assert rig.app.last_error and rig.app.is_running
             await until(pilot, lambda: "✖ 1 fallo" in rig.app.query_one(StatusBar).text)
 
-    async def test_un_bug_al_confirmar_no_cierra_la_terminal(self, tmp_path):
+    async def test_bug_on_confirm_does_not_close_terminal(self, tmp_path):
         rig = Rig(tmp_path)
 
         async def boom(pending):

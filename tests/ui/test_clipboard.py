@@ -24,19 +24,19 @@ def which(*present):
 
 @pytest.mark.spec("RF-28", "CA-13")
 class TestSystemCopy:
-    async def test_x11_usa_xclip_con_el_texto_exacto(self):
+    async def test_x11_uses_xclip_with_exact_text(self):
         run = Runner()
         got = await system_copy(ADDRESS, env={"DISPLAY": ":0"}, which=which("xclip"), run=run)
         assert got == "xclip"
         assert run.calls == [(["/usr/bin/xclip", "-selection", "clipboard"], ADDRESS.encode())]
 
-    async def test_wayland_primero_wl_copy(self):
+    async def test_wayland_first_wl_copy(self):
         run = Runner()
         env = {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}
         got = await system_copy(ADDRESS, env=env, which=which("wl-copy", "xclip"), run=run)
         assert got == "wl-copy" and len(run.calls) == 1
 
-    async def test_si_una_falla_prueba_la_siguiente(self):
+    async def test_if_one_fails_tries_next(self):
         run = Runner(codes={"/usr/bin/xclip": 1})
         got = await system_copy(
             ADDRESS, env={"DISPLAY": ":0"}, which=which("xclip", "xsel"), run=run
@@ -44,21 +44,21 @@ class TestSystemCopy:
         assert got == "xsel"
         assert run.calls[1] == (["/usr/bin/xsel", "--clipboard", "--input"], ADDRESS.encode())
 
-    async def test_una_que_revienta_no_rompe(self):
+    async def test_crashing_one_breaks_nothing(self):
         async def boom(argv, data):
             raise OSError("no se puede ejecutar")
 
         got = await system_copy(ADDRESS, env={"DISPLAY": ":0"}, which=which("xclip"), run=boom)
         assert got is None
 
-    async def test_sin_herramientas_o_sin_pantalla_da_none(self):
+    async def test_no_tools_or_screen_gives_none(self):
         run = Runner()
         assert await system_copy(ADDRESS, env={"DISPLAY": ":0"}, which=which(), run=run) is None
         # xclip installed but no graphical session (ssh): not even tried
         assert await system_copy(ADDRESS, env={}, which=which("xclip"), run=run) is None
         assert run.calls == []
 
-    async def test_el_runner_real_no_espera_al_proceso_en_segundo_plano(self, tmp_path):
+    async def test_real_runner_does_not_wait_for_background_process(self, tmp_path):
         # xclip stays alive serving the selection: with output into a pipe the wait would not
         # end. An `sh` leaving a sleeping child imitates it.
         script = tmp_path / "xclip"

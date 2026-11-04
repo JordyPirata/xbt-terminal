@@ -18,31 +18,31 @@ def nobody(level):
 
 @pytest.mark.spec("RF-34", "CA-19")
 class TestMatch:
-    def test_compra_por_niveles_hasta_su_limite(self):
+    def test_buy_by_levels_up_to_its_limit(self):
         assert match("buy", D("0.011"), D("2"), ASKS, nobody) == [
             (D("0.010"), D("1")),
             (D("0.011"), D("1")),
         ]
 
-    def test_venta_por_niveles_hasta_su_limite(self):
+    def test_sell_by_levels_down_to_its_limit(self):
         assert match("sell", D("0.008"), D("2"), BIDS, nobody) == [
             (D("0.009"), D("1")),
             (D("0.008"), D("1")),
         ]
 
-    def test_lo_que_no_llega_al_limite_no_casa(self):
+    def test_short_of_limit_does_not_match(self):
         assert match("buy", D("0.0099"), D("1"), ASKS, nobody) == []
         assert match("sell", D("0.0091"), D("1"), BIDS, nobody) == []
 
-    def test_sin_profundidad_casa_lo_que_hay(self):
+    def test_no_depth_matches_what_there_is(self):
         assert match("buy", D("0.010"), D("5"), ASKS, nobody) == [(D("0.010"), D("1"))]
 
-    def test_el_competidor_se_lleva_niveles_enteros(self):
+    def test_competitor_takes_whole_levels(self):
         first = ASKS[0]
         taken = match("buy", D("0.011"), D("2"), ASKS, lambda lv: lv == first)
         assert taken == [(D("0.011"), D("2"))]
 
-    def test_solo_pregunta_por_los_niveles_que_alcanza(self):
+    def test_only_asks_for_reachable_levels(self):
         asked = []
         match("buy", D("0.010"), D("1"), ASKS, lambda lv: asked.append(lv) or False)
         assert asked == [ASKS[0]]
@@ -54,7 +54,7 @@ def row(event, **data):
 
 @pytest.mark.spec("RF-35", "CA-20")
 class TestSummarize:
-    def test_por_cada_100_disparos(self):
+    def test_per_100_shots(self):
         rows = [
             *[row("bot_fire", double=f"d-{i}") for i in range(4)],
             row("bot_miss", double="d-1"),
@@ -68,21 +68,21 @@ class TestSummarize:
             hanging_per_100=D(25), halted=None,
         )  # fmt: skip
 
-    def test_sin_cruces_ni_disparos_no_divide(self):
+    def test_no_crossings_or_shots_does_not_divide(self):
         report = summarize([], crossings=0, filled=0, net=Decimal(0), duration_ms=60_000)
         assert report.capture_pct is None and report.miss_per_100 is None
 
-    def test_otra_parada_se_dice(self):
+    def test_another_stop_is_reported(self):
         rows = [row("bot_state", status="halted", reason="rejected: saldo")]
         report = summarize(rows, crossings=0, filled=0, net=Decimal(0), duration_ms=1)
         assert report.halted == "rejected: saldo"
 
-    def test_una_pierna_colgada_no_es_la_parada_final(self):
+    def test_hanging_leg_is_not_the_final_stop(self):
         rows = [row("bot_state", status="halted", reason="hanging_leg: x")]
         report = summarize(rows, crossings=0, filled=0, net=Decimal(0), duration_ms=1)
         assert report.halted is None
 
-    def test_el_texto_lleva_cada_medida(self):
+    def test_text_has_each_measure(self):
         rows = [row("bot_fire", double="d-1")]
         report = summarize(rows, crossings=2, filled=1, net=D("0.00001234"), duration_ms=60_000)
         text = render(report)

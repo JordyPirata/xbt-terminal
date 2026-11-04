@@ -37,8 +37,8 @@ class Hub:
 
 
 @pytest.mark.spec("RF-01", "RF-03")
-class TestArranque:
-    async def test_carga_mercado_e_historico_de_cada_timeframe(self):
+class TestStartup:
+    async def test_loads_market_and_history_of_each_timeframe(self):
         async with Hub() as h:
             await h.until(lambda: all(s.ready for s in h.hub.state.values()))
             for venue, feed in h.feeds.items():
@@ -61,7 +61,7 @@ class TestArranque:
                 }
             assert ("nk", "market") in h.changes and ("nx", "candles") in h.changes
 
-    async def test_si_falla_al_arrancar_reintenta_y_lo_dice(self):
+    async def test_startup_failure_retries_and_says_so(self):
         feeds = {"nk": FakeFeed("nk", fail_market=2), "nx": FakeFeed("nx")}
         async with Hub(**feeds) as h:
             await h.until(lambda: h.hub.state["nk"].ready)
@@ -69,7 +69,7 @@ class TestArranque:
             assert ("nk", "conn") in h.changes
             assert h.hub.state["nk"].error is None  # cleared on recovery
 
-    async def test_estado_down_mientras_no_arranca(self):
+    async def test_down_state_until_started(self):
         feeds = {"nk": FakeFeed("nk", fail_market=10**6), "nx": FakeFeed("nx")}
         async with Hub(**feeds) as h:
             await h.until(lambda: h.hub.state["nk"].conn is not None)
@@ -80,7 +80,7 @@ class TestArranque:
 
 @pytest.mark.spec("RF-01", "RF-02")
 class TestBook:
-    async def test_snapshot_y_delta(self):
+    async def test_snapshot_and_delta(self):
         async with Hub() as h:
             await h.until(lambda: h.hub.state["nk"].ready)
             h.feeds["nk"].push(book("nk", "0.00720000", "0.00730000", seq=1))
@@ -92,8 +92,8 @@ class TestBook:
 
 
 @pytest.mark.spec("RF-03")
-class TestVelas:
-    async def test_trade_en_vivo_actualiza_todos_los_timeframes(self):
+class TestCandleBars:
+    async def test_live_trade_updates_all_timeframes(self):
         async with Hub() as h:
             await h.until(lambda: h.hub.state["nx"].ready)
             h.feeds["nx"].push(Trade("nx", D("0.0080"), D("2"), "buy", NOW + 1_000))
@@ -101,7 +101,7 @@ class TestVelas:
             for builder in h.hub.state["nx"].candles.values():
                 assert builder.candles[-1].close == D("0.0080")
 
-    async def test_trades_anteriores_a_la_carga_no_cuentan_dos_veces(self):
+    async def test_trades_before_load_do_not_count_twice(self):
         """The initial WS batch brings trades already in the REST history."""
         async with Hub() as h:
             await h.until(lambda: h.hub.state["nx"].ready)
@@ -113,7 +113,7 @@ class TestVelas:
             await h.until(lambda: h.hub.state["nx"].conn is not None)
             assert h.hub.state["nx"].candles["1h"].candles == before
 
-    async def test_roll_abre_velas_planas(self):
+    async def test_roll_opens_flat_candles(self):
         async with Hub() as h:
             await h.until(lambda: h.hub.state["nk"].ready)
             n = len(h.hub.state["nk"].candles["1m"].candles)
@@ -122,7 +122,7 @@ class TestVelas:
 
 
 @pytest.mark.spec("RF-14")
-async def test_guarda_el_ultimo_estado_de_conexion():
+async def test_keeps_last_connection_state():
     async with Hub() as h:
         await h.until(lambda: h.hub.state["nk"].ready)
         state = ConnState("nk", "market", "ws", "up", 120.0, NOW)
@@ -132,7 +132,7 @@ async def test_guarda_el_ultimo_estado_de_conexion():
 
 
 @pytest.mark.spec("RF-03")
-async def test_velas_desalineadas_son_error_del_venue_no_del_hub():
+async def test_misaligned_candles_are_venue_error_not_hub():
     class Misaligned(FakeFeed):
         async def candles(self, tf, limit):
             return [

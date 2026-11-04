@@ -110,33 +110,33 @@ def count(events, state):
 
 @pytest.mark.spec("RF-14")
 class TestBackoff:
-    def test_exponencial_hasta_el_tope(self):
+    def test_exponential_up_to_cap(self):
         b = Backoff(base_s=0.5, max_s=30, rng=lambda: 0.5)
         assert [b.delay(n) for n in range(1, 9)] == [0.5, 1, 2, 4, 8, 16, 30, 30]
 
-    def test_jitter_del_20_por_ciento(self):
+    def test_jitter_20_percent(self):
         low = Backoff(base_s=0.5, max_s=30, rng=lambda: 0.0)
         high = Backoff(base_s=0.5, max_s=30, rng=lambda: 1.0)
         assert low.delay(3) == pytest.approx(1.6) and high.delay(3) == pytest.approx(2.4)
 
-    def test_el_jitter_no_pasa_el_tope(self):
+    def test_jitter_stays_under_the_cap(self):
         assert Backoff(base_s=0.5, max_s=30, rng=lambda: 1.0).delay(20) == 30
 
-    def test_n_invalido(self):
+    def test_invalid_n(self):
         with pytest.raises(ValueError):
             Backoff(base_s=0.5, max_s=30).delay(0)
 
 
 @pytest.mark.spec("RF-14")
-class TestLatencia:
-    def test_media_movil(self):
+class TestLatency:
+    def test_moving_average(self):
         m = LatencyMeter(alpha=0.5)
         assert m.ms is None
         m.add(10)
         m.add(20)
         assert m.ms == pytest.approx(15)
 
-    def test_ignora_muestras_no_validas(self):
+    def test_ignores_invalid_samples(self):
         m = LatencyMeter()
         m.add(0)  # websockets gives 0.0 before the first ping
         m.add(-1)
@@ -145,24 +145,24 @@ class TestLatencia:
 
 @pytest.mark.spec("RF-01", "RF-14", "CA-06")
 class TestSupervisor:
-    async def test_up_al_primer_book_no_al_conectar(self):
+    async def test_up_on_first_book_not_on_connecting(self):
         venue = FakeVenue(["wait", WS_BOOK])
         events = await run(venue, lambda evs: WS_BOOK in evs)
         assert events == [ConnState("nk", "market", "ws", "up", None, 1_000), WS_BOOK]
 
-    async def test_una_caida_reintenta_ws_sin_rest(self):
+    async def test_drop_retries_ws_without_rest(self):
         venue = FakeVenue([WS_BOOK, "drop"], [WS_BOOK])
         events = await run(venue, lambda evs: count(evs, ("ws", "up")) == 2)
         assert states(events) == [("ws", "up"), ("ws", "reconnecting"), ("ws", "up")]
         assert venue.rest_calls == 0
         assert venue.delays == [0.01]
 
-    async def test_backoff_crece_con_fallos_seguidos(self):
+    async def test_backoff_grows_with_consecutive_failures(self):
         venue = FakeVenue("fail", "fail", [WS_BOOK])
         await run(venue, lambda evs: WS_BOOK in evs)
         assert venue.delays == [0.01, 0.02]
 
-    async def test_tres_fallos_activan_rest_hasta_que_vuelve_el_ws(self):
+    async def test_three_failures_start_rest_until_ws_returns(self):
         venue = FakeVenue("fail", "fail", "fail", "fail", "fail", [WS_BOOK])
         events = await run(venue, lambda evs: WS_BOOK in evs)
         assert states(events) == [
@@ -176,7 +176,7 @@ class TestSupervisor:
         assert events[-2:] == [ConnState("nk", "market", "ws", "up", None, 1_000), WS_BOOK]
         assert venue.delays == [0.01, 0.02, 0.04, 0.08, 0.08]
 
-    async def test_el_polling_se_para_al_volver_el_ws(self):
+    async def test_polling_stops_when_ws_returns(self):
         venue = FakeVenue("fail", "fail", "fail", [WS_BOOK, TRADE])
         events = await run(venue, lambda evs: TRADE in evs)
         calls = venue.rest_calls
@@ -185,7 +185,7 @@ class TestSupervisor:
         i = events.index(WS_BOOK)
         assert REST_BOOK not in events[i:]
 
-    async def test_datos_reinician_el_contador(self):
+    async def test_data_resets_the_counter(self):
         """failure, failure, session with data that drops, failure: never 3 in a row."""
         venue = FakeVenue("fail", "fail", [WS_BOOK, "drop"], "fail", [WS_BOOK])
         events = await run(venue, lambda evs: count(evs, ("ws", "up")) == 2)
@@ -193,42 +193,42 @@ class TestSupervisor:
         assert ("rest", "up") not in states(events)
         assert venue.delays == [0.01, 0.02, 0.01, 0.02]
 
-    async def test_conectar_sin_datos_cuenta_como_fallo(self):
+    async def test_connecting_without_data_counts_as_failure(self):
         venue = FakeVenue(["drop"], ["drop"], ["drop"], [WS_BOOK])
         events = await run(venue, lambda evs: WS_BOOK in evs)
         assert ("rest", "up") in states(events)
 
-    async def test_rest_caido(self):
+    async def test_rest_down(self):
         venue = FakeVenue("fail", "fail", "fail", rest_ok=False)
         events = await run(venue, lambda evs: ("rest", "down") in states(evs))
         assert ("rest", "up") not in states(events)
 
-    async def test_con_rest_activo_no_se_reemite_reconnecting(self):
+    async def test_with_rest_active_reconnecting_is_not_reemitted(self):
         venue = FakeVenue(*["fail"] * 6, [WS_BOOK])
         events = await run(venue, lambda evs: WS_BOOK in evs)
         assert count(events, ("ws", "reconnecting")) == 3
 
 
 @pytest.mark.spec("RF-14")
-class TestLatenciaEnElStream:
-    async def test_latido_con_latencia_ws(self):
+class TestStreamLatency:
+    async def test_heartbeat_with_ws_latency(self):
         venue = FakeVenue([WS_BOOK], ws_latency=0.012, latency_every_s=0.02)
         events = await run(venue, lambda evs: count(evs, ("ws", "up")) >= 3)
         beats = [e for e in events if isinstance(e, ConnState)][1:]
         assert all(b.latency_ms == pytest.approx(12) for b in beats)
 
-    async def test_latido_con_latencia_rest(self):
+    async def test_heartbeat_with_rest_latency(self):
         venue = FakeVenue("fail", "fail", "fail", latency_every_s=0.02)
         events = await run(venue, lambda evs: count(evs, ("rest", "up")) >= 3)
         beats = [e for e in events if isinstance(e, ConnState) and e.source == "rest"]
         assert beats[-1].latency_ms is not None and beats[-1].latency_ms >= 5
 
-    async def test_sin_medidas_la_latencia_es_none(self):
+    async def test_no_measures_latency_is_none(self):
         venue = FakeVenue([WS_BOOK], latency_every_s=0.02)
         events = await run(venue, lambda evs: count(evs, ("ws", "up")) >= 2)
         assert all(e.latency_ms is None for e in events if isinstance(e, ConnState))
 
-    async def test_sin_latido_mientras_reconecta(self):
+    async def test_no_heartbeat_while_reconnecting(self):
         """Reconnecting there is no latency to give: the state does not repeat."""
         venue = FakeVenue([WS_BOOK, "drop"], "hang", latency_every_s=0.02)
         events = await run_for(venue, 0.15)
@@ -236,7 +236,7 @@ class TestLatenciaEnElStream:
 
 
 @pytest.mark.spec("RF-01")
-async def test_error_de_programacion_no_se_traga():
+async def test_programming_error_is_not_swallowed():
     """A bug (not a network failure) must reach the consumer, not be retried."""
 
     class Buggy(FakeVenue):
@@ -249,7 +249,7 @@ async def test_error_de_programacion_no_se_traga():
 
 
 @pytest.mark.spec("RF-01")
-async def test_error_de_programacion_en_el_polling_no_se_traga():
+async def test_programming_error_in_polling_is_not_swallowed():
     class BuggyRest(FakeVenue):
         async def book_snapshot(self, depth):
             raise ZeroDivisionError("bug en el REST")

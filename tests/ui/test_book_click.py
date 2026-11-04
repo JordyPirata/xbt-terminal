@@ -42,8 +42,8 @@ async def click(pilot, venue, x, y):
 
 
 @pytest.mark.spec("RF-16")
-class TestNivelBajoElRaton:
-    async def test_mapa_de_filas_y_columnas(self, tmp_path):
+class TestLevelUnderMouse:
+    async def test_row_and_column_map(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             panel = await ready(rig, pilot)
@@ -58,7 +58,7 @@ class TestNivelBajoElRaton:
             assert panel.level_at(BID_X, 3) is None  # empty level
             assert panel.level_at(BID_X, 16) is None  # summary line
 
-    async def test_columna_de_acumulado_da_el_acumulado(self, tmp_path):
+    async def test_cumulative_column_gives_cumulative(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             panel = await ready(rig, pilot)
@@ -70,7 +70,7 @@ class TestNivelBajoElRaton:
             assert panel.level_at(63, 2)[2] == D("3.5")  # cumulative
             assert panel.level_at(76, 2)[2] == D("3.5")  # AMM mark: counts as cumulative
 
-    async def test_sin_book_no_hay_nivel(self, tmp_path):
+    async def test_without_book_no_level(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
@@ -78,8 +78,8 @@ class TestNivelBajoElRaton:
 
 
 @pytest.mark.spec("RF-16", "RF-06")
-class TestClic:
-    async def test_clic_en_ventas_escribe_la_compra_entera(self, tmp_path, monkeypatch):
+class TestClick:
+    async def test_click_on_asks_writes_the_whole_buy(self, tmp_path, monkeypatch):
         rig = Rig(tmp_path)
         copied = []
         monkeypatch.setattr(rig.app, "copy_to_clipboard", copied.append)
@@ -92,21 +92,21 @@ class TestClic:
             assert copied == ["0.00730000"]
             assert "0.00730000" in rig.app.last_message
 
-    async def test_clic_en_compras_escribe_la_venta(self, tmp_path):
+    async def test_click_on_bids_writes_the_sell(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
             await click(pilot, "nk", BID_X, 2)
             assert rig.app.query_one(CommandLine).value == "sell nk 2.0000 0.00719900"
 
-    async def test_clic_en_acumulado_barre_hasta_ese_nivel(self, tmp_path):
+    async def test_click_on_cumulative_sweeps_to_that_level(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
             await click(pilot, "nk", ASK_CUM_X, 2)
             assert rig.app.query_one(CommandLine).value == "buy nk 3.5000 0.00730100"
 
-    async def test_enter_abre_el_dialogo(self, tmp_path):
+    async def test_enter_opens_dialog(self, tmp_path):
         from xbt_terminal.ui.screens.confirm import ConfirmScreen
 
         rig = Rig(tmp_path)
@@ -126,7 +126,7 @@ class TestClic:
             await until(pilot, lambda: isinstance(rig.app.screen, ConfirmScreen))
             assert "BUY 0.0100 XBT @ 0.00730000 en NonKYC" in rig.app.screen.summary
 
-    async def test_una_cantidad_por_encima_del_tope_no_se_recorta(self, tmp_path):
+    async def test_quantity_above_cap_not_trimmed(self, tmp_path):
         """Cumulative 3.5 × 0.007301 ≈ 0.0256 BTC > 25 % of the inventory (≈ 0.0043): RiskCheck
         says so, it is not changed behind your back."""
         rig = Rig(tmp_path)
@@ -138,7 +138,7 @@ class TestClic:
             await until(pilot, lambda: "rechazada" in rig.app.last_message)
             assert "25 % del inventario total" in rig.app.last_message
 
-    async def test_con_texto_solo_inserta_el_precio(self, tmp_path):
+    async def test_with_text_only_inserts_the_price(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -153,7 +153,7 @@ class TestClic:
             await click(pilot, "nx", BID_X, 1)
             assert cmd.value == "dbl 0.01 nk 0.00730000 nx 0.00720000"
 
-    async def test_sin_espacio_doble(self, tmp_path):
+    async def test_no_double_space(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -164,7 +164,7 @@ class TestClic:
             await click(pilot, "nk", BID_X, 1)
             assert cmd.value == "buy nk 0.01 0.00720000"
 
-    async def test_clic_fuera_de_un_nivel_no_hace_nada(self, tmp_path):
+    async def test_click_off_a_level_does_nothing(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
@@ -173,7 +173,7 @@ class TestClic:
 
 
 @pytest.mark.spec("RF-16", "RF-13")
-async def test_en_solo_lectura_solo_copia(monkeypatch):
+async def test_read_only_only_copies(monkeypatch):
     feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
     app = local_app(MarketHub(feeds), book_levels=15, timeframe="1m", mode="read-only")
     copied = []
@@ -188,7 +188,7 @@ async def test_en_solo_lectura_solo_copia(monkeypatch):
 
 
 @pytest.mark.spec("RF-16", "RF-28")
-async def test_el_clic_copia_tambien_con_el_sistema(monkeypatch):
+async def test_click_also_copies_with_system(monkeypatch):
     """D-52: OSC 52 does not reach GNOME Terminal; the price also goes through xclip."""
     copied: list[str] = []
 
