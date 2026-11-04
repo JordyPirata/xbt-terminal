@@ -14,7 +14,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   en `src/`, `tests/` y `tools/`; lo vigila `tests/unit/test_english.py`. El AST de
   `src/` solo cambia en mensajes de log y en `DESCRIPTION` de `--help`, que sigue en
   español (antes salía del docstring del módulo).
-- **`main` por delante de `origin`** (T-87 y T-91): falta `git push origin main`.
+- **`main` por delante de `origin`** (T-87, T-91 y T-88): falta `git push origin main`.
 - **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
   `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
   con venues simulados (`services/replay.py`) y `[replay]` en la config;
@@ -134,9 +134,8 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-00. **T-88 hecha** en la rama `t-88-adapter-contract`, sin fusionar: falta el visto
-    bueno del usuario. Después **T-89** (interfaz de estrategia), que empieza por su
-    versión de la spec; luego T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
+00. **T-88 fusionada en `main`.** Siguiente: **T-89** (interfaz de estrategia), que
+    empieza por su versión de la spec; luego T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
     seguridad en `CONTRIBUTING.md`.
 1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
    salen y en qué venue (en Neoxa se espera ~1 cada 3 a 4 min por carreras,
