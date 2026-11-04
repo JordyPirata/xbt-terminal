@@ -90,6 +90,7 @@ dicen en su propia nota.
 | D-78 | 2026-10-29 | Los fallos se piden al `Engine` (`report_fault`, `fault_count`, `subscribe_faults`), no a su lista (T-82, corrige D-77) |
 | D-79 | 2026-10-31 | Fase 3: comunidad pequeña, pares contra BTC, venues y estrategias por contrato (requirements v0.30) |
 | D-80 | 2026-11-04 | Banco de pruebas: grabación aparte del journal, venues simulados y tiempo virtual (requirements v0.31, T-87) |
+| D-81 | 2026-11-04 | El código va todo en inglés; en español, lo que ve el usuario, los docs y la spec (T-91) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -2017,3 +2018,18 @@ keys y un informe fijo. El dry-run normal no llena órdenes (D-16) y necesita ke
 - **Dónde viven las grabaciones:** el supuesto de PA-11 (muestras de minutos en
   `tests/fixtures/`).
 **Toca:** RF-33 a RF-35, CA-19, CA-20, design.md §4, §6.14 y §8, T-87.
+
+## D-81 · 2026-11-04 · El código va todo en inglés; en español, lo que ve el usuario, los docs y la spec (T-91)
+**Contexto:** hasta ahora solo los identificadores iban en inglés. El usuario pide
+una regla estricta para una comunidad de programadores (D-79) y limpiar los
+comentarios que sobran.
+**Decisión:**
+- En inglés, sin excepciones: identificadores, comentarios, docstrings, mensajes
+  de log y nombres de test, también en `tests/` y `tools/`.
+- En español: mensajes de UI, errores y CLI, `docs/` y la spec. El usuario eligió
+  dejar la pantalla fuera: traducirla cambiaría el producto.
+- La regla la vigila un test, no la memoria: `tests/unit/test_english.py`.
+- Un comentario explica por qué, no qué.
+**Toca:** `CLAUDE.md`, `CONTRIBUTING.md`, T-91. Sustituye a la regla anterior de
+`CLAUDE.md` (docstrings y comentarios en español).
+

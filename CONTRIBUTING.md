@@ -49,7 +49,10 @@ una versión nueva de la spec lo abra.
   `core/journal.py`). `ui/` no importa de `adapters/`. Lo vigila
   `tests/unit/test_layers.py`.
 - Los secretos se manejan como `Secret` y nunca se formatean en strings.
-- Identificadores en inglés; docstrings, comentarios y mensajes de UI en español.
+- El código va todo en inglés: identificadores, comentarios, docstrings, logs y
+  nombres de test. En español solo queda lo que ve el usuario (mensajes de UI,
+  errores y CLI), los docs y la spec (D-81).
+- Un comentario explica por qué, no qué: si repite el código, sobra.
 
 ## Qué se puede proponer (fase 3, D-79)
 

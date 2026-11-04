@@ -6,6 +6,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-04)
 
+- **T-87 fusionada en `main`** (`dd7208b`), sin subir: falta `git push origin main`.
 - **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
   `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
   con venues simulados (`services/replay.py`) y `[replay]` en la config;
@@ -125,7 +126,8 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-00. **T-88** (contrato de adaptador), que empieza por su versión de la spec; luego
+00. **T-91** (limpieza y código en inglés, D-81), en la rama `t-91-english-code`.
+    Después **T-88** (contrato de adaptador), que empieza por su versión de la spec; luego
     T-89 y T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
     seguridad en `CONTRIBUTING.md`.
 1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
@@ -225,7 +227,8 @@ Resueltas: PA-01 → D-08, PA-02 → D-10, PA-03 → D-19, PA-04 → D-42, PA-05
 - Un cambio de alcance (como el paso a BTC) va primero a la spec: nueva versión
   de requirements.md, `D-NN` y tarea propia, y solo después código.
 - Commits en inglés, sin `Co-Authored-By` (desde el squash al remoto privado).
-- Todo en español (docs, mensajes, docstrings); identificadores en inglés.
+- Código en inglés (identificadores, comentarios, docstrings, logs, nombres de
+  test); en español, lo que ve el usuario, los docs y la spec (D-81, T-91).
 - Al cerrar la sesión, actualizar este fichero.
 
 ## Trampas encontradas

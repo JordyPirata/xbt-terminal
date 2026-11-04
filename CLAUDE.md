@@ -33,7 +33,10 @@ falta leerlo.
   excepción: `core/journal.py` escribe el journal (D-55). `ui/` no importa de
   `adapters/`. `tests/unit/test_layers.py` lo vigila.
 - Los secretos se manejan como `Secret` y nunca se formatean en strings.
-- Identificadores en inglés; docstrings, comentarios y mensajes de UI en español.
+- **Regla estricta:** el código va todo en inglés: identificadores, comentarios,
+  docstrings, logs y nombres de test. En español solo queda lo que ve el usuario
+  (mensajes de UI, errores y CLI), los docs y la spec (D-81).
+- Un comentario explica por qué, no qué: si repite el código, sobra.
 
 ## Referencia
 
