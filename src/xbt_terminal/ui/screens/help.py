@@ -1,6 +1,6 @@
-"""Ayuda de comandos y teclas según el modo.
+"""Command and key help per mode.
 
-Spec: RF-06 · design.md §9 · Tareas: T-21, T-83
+Spec: RF-06 · design.md §9 · Tasks: T-21, T-83
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ PLAN DE REEQUILIBRIO (tecla e o rebalance)
 
 
 class HelpScreen(ModalScreen[None]):
-    """Ayuda (RF-15). Sin markup: lleva corchetes."""
+    """Help (RF-15). No markup: it has brackets."""
 
     DEFAULT_CSS = """
     HelpScreen { align: center middle; }
@@ -143,7 +143,7 @@ class HelpScreen(ModalScreen[None]):
         width: 100; height: 40; border: thick $accent; background: $panel; padding: 0 1;
     }
     """
-    BINDINGS = [  # noqa: RUF012  (así lo declara Textual)
+    BINDINGS = [  # noqa: RUF012  (Textual declares it so)
         Binding("escape", "close", "cerrar"),
         Binding("question_mark", "close", show=False),
         Binding("q", "close", show=False),

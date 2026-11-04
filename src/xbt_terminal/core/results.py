@@ -1,29 +1,28 @@
-"""Resultado realizado de cada orden doble, sacado del journal (RF-25).
+"""Realized result of each double order, from the journal (RF-25).
 
-Puro: recibe filas del journal ya leídas y devuelve un `DoubleResult` por doble,
-un resumen y la curva del acumulado. No es un PnL de cartera: no valora
-inventario ni lo llenado de más en una pierna (D-44).
+Pure: takes journal rows already read and returns a `DoubleResult` per double, a
+summary and the cumulative curve. Not a portfolio PnL: it values neither inventory
+nor what was overfilled on a leg (D-44).
 
     order_sent(client_id, double, side) ─┐
-    order_ack(client_id, order_id)       ├─▶ fills por pierna ─▶ DoubleResult
+    order_ack(client_id, order_id)       ├─▶ fills per leg ─▶ DoubleResult
     fill · fill_fee · bot_fire · ...  ───┘
 
-Un fill se asigna a su orden por `client_id`, si no por `order_id` (vía
-`order_ack`) y, si no trae ninguno (Neoxa, D-45), a la única orden del mismo
-venue y lado enviada antes, con precio compatible con su límite y cantidad
-pendiente suficiente; si hay varias, a la única enviada en el último minuto.
-Si sigue habiendo dudas, queda sin asignar y se cuenta.
+A fill goes to its order by `client_id`, else by `order_id` (through `order_ack`)
+and, if it has neither (Neoxa, D-45), to the only order of the same venue and side
+sent before, with a price compatible with its limit and enough pending quantity;
+if several fit, to the only one sent in the last minute. If still in doubt, it
+stays unassigned and is counted.
 
-Resultado = casada × (medio venta - medio compra) - fees en BTC, con
-casada = mín(llenado compra, llenado venta). Una fee en BTCB2 se valora al
-precio de su fill; una en otro token se valora al precio que llegue en `prices`
-(el token de fee del venue, D-65) y, sin precio, se apunta aparte sin restar.
-Un `fill_fee` (el venue corrigió la fee, D-64) sustituye la del fill.
+Result = matched × (avg sell - avg buy) - fees in BTC, with matched = min(bought,
+sold). A BTCB2 fee is valued at its fill's price; another token's at the price in
+`prices` (the venue's fee token, D-65) and, without one, noted apart and not
+subtracted. A `fill_fee` (the venue corrected the fee, D-64) replaces the fill's.
 
-El `Report` lleva también la serie del valor de la cuenta (RF-32, D-69).
+The `Report` also carries the account value series (RF-32, D-69).
 
 Spec: RF-11, RF-24, RF-25, RF-32, CA-11 · design.md §6.10 · D-44, D-45, D-64,
-D-65, D-69 · Tareas: T-40, T-59, T-60, T-69
+D-65, D-69 · Tasks: T-40, T-59, T-60, T-69
 """
 
 from __future__ import annotations
@@ -39,7 +38,7 @@ from .models import ZERO, Side, VenueId
 from .valuation import ValueSample, series
 
 DAY_MS = 86_400_000
-RECENT_MS = 60_000  # una toma del bot se llena en segundos (D-45)
+RECENT_MS = 60_000  # a bot take fills within seconds (D-45)
 BASE = "BTCB2"
 QUOTE = "BTC"
 
@@ -51,7 +50,7 @@ _FIELDS = ("ts", "mode", "event", "data")
 
 
 def read_rows(lines: Iterable[str]) -> tuple[list[dict[str, Any]], int]:
-    """Filas JSON del journal y cuántas no se pudieron leer (las vacías no cuentan)."""
+    """JSON rows of the journal and how many could not be read (blank ones do not count)."""
     rows: list[dict[str, Any]] = []
     bad = 0
     for line in lines:
@@ -70,7 +69,7 @@ def read_rows(lines: Iterable[str]) -> tuple[list[dict[str, Any]], int]:
 
 
 def range_start(rng: Range, now_ms: int) -> int | None:
-    """Inicio del rango en ms: el día UTC de hoy, los 7 últimos días o todo (None)."""
+    """Range start in ms: today's UTC day, the last 7 days or everything (None)."""
     today = now_ms // DAY_MS * DAY_MS
     if rng == "dia":
         return today
@@ -102,7 +101,7 @@ class _Order:
 class _Leg:
     venue: VenueId | None = None
     filled: Decimal = ZERO
-    cost: Decimal = ZERO  # Σ qty × price, en BTC
+    cost: Decimal = ZERO  # Σ qty × price, in BTC
 
 
 @dataclass(slots=True)
@@ -121,7 +120,7 @@ class _Double:
 class DoubleResult:
     id: str
     origin: Origin
-    started: int  # ms epoch del primer envío
+    started: int  # epoch ms of the first send
     buy_venue: VenueId | None
     sell_venue: VenueId | None
     buy_filled: Decimal
@@ -131,12 +130,12 @@ class DoubleResult:
     matched: Decimal
     fees: Decimal  # BTC
     other_fees: tuple[tuple[str, Decimal], ...]
-    mismatch: Decimal  # BTCB2: compra - venta
+    mismatch: Decimal  # BTCB2: bought - sold
     status: Status
-    result: Decimal | None  # BTC; solo en las cerradas
-    result_pct: Decimal | None  # sobre lo pagado por la parte casada
-    expected_pct: Decimal | None  # neta esperada del bot
-    # BTC: las de `other_fees` con precio, que también restan del resultado (D-65)
+    result: Decimal | None  # BTC; closed doubles only
+    result_pct: Decimal | None  # of what the matched part paid
+    expected_pct: Decimal | None  # the bot's expected net
+    # BTC: those of `other_fees` with a price, which also subtract from the result (D-65)
     token_fees: Decimal = ZERO
 
 
@@ -149,11 +148,11 @@ class Summary:
     worst: Decimal | None
     hanging: int
     no_fills: int
-    unassigned: int  # fills que no se pudieron asignar a una orden
+    unassigned: int  # fills that could not be assigned to an order
     bad_rows: int
-    # fees de las cerradas en otros activos sin precio (D-63): no restan del total
+    # fees of closed doubles in other assets without price (D-63): not subtracted
     other_fees: tuple[tuple[str, Decimal], ...] = ()
-    # precios en BTC con que se valoraron las fees en token de las cerradas (D-65)
+    # BTC prices used to value the token fees of closed doubles (D-65)
     prices: tuple[tuple[str, Decimal], ...] = ()
 
 
@@ -161,19 +160,19 @@ class Summary:
 class Report:
     doubles: tuple[DoubleResult, ...]
     summary: Summary
-    curve: tuple[tuple[int, Decimal], ...]  # (inicio de la doble, acumulado)
-    # valor de la cuenta en el rango (RF-32, D-69): muestras `value` del journal
+    curve: tuple[tuple[int, Decimal], ...]  # (double start, cumulative)
+    # account value in the range (RF-32, D-69): `value` samples of the journal
     values: tuple[ValueSample, ...] = ()
 
 
 def _part(leg: _Leg, qty: Decimal) -> Decimal:
-    """Lo pagado o cobrado por `qty` de la pierna, a su precio medio."""
+    """What `qty` of the leg paid or collected, at its average price."""
     return leg.cost if qty == leg.filled else qty * leg.cost / leg.filled
 
 
 def _add_fee(d: _Double, fee: Decimal, asset: str | None, price: Decimal) -> None:
-    """Suma (o resta, con fee negativa) la fee de un fill: en BTC, la de BTCB2 a su
-    precio; la de otro activo, aparte y sin valorar."""
+    """Add (or subtract, with a negative fee) a fill's fee: in BTC, BTCB2 at its price;
+    another asset's apart and unvalued."""
     if fee == 0 or asset in (None, QUOTE):
         d.fees += fee
     elif asset == BASE:
@@ -206,7 +205,7 @@ class _Builder:
         self.fired: dict[str, Decimal | None] = {}
         self.hanging: set[str] = set()
         self.trades: set[tuple[str, str]] = set()
-        # fee apuntada de cada fill asignado a una doble, para `fill_fee` (D-64)
+        # fee written for each fill assigned to a double, for `fill_fee` (D-64)
         self.fill_fees: dict[tuple[str, str], tuple[_Double, Decimal, Decimal, str | None]] = {}
         self.unassigned = 0
         self.bad = 0
@@ -221,7 +220,7 @@ class _Builder:
         try:
             handler(row, data)
         except (ValueError, KeyError, TypeError, InvalidOperation, AttributeError):
-            self.bad += 1  # una fila rara no impide calcular el resto
+            self.bad += 1  # an odd row does not stop computing the rest
 
     def _on_order_sent(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
         cid, at, double = row["client_id"], _ms(row["ts"]), data.get("double")
@@ -278,8 +277,8 @@ class _Builder:
         self.fill_fees[key] = (d, price, fee, asset)
 
     def _on_fill_fee(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
-        """El venue corrigió la fee de un fill (D-64): sustituye la apuntada. De un
-        fill que no está en una doble, no hay nada que corregir."""
+        """The venue corrected a fill's fee (D-64): it replaces the written one. For a
+        fill outside any double, there is nothing to correct."""
         key = (row["venue"], str(data["trade_id"]))
         known = self.fill_fees.get(key)
         if known is None:
@@ -306,7 +305,7 @@ class _Builder:
         oid = data.get("order_id")
         if oid and (venue, str(oid)) in self.acks:
             return self.acks[(venue, str(oid))]
-        # sin ids (Neoxa, D-45): la única orden compatible, o la única reciente
+        # no ids (Neoxa, D-45): the only compatible order, or the only recent one
         fits = [c for c, o in self.orders.items() if o.takes(venue, side, qty, price, at)]
         if len(fits) > 1:
             fits = [c for c in fits if at - self.orders[c].sent_at <= RECENT_MS]
@@ -331,7 +330,7 @@ class _Builder:
             status = "closed"
         result = pct = None
         if status == "closed":
-            # con la pierna casada entera, su coste exacto: el medio lleva una división
+            # with the whole leg matched, its exact cost: the average carries a division
             paid, got = _part(buy, matched), _part(sell, matched)
             result = got - paid - d.fees - token_fees
             pct = result / paid * 100
@@ -365,13 +364,12 @@ def compute(
     prices: Mapping[str, Decimal] | None = None,
     mode: str = "live",
 ) -> Report:
-    """Resultados de las dobles que empezaron desde `since_ms` (todas si None).
+    """Results of the doubles started since `since_ms` (all if None).
 
-    Las filas se procesan en el orden del journal; conviene pasar también las
-    de antes del rango, para que los fills se asignen igual que en el día entero.
-    `prices`: BTC por unidad de los tokens de fee (D-65); sin precio, su fee va
-    aparte y no resta. `mode`: de qué modo son las filas que cuentan; el informe
-    de una reproducción lee las de dry-run (RF-35)."""
+    Rows are processed in journal order; pass the ones before the range too, so fills
+    are assigned as in the whole day. `prices`: BTC per unit of the fee tokens (D-65);
+    without a price, the fee goes apart and is not subtracted. `mode`: which mode's
+    rows count; a replay report reads the dry-run ones (RF-35)."""
     prices = prices or {}
     rows = list(rows)
     b = _Builder(mode)

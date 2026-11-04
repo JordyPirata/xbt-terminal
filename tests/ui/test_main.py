@@ -276,7 +276,7 @@ def test_daemon_corre_el_motor_sin_pantalla(xdg, served, monkeypatch, capsys):
     assert served["book_depth"] == 15
     assert isinstance(served["view"], ClientView) and served["view"].timeframe == "1m"
     assert "xbt daemon en dry-run" in capsys.readouterr().err
-    assert "arranque en dry-run" in (data / "diag.log").read_text()  # RNF-19
+    assert "starting in dry-run" in (data / "diag.log").read_text()  # RNF-19
     assert not (Path.cwd() / "logs").exists()
     with InstanceLock(data):  # al salir se suelta
         pass

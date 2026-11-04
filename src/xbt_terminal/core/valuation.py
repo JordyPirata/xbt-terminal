@@ -1,12 +1,12 @@
-"""Valor de la cuenta en el tiempo (RF-32, D-69).
+"""Account value over time (RF-32, D-69).
 
-Puro: arma la muestra que el daemon apunta como evento `value` a partir del
-inventario de RF-05, y lee del journal la serie de un rango con su resumen. No
-es un PnL: depósitos y retiros salen como saltos, sin ajustar.
+Pure: builds the sample the daemon writes as a `value` event from the RF-05
+inventory, and reads a range's series from the journal with its summary. Not a
+PnL: deposits and withdrawals show as jumps, unadjusted.
 
     inventory() ─▶ sample() ─▶ journal "value" ─▶ series() ─▶ summarize()
 
-Spec: RF-05, RF-32, RNF-10, CA-17 · design.md §6.5 · D-69 · Tareas: T-69
+Spec: RF-05, RF-32, RNF-10, CA-17 · design.md §6.5 · D-69 · Tasks: T-69
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from .inventory import Inventory
 from .models import ZERO, VenueId
 
 HUNDRED = Decimal(100)
-# un salto mayor entre dos muestras seguidas es una transferencia, no el mercado (D-69)
+# a bigger jump between two samples in a row is a transfer, not the market (D-69)
 JUMP_PCT = Decimal(5)
 
 
@@ -36,9 +36,9 @@ class VenueValue:
 
 @dataclass(frozen=True, slots=True)
 class ValueSample:
-    ts: int  # ms epoch del múltiplo del intervalo
-    value: Decimal  # BTC, los dos venues
-    every_ms: int  # intervalo con que se muestreó: decide qué es un hueco
+    ts: int  # epoch ms of the interval multiple
+    value: Decimal  # BTC, both venues
+    every_ms: int  # sampling interval: decides what a gap is
     venues: tuple[VenueValue, ...]
 
 
@@ -49,7 +49,7 @@ class ValueSummary:
     first: Decimal
     last: Decimal
     change: Decimal
-    change_pct: Decimal | None  # sobre la primera; None si era 0
+    change_pct: Decimal | None  # of the first; None if that was 0
     high: Decimal
     low: Decimal
     count: int
@@ -58,8 +58,8 @@ class ValueSummary:
 def sample(
     inv: Inventory, mids: Mapping[VenueId, Decimal | None], ts: int, every_ms: int
 ) -> ValueSample | None:
-    """La muestra del inventario, o None si falta el saldo o el mid de algún
-    venue: un total a medias engañaría (como RF-05)."""
+    """The inventory sample, or None if a venue lacks its balance or mid: a partial
+    total would mislead (like RF-05)."""
     if inv.value is None:
         return None
     venues = []
@@ -72,7 +72,7 @@ def sample(
 
 
 def sample_data(s: ValueSample) -> dict[str, Any]:
-    """El `data` del evento `value` del journal."""
+    """The `data` of the journal's `value` event."""
     return {
         "at": s.ts,
         "every_ms": s.every_ms,
@@ -109,9 +109,8 @@ def _parse(row: Mapping[str, Any]) -> ValueSample:
 def series(
     rows: Iterable[Mapping[str, Any]], since_ms: int | None
 ) -> tuple[tuple[ValueSample, ...], int]:
-    """Las muestras desde `since_ms` (todas si None), por hora, y cuántas filas
-    `value` no se pudieron leer. El modo no importa: los saldos son reales también
-    en dry-run (D-69)."""
+    """Samples since `since_ms` (all if None), by time, and how many `value` rows could
+    not be read. The mode does not matter: balances are real in dry-run too (D-69)."""
     out: list[ValueSample] = []
     bad = 0
     for row in rows:
@@ -147,8 +146,8 @@ def summarize(values: Sequence[ValueSample]) -> ValueSummary | None:
 
 
 def segments(values: Sequence[ValueSample]) -> list[tuple[ValueSample, ...]]:
-    """Tramos sin huecos: se corta donde entre dos muestras pasan más de dos
-    intervalos (el daemon estuvo parado); los huecos no se interpolan."""
+    """Stretches without gaps: cut where more than two intervals pass between samples
+    (the daemon was stopped); gaps are not interpolated."""
     out: list[list[ValueSample]] = []
     for s in values:
         if out and s.ts - out[-1][-1].ts <= 2 * s.every_ms:
@@ -159,8 +158,8 @@ def segments(values: Sequence[ValueSample]) -> list[tuple[ValueSample, ...]]:
 
 
 def thin(values: Sequence[ValueSample], n: int) -> tuple[ValueSample, ...]:
-    """A lo sumo `n` muestras repartidas, con la primera y la última: plotext no
-    distingue más puntos que columnas."""
+    """At most `n` samples spread out, with the first and last: plotext cannot tell
+    more points than columns."""
     if len(values) <= n:
         return tuple(values)
     last = len(values) - 1
@@ -175,9 +174,9 @@ def _jumped(a: Decimal, b: Decimal) -> bool:
 
 
 def last_stretch(values: Sequence[ValueSample]) -> tuple[ValueSample, ...]:
-    """Las muestras desde el último salto de más de `JUMP_PCT` entre dos
-    seguidas, en el total o en un venue: una transferencia en tránsito aplasta
-    la escala y no deja ver lo que mueven el precio y el bot (D-69)."""
+    """Samples since the last jump above `JUMP_PCT` between two in a row, in the total
+    or a venue: a transfer in transit crushes the scale and hides what price and bot
+    move (D-69)."""
     start = 0
     for i in range(1, len(values)):
         prev, cur = values[i - 1], values[i]

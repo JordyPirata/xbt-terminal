@@ -1,4 +1,4 @@
-"""TUI en Textual. Solo habla con services.
+"""Textual TUI. It only talks to services.
 
 Spec: design.md §2, §9
 """

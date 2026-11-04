@@ -1,14 +1,14 @@
-"""Log de diagnóstico: `<datos>/diag.log`, rotativo y separado del journal.
+"""Diagnostic log: `<data>/diag.log`, rotating and apart from the journal.
 
-El journal (RF-11) es el registro de lo operado; este fichero es para entender
-qué pasó con la red: errores de carga, caídas y reconexiones del WS, polling de
-respaldo, fallos de la cuenta y bugs con su traceback. Cada línea pasa entera
-(mensaje y traceback) por el `Redactor` y el fichero se crea `0600`. Nunca se
-escribe en stdout ni stderr: la TUI ocupa la pantalla (RNF-19).
+The journal (RF-11) is the record of what was traded; this file is for understanding
+what happened with the network: load errors, WS drops and reconnections, fallback
+polling, account failures and bugs with their traceback. Each line goes whole
+(message and traceback) through the `Redactor` and the file is created `0600`. It
+never writes to stdout or stderr: the TUI owns the screen (RNF-19).
 
-Los módulos usan `logging.getLogger(__name__)`, todos bajo `xbt_terminal`.
+Modules use `logging.getLogger(__name__)`, all under `xbt_terminal`.
 
-Spec: RNF-19, RNF-18 · design.md §8 · Tarea: T-31
+Spec: RNF-19, RNF-18 · design.md §8 · Task: T-31
 """
 
 from __future__ import annotations
@@ -29,9 +29,9 @@ BACKUPS = 5
 
 
 class _RedactingFormatter(logging.Formatter):
-    """Redacta la línea ya formateada: así cubre mensaje, argumentos y traceback."""
+    """Redact the formatted line: that covers message, arguments and traceback."""
 
-    converter = time.gmtime  # UTC, como el journal
+    converter = time.gmtime  # UTC, like the journal
 
     def __init__(self, redactor: Redactor) -> None:
         super().__init__(
@@ -49,11 +49,11 @@ def _private(path: str, flags: int) -> int:
 
 
 class DiagHandler(RotatingFileHandler):
-    """Handler del log de diagnóstico. `close()` además lo quita del logger."""
+    """Diagnostic log handler. `close()` also removes it from the logger."""
 
     def _open(self) -> IO[Any]:
-        # cada fichero, también los nuevos tras rotar, solo para el usuario
-        stream = open(  # lo cierra logging
+        # every file, new ones after rotating too, for the user only
+        stream = open(  # closed by logging
             self.baseFilename, self.mode, encoding=self.encoding, errors=self.errors,
             opener=_private,
         )  # fmt: skip
@@ -78,8 +78,8 @@ def setup_diagnostics(
     backups: int = BACKUPS,
     name: str = LOG_FILE,
 ) -> DiagHandler:
-    """Instala el handler en el logger `xbt_terminal`. `data` ya existe (`0700`).
-    `name`: la TUI conectada usa otro fichero, para no rotar el del daemon (D-61)."""
+    """Install the handler on the `xbt_terminal` logger. `data` already exists (`0700`).
+    `name`: the attached TUI uses another file, to avoid rotating the daemon's (D-61)."""
     handler = DiagHandler(
         Path(data) / name, maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
     )
@@ -87,5 +87,5 @@ def setup_diagnostics(
     logger = logging.getLogger(LOGGER)
     logger.addHandler(handler)
     logger.setLevel(level.upper())
-    logger.propagate = False  # nada sube al root, que podría escribir en la pantalla
+    logger.propagate = False  # nothing goes up to root, which could write on the screen
     return handler

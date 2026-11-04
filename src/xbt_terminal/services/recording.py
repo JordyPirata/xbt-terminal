@@ -1,13 +1,13 @@
-"""Grabación de mercado (RF-33, D-80): lo que el hub aplica, a un fichero propio.
+"""Market recording (RF-33, D-80): what the hub applies, to a file of its own.
 
-Primera línea `{"format":1}`; las demás, `{"t", "venue", "kind", "data"}`, con la
-hora local de recepción y los datos como en el socket (`wire`). Se graba lo que
-el hub acepta, no el stream crudo: una reproducción ve lo mismo que vio el bot.
-Solo hay datos públicos: el recorder no conoce la cuenta.
+First line `{"format":1}`; the others `{"t", "venue", "kind", "data"}`, with the local
+arrival time and data as on the socket (`wire`). It records what the hub accepts, not
+the raw stream: a replay sees what the bot saw. Public data only: the recorder does
+not know the account.
 
-Un fallo de escritura para la grabación y se reporta (RNF-14): el mercado sigue.
+A write failure stops the recording and is reported (RNF-14): the market goes on.
 
-Spec: RF-33, RF-34, CA-19 · design.md §6.14 · Tarea: T-87
+Spec: RF-33, RF-34, CA-19 · design.md §6.14 · Task: T-87
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from .market import MarketHub
 from .wire import decode, dumps, loads
 
 FORMAT = 1
-VENUE_COUNT = 2  # una grabación trae los dos venues (RNF-09)
+VENUE_COUNT = 2  # a recording has both venues (RNF-09)
 KINDS: dict[str, type] = {
     "market": MarketSpec,
     "book": BookSnapshot,
@@ -37,7 +37,7 @@ _KIND_OF = {tp: kind for kind, tp in KINDS.items()}
 
 
 class RecordingError(ValueError):
-    """Grabación que no se puede leer; el mensaje dice fichero y línea."""
+    """Unreadable recording; the message gives file and line."""
 
 
 def recording_path(directory: Path, now: int) -> Path:
@@ -80,7 +80,7 @@ class Recorder:
             self._file.write(line)
             self._file.flush()
         except OSError as exc:
-            self._file = None  # la grabación acaba aquí; el mercado sigue
+            self._file = None  # the recording ends here; the market goes on
             self._hub.faults.report("recording", exc, note="grabación parada")
 
     def close(self) -> None:
@@ -109,7 +109,7 @@ def _row(path: Path, number: int, raw: bytes) -> Recorded:
 
 
 def read_recording(path: Path) -> Iterator[Recorded]:
-    """Línea a línea: una grabación larga no cabe entera en memoria."""
+    """Line by line: a long recording does not fit in memory."""
     try:
         with open(path, "rb") as source:
             first = source.readline()
@@ -127,13 +127,13 @@ def read_recording(path: Path) -> Iterator[Recorded]:
 
 @dataclass(frozen=True, slots=True)
 class RecordingInfo:
-    first: int  # hora del primer evento
+    first: int  # time of the first event
     last: int
     specs: dict[VenueId, MarketSpec]
 
 
 def scan_recording(path: Path) -> RecordingInfo:
-    """Valida el fichero entero: mejor fallar al arrancar que a mitad."""
+    """Validate the whole file: better to fail at startup than halfway."""
     first = last = None
     specs: dict[VenueId, MarketSpec] = {}
     for row in read_recording(path):

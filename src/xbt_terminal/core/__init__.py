@@ -1,4 +1,4 @@
-"""Núcleo puro: sin I/O, sin red. Solo importa de core.
+"""Pure core: no I/O, no network. Imports from core only.
 
 Spec: design.md §2
 """

@@ -1,6 +1,6 @@
-"""Confirmación de una orden, una cancelación, salir o armar el bot.
+"""Confirmation of an order, a cancel, exiting or arming the bot.
 
-Spec: RF-06, RF-07, RF-08, RF-18 · Tareas: T-83
+Spec: RF-06, RF-07, RF-08, RF-18 · Tasks: T-83
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ CONFIRM_LABELS = {
 
 
 class ConfirmScreen(ModalScreen[bool]):
-    """Confirmación de una orden o una cancelación (design.md §6.2). Por defecto, no."""
+    """Confirmation of an order or a cancel (design.md §6.2). Defaults to no."""
 
     DEFAULT_CSS = """
     ConfirmScreen { align: center middle; }
@@ -30,7 +30,7 @@ class ConfirmScreen(ModalScreen[bool]):
         width: 90; height: auto; padding: 1 2; border: thick $warning; background: $panel;
     }
     """
-    BINDINGS = [  # noqa: RUF012  (así lo declara Textual)
+    BINDINGS = [  # noqa: RUF012  (Textual declares it so)
         Binding("y", "answer(True)", "confirmar"),
         Binding("n", "answer(False)", "cancelar"),
         Binding("escape", "answer(False)", "cancelar"),
@@ -44,7 +44,7 @@ class ConfirmScreen(ModalScreen[bool]):
         self.text = f"{label}\n\n{summary}\n\n[y] confirmar   [n / Esc / Enter] cancelar"
 
     def compose(self) -> ComposeResult:
-        # sin markup: "[y]" se tomaría como etiqueta de Rich y no se vería
+        # no markup: "[y]" would be taken as a Rich tag and not shown
         yield Static(self.text, markup=False)
 
     def action_answer(self, yes: bool) -> None:

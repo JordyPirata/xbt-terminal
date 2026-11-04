@@ -1,17 +1,17 @@
-"""DryRunVenue: market data real, órdenes simuladas en memoria.
+"""DryRunVenue: real market data, orders simulated in memory.
 
-Envuelve el adaptador real: los datos de mercado y los saldos los da él, y las
-órdenes se simulan aquí (D-16). Los saldos son los reales de cada consulta más
-lo simulado: al abrir una orden su importe pasa de `available` a `locked`, y al
-cancelarla vuelve. La terminal no simula fills: las órdenes quedan abiertas
-hasta cancelarlas. `simulate_fill` y los saldos fijos del constructor son para
-los tests y para `SimVenue`, que reproduce una grabación (RF-34).
+Wraps the real adapter: it gives market data and balances, and orders are simulated
+here (D-16). Balances are the real ones of each query plus the simulated: opening
+an order moves its amount from `available` to `locked`, and cancelling moves it
+back. The terminal does not simulate fills: orders stay open until cancelled.
+`simulate_fill` and the constructor's fixed balances are for tests and for
+`SimVenue`, which replays a recording (RF-34).
 
-Para no esperar a la red al enviar (RNF-11, D-18): el `MarketSpec` sale del hub
-(`spec`) y la comprobación de saldo reutiliza la última lectura real si tiene
-menos de `BASE_MAX_AGE_MS`.
+To avoid waiting on the network when sending (RNF-11, D-18): the `MarketSpec` comes
+from the hub (`spec`) and the balance check reuses the last real read if it is
+younger than `BASE_MAX_AGE_MS`.
 
-Spec: RF-10, RF-13, RNF-11 · design.md §4 · Tareas: T-16, T-16b, T-18, T-21
+Spec: RF-10, RF-13, RNF-11 · design.md §4 · Tasks: T-16, T-16b, T-18, T-21
 """
 
 from __future__ import annotations
@@ -51,24 +51,24 @@ class DryRunVenue:
         spec: Callable[[], MarketSpec | None] | None = None,
         clock: Callable[[], int] = now_ms,
     ) -> None:
-        """`balances`: saldos fijos en lugar de los reales (tests y `SimVenue`).
-        `spec`: el MarketSpec ya cargado (el del hub), para no pedirlo por REST."""
+        """`balances`: fixed balances instead of the real ones (tests and `SimVenue`).
+        `spec`: the MarketSpec already loaded (the hub's), to avoid asking over REST."""
         self.inner = inner
         self.id = inner.id
         self._fixed = dict(balances) if balances is not None else None
-        # lo simulado encima de la base: activo → (Δ available, Δ locked)
+        # simulated on top of the base: asset → (Δ available, Δ locked)
         self._delta: dict[str, tuple[Decimal, Decimal]] = {}
         self._orders: dict[str, Order] = {}
-        self._locks: dict[str, tuple[str, Decimal]] = {}  # order_id → (activo, importe)
+        self._locks: dict[str, tuple[str, Decimal]] = {}  # order_id → (asset, amount)
         self._ids = itertools.count(1)
         self._fill_ids = itertools.count(1)
         self._clock = clock
         self._spec: MarketSpec | None = None
         self._spec_source = spec
-        self._last_base: tuple[int, dict[str, Balance]] | None = None  # (hora, saldos)
+        self._last_base: tuple[int, dict[str, Balance]] | None = None  # (time, balances)
         self._listeners: list[asyncio.Queue[PrivateEvent]] = []
 
-    # -- mercado: delegado ---------------------------------------------------------
+    # -- market: delegated ---------------------------------------------------------
 
     async def market(self) -> MarketSpec:
         self._spec = await self.inner.market()
@@ -86,10 +86,10 @@ class DryRunVenue:
     def market_stream(self) -> AsyncIterator[MarketEvent]:
         return self.inner.market_stream()
 
-    # -- privado: simulado ---------------------------------------------------------
+    # -- private: simulated --------------------------------------------------------
 
     async def _base(self, *, reuse: bool = False) -> dict[str, Balance]:
-        """Saldos reales (o fijos). Con `reuse`, vale la última lectura reciente."""
+        """Real (or fixed) balances. With `reuse`, the last recent read will do."""
         if self._fixed is not None:
             return dict(self._fixed)
         if reuse and self._last_base is not None:
@@ -118,7 +118,7 @@ class DryRunVenue:
         return [o for o in self._orders.values() if not o.is_done]
 
     async def recent_orders(self, since: int) -> list[Order]:
-        """Todas las simuladas, terminadas incluidas (D-26)."""
+        """All simulated ones, finished included (D-26)."""
         return list(self._orders.values())
 
     async def place_limit(self, req: OrderRequest) -> Order:
@@ -167,8 +167,8 @@ class DryRunVenue:
     async def simulate_fill(
         self, order_id: str, qty: Decimal, *, price: Decimal | None = None
     ) -> Order:
-        """Llena `qty` de una orden abierta con fee taker, a `price` o, sin él, a
-        su precio límite. Al acabar de llenar, lo bloqueado de más vuelve."""
+        """Fill `qty` of an open order with taker fee, at `price` or, without it, at its
+        limit price. When fully filled, what was over-locked comes back."""
         order = self._orders.get(order_id)
         if order is None or order.is_done:
             raise VenueError(f"dry-run: no hay orden abierta {order_id}")

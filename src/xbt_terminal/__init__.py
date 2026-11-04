@@ -1,9 +1,9 @@
-"""xbt-terminal: operación manual de BTCB2 contra BTC en NonKYC y Neoxa. Ver specs/mvp/."""
+"""xbt-terminal: manual trading of BTCB2 against BTC on NonKYC and Neoxa. See specs/mvp/."""
 
 import logging
 
 __version__ = "0.1.0"
 
-# Sin esto, un aviso antes de configurar el log de diagnóstico (o en los tests)
-# acabaría en stderr por `logging.lastResort`, encima de la TUI (RNF-19).
+# Without this, a warning before the diagnostic log is set up (or in tests) would
+# land on stderr through `logging.lastResort`, over the TUI (RNF-19).
 logging.getLogger(__name__).addHandler(logging.NullHandler())

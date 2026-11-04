@@ -1,15 +1,15 @@
-"""Plan de reequilibrio entre venues (RF-29, D-53).
+"""Rebalance plan between venues (RF-29, D-53).
 
-Una sola transferencia deja los dos venues con el mismo % de BTCB2: mandar
-BTCB2 del venue con más % al otro, o BTC del que tiene menos % al otro. Se
-calculan las dos y se recomienda la viable más barata. La comisión depende del
-venue (D-53): aparte (se pide X, llega X y salen X + comisión, Neoxa) o
-descontada (se pide X, sale X y llega X - comisión). Una transferencia no
-cambia el % total: eso se corrige operando, a mano.
+One transfer leaves both venues with the same BTCB2 %: send BTCB2 from the venue
+with the higher % to the other, or BTC from the lower one to the other. Both are
+computed and the cheapest viable one is recommended. The fee depends on the venue
+(D-53): on top (ask X, X arrives, X + fee leaves, Neoxa) or deducted (ask X, X
+leaves, X - fee arrives). A transfer does not change the total %: that is fixed by
+trading, by hand.
 
-Solo calcula. La terminal no retira ni transfiere.
+It only computes. The terminal neither withdraws nor transfers.
 
-Spec: RF-29, CA-14 · design.md §6.12 · Tarea: T-45
+Spec: RF-29, CA-14 · design.md §6.12 · Task: T-45
 """
 
 from __future__ import annotations
@@ -22,15 +22,15 @@ from decimal import ROUND_DOWN, Decimal
 from .inventory import BASE, HUNDRED, QUOTE, base_pct
 from .models import ZERO, Balance, VenueId, WithdrawalFee, asset_label
 
-STEP = Decimal("0.00000001")  # los dos venues retiran con 8 decimales
+STEP = Decimal("0.00000001")  # both venues withdraw with 8 decimals
 
-FeeInfo = WithdrawalFee | str  # str: por qué no llegó la comisión
+FeeInfo = WithdrawalFee | str  # str: why the fee did not arrive
 
 
 @dataclass(frozen=True, slots=True)
 class Holding:
-    """Saldos de un venue: totales para el %, disponibles para lo que se puede
-    enviar; `price` es el mid del venue."""
+    """A venue's balances: totals for the %, available for what can be sent; `price`
+    is the venue mid."""
 
     btc: Decimal
     btcb2: Decimal
@@ -48,13 +48,13 @@ class Transfer:
     asset: str
     source: VenueId
     dest: VenueId
-    amount: Decimal  # lo que se escribe en el formulario de retiro del venue
-    fee: Decimal | None  # None: la comisión no llegó
-    received: Decimal  # lo que llega al destino
-    debited: Decimal  # lo que sale del origen
-    cost_btc: Decimal | None  # la comisión en BTC, al mid del origen
-    after: Mapping[VenueId, Decimal | None]  # % de BTCB2 de cada venue después
-    problem: str = ""  # vacío si es viable
+    amount: Decimal  # what goes in the venue's withdrawal form
+    fee: Decimal | None  # None: the fee did not arrive
+    received: Decimal  # what reaches the destination
+    debited: Decimal  # what leaves the origin
+    cost_btc: Decimal | None  # the fee in BTC, at the origin mid
+    after: Mapping[VenueId, Decimal | None]  # BTCB2 % of each venue afterwards
+    problem: str = ""  # empty if viable
 
     @property
     def viable(self) -> bool:
@@ -77,7 +77,7 @@ def holdings(
     balances: Mapping[VenueId, Mapping[str, Balance] | None],
     mids: Mapping[VenueId, Decimal | None],
 ) -> dict[VenueId, Holding] | str:
-    """Los `Holding` de cada venue, o por qué no se pueden calcular."""
+    """Each venue's `Holding`, or why they cannot be computed."""
     out: dict[VenueId, Holding] = {}
     for vid, bal in balances.items():
         if bal is None:
@@ -99,7 +99,7 @@ def holdings(
 def plan(
     holdings: Mapping[VenueId, Holding], fees: Mapping[tuple[VenueId, str], FeeInfo]
 ) -> Plan | str:
-    """Las dos alternativas; A es el venue con más % y B el otro."""
+    """Both alternatives; A is the venue with the higher %, B the other."""
     if len(holdings) != 2:
         return "hacen falta los saldos de los dos venues"
     (va, ha), (vb, hb) = sorted(holdings.items(), key=lambda kv: kv[1].pct or ZERO, reverse=True)
@@ -116,15 +116,15 @@ def plan(
 
 
 def _split(info: FeeInfo) -> tuple[Decimal, Decimal]:
-    """(lo que paga de más el origen, lo que pierde el destino)."""
+    """(extra paid by the origin, lost by the destination)."""
     if not isinstance(info, WithdrawalFee):
         return ZERO, ZERO
     return (info.fee, ZERO) if info.on_top else (ZERO, info.fee)
 
 
 def _base_transfer(va: VenueId, a: Holding, vb: VenueId, b: Holding, info: FeeInfo) -> Transfer:
-    """BTCB2 de A a B: (b_A - x - fo)·p_A·q_B = (b_B + x - fd)·p_B·q_A, con fo
-    la comisión aparte y fd la descontada (una de las dos es 0)."""
+    """BTCB2 from A to B: (b_A - x - fo)·p_A·q_B = (b_B + x - fd)·p_B·q_A, with fo the
+    on-top fee and fd the deducted one (one of them is 0)."""
     fo, fd = _split(info)
     den = a.price * b.btc + b.price * a.btc
     x = ((a.btcb2 - fo) * a.price * b.btc - (b.btcb2 - fd) * b.price * a.btc) / den if den else ZERO
@@ -144,7 +144,7 @@ def _base_transfer(va: VenueId, a: Holding, vb: VenueId, b: Holding, info: FeeIn
 
 
 def _quote_transfer(va: VenueId, a: Holding, vb: VenueId, b: Holding, info: FeeInfo) -> Transfer:
-    """BTC de B a A: b_A·p_A·(q_B - y - fo) = b_B·p_B·(q_A + y - fd)."""
+    """BTC from B to A: b_A·p_A·(q_B - y - fo) = b_B·p_B·(q_A + y - fd)."""
     fo, fd = _split(info)
     den = a.btcb2 * a.price + b.btcb2 * b.price
     y = (a.btcb2 * a.price * (b.btc - fo) - b.btcb2 * b.price * (a.btc - fd)) / den if den else ZERO
@@ -188,14 +188,14 @@ def _problem(
     source: VenueId,
     same: bool,
 ) -> str:
-    """Por qué no es viable, o vacío. Con el mismo % antes, la comisión sola
-    daría una cantidad: no hace falta nada."""
+    """Why it is not viable, or empty. With equal % already, the fee alone would give
+    an amount: nothing is needed."""
     label = asset_label(asset)
     if same:
         return "no hace falta: ya tienen el mismo %"
     if isinstance(info, str):
         return f"sin comisión de retiro: {info}" if amount > 0 else "no hace falta"
-    if amount <= 0:  # con la comisión aparte, lo que pagaría el origen ya pasa del medio
+    if amount <= 0:  # with the fee on top, what the origin would pay is already past the middle
         return f"la comisión ({info.fee:f} {label}) es mayor que lo que hay que mover"
     if not info.active:
         return f"retiro de {label} cerrado en {source}"
@@ -213,7 +213,7 @@ def _down(value: Decimal) -> Decimal:
 
 
 def break_even(cost_btc: Decimal, qty: Decimal, price: Decimal, net_pct: Decimal) -> int | None:
-    """Dobles de `qty` a la neta `net_pct` que pagan `cost_btc`; None si no ganan."""
+    """Doubles of `qty` at net `net_pct` that pay `cost_btc`; None if they do not earn."""
     per_double = qty * price * net_pct / HUNDRED
     if per_double <= 0:
         return None

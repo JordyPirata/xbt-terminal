@@ -90,7 +90,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
     movió más de ese % en la ventana (no espera: mira hacia atrás; tras un salto
     tarda hasta `move_window_ms` en volver a disparar). `bot_fire.move` apunta el
     movimiento de cada venue, con filtro o sin él. Al frenar, `diag.log` dice
-    "sin disparar por movimiento brusco".
+    "not firing, sharp move".
   - T-74 (D-72): la ventana de T-73 olvidaba también el mid vigente al
     empezarla; tras un book quieto, un salto en un solo cambio daba `move` 0.
     Así disparó d-60003f (23:42:42 UTC, venta en Neoxa colgada, 0.0038 XBT

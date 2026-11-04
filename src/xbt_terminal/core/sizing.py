@@ -1,12 +1,12 @@
-"""Cantidad de una orden a partir de un porcentaje del saldo del venue (RF-17, D-21).
+"""Order quantity from a percentage of the venue balance (RF-17, D-21).
 
-La base es el saldo total (disponible + bloqueado) del venue de la orden:
-- compra: `qty = N % × BTC / (precio × (1 + fee taker))`, para que la fee quepa;
-- venta: `qty = N % × BTCB2`.
-Las dos, hacia abajo al lote. Sin saldo, o con menos de un lote, sale 0 y quien
-llama decide (OrderService lo rechaza). Las reglas de RF-10 no se miran aquí.
+The base is the venue's total balance (available + locked):
+- buy: `qty = N % × BTC / (price × (1 + taker fee))`, so the fee fits;
+- sell: `qty = N % × BTCB2`.
+Both rounded down to the lot. With no balance, or less than a lot, it gives 0 and
+the caller decides (OrderService rejects). RF-10 rules are not looked at here.
 
-Spec: RF-17 · Tarea: T-23
+Spec: RF-17 · Task: T-23
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ HUNDRED = Decimal(100)
 class PercentSize:
     qty: Decimal
     pct: Decimal
-    basis: Decimal  # saldo total del que sale el porcentaje
+    basis: Decimal  # total balance the percentage comes from
     asset: str
 
 

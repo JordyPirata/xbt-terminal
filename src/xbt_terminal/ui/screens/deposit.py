@@ -1,6 +1,6 @@
-"""Direcciones de depósito por venue y activo.
+"""Deposit addresses by venue and asset.
 
-Spec: RF-28 · Tareas: T-42, T-83
+Spec: RF-28 · Tasks: T-42, T-83
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ from ..qr import qr_lines
 
 
 class DepositScreen(ModalScreen[None]):
-    """Direcciones de depósito de BTC y BTCB2 por venue (RF-28). Se piden al
-    venue al abrirla y con `r`; una fila con error nunca muestra dirección.
-    A la derecha, el QR de la fila resaltada para pagar desde el móvil (D-52)."""
+    """BTC and BTCB2 deposit addresses per venue (RF-28). Asked of the venue on opening
+    and with `r`; a row with an error never shows an address. On the right, the QR of
+    the highlighted row to pay from a phone (D-52)."""
 
     DEFAULT_CSS = """
     DepositScreen { align: center middle; }
@@ -36,7 +36,7 @@ class DepositScreen(ModalScreen[None]):
     DepositScreen #deposit-qr { width: 35; height: auto; padding: 0 1; }
     DepositScreen #deposit-status { height: auto; }
     """
-    BINDINGS = [  # noqa: RUF012  (así lo declara Textual)
+    BINDINGS = [  # noqa: RUF012  (Textual declares it so)
         Binding("escape", "close", "cerrar"),
         Binding("w", "close", show=False),
         Binding("c", "copy", "copiar"),
@@ -48,8 +48,8 @@ class DepositScreen(ModalScreen[None]):
     ) -> None:
         super().__init__()
         self._source = source
-        self._copy = copy  # devuelve la herramienta del sistema que copió, o None
-        self.rows: list[DepositRow] | None = None  # None: aún no han llegado
+        self._copy = copy  # returns the system tool that copied, or None
+        self.rows: list[DepositRow] | None = None  # None: not arrived yet
         self._qr = ""
 
     def compose(self) -> ComposeResult:
@@ -104,7 +104,7 @@ class DepositScreen(ModalScreen[None]):
         return VENUE_NAME[r.venue], asset, network, address, minimum, confs
 
     def table_text(self) -> str:
-        """Filas en texto plano (tests y depuración)."""
+        """Rows as plain text (tests and debugging)."""
         table = self.query_one(DataTable)
         return "\n".join(
             " | ".join(str(c) for c in table.get_row_at(i)) for i in range(table.row_count)
@@ -114,7 +114,7 @@ class DepositScreen(ModalScreen[None]):
         return str(self.query_one("#deposit-status", Static).render())
 
     def qr_text(self) -> str:
-        """El QR (o su aviso) en texto plano (tests)."""
+        """The QR (or its notice) as plain text (tests)."""
         return self._qr
 
     def _status(self, text: str) -> None:
@@ -124,7 +124,7 @@ class DepositScreen(ModalScreen[None]):
         self._show_qr(event.cursor_row)
 
     def _show_qr(self, index: int) -> None:
-        """Solo la dirección, sin `bitcoin:`: BTCB2 no es bitcoin (D-52)."""
+        """Only the address, without `bitcoin:`: BTCB2 is not bitcoin (D-52)."""
         if not self.rows or not 0 <= index < len(self.rows):
             return
         r = self.rows[index]

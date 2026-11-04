@@ -1,23 +1,22 @@
-"""Orden doble: estado de las dos piernas y pierna colgada (RF-07, PA-08, D-15).
+"""Double order: state of both legs and hanging leg (RF-07, PA-08, D-15).
 
-Puro: recibe órdenes y la hora, y devuelve estados nuevos. Una pierna se
-identifica primero por su `client_id` (la respuesta del envío) y después por
-`(venue, order_id)`, porque Neoxa no guarda el client_id.
+Pure: takes orders and the time, and returns new states. A leg is identified first
+by its `client_id` (the send response), then by `(venue, order_id)`, because Neoxa
+does not keep the client_id.
 
-Pierna colgada (supuesto de PA-08, generalizado en D-15): las cantidades llenas
-difieren y la pierna que va por detrás está rechazada o cancelada, o el
-desequilibrio dura más de `hanging_leg_after_s`. El reloj del desequilibrio
-empieza cuando las cantidades dejan de coincidir y se reinicia si se igualan.
-No se hace nada automático: solo se avisa.
+Hanging leg (PA-08 assumption, generalized in D-15): filled quantities differ and
+the leg behind is rejected or cancelled, or the imbalance lasts more than
+`hanging_leg_after_s`. The imbalance clock starts when quantities stop matching
+and resets if they match again. Nothing automatic happens: it only warns.
 
-Una pierna cuyo envío quedó incierto (RNF-12) está `unknown` hasta que se
-reconcilia: si aparece, sigue como cualquier otra; si no existe, `rejected`.
+A leg whose send was uncertain (RNF-12) is `unknown` until reconciled: if it shows
+up, it goes on like any other; if it does not exist, `rejected`.
 
-En la doble del bot con `lead_venue` (D-75), la otra pierna está `held`
-(preparada, sin enviar) hasta que la primera responde: se envía por lo que
-llenó (`resize`) o pasa a `skipped`, que cuenta como cerrada con 0 lleno.
+In a bot double with `lead_venue` (D-75), the other leg is `held` (prepared, not
+sent) until the first answers: it goes out for what that filled (`resize`) or
+becomes `skipped`, which counts as closed with 0 filled.
 
-Spec: RF-07, RF-20, CA-03, RNF-12 · design.md §6.4, §6.9 · Tareas: T-18, T-25, T-77
+Spec: RF-07, RF-20, CA-03, RNF-12 · design.md §6.4, §6.9 · Tasks: T-18, T-25, T-77
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ from typing import Literal
 
 from .models import BASE_LABEL, ZERO, Order, OrderRequest, OrderStatus, Side
 
-# unknown: envío incierto (RNF-12); held y skipped: la otra pierna del bot (D-75)
+# unknown: uncertain send (RNF-12); held and skipped: the bot's other leg (D-75)
 LegStatus = OrderStatus | Literal["unknown", "held", "skipped"]
 
 NAMES = {"nk": "NonKYC", "nx": "Neoxa"}
@@ -80,19 +79,19 @@ class DoubleState:
         return self.buy if side == "buy" else self.sell
 
     def fail(self, side: Side, error: str) -> DoubleState:
-        """La pierna no llegó al venue (error al enviar)."""
+        """The leg never reached the venue (send error)."""
         return self._with(side, replace(self.leg(side), status="rejected", error=error))
 
     def uncertain(self, side: Side, error: str) -> DoubleState:
-        """No se sabe si la pierna llegó al venue: se reconcilia (RNF-12)."""
+        """Unknown whether the leg reached the venue: to be reconciled (RNF-12)."""
         return self._with(side, replace(self.leg(side), status="unknown", error=error))
 
     def skip(self, side: Side) -> DoubleState:
-        """La pierna que esperaba no se envía (D-75): cerrada con 0 lleno."""
+        """The waiting leg is not sent (D-75): closed with 0 filled."""
         return self._with(side, replace(self.leg(side), status="skipped"))
 
     def resize(self, side: Side, qty: Decimal) -> DoubleState:
-        """La pierna que esperaba sale por `qty`, lo que llenó la primera (D-75)."""
+        """The waiting leg goes out for `qty`, what the first filled (D-75)."""
         leg = self.leg(side)
         return self._with(side, replace(leg, req=replace(leg.req, qty=qty), status="pending"))
 
@@ -103,7 +102,7 @@ class DoubleState:
 def start(
     double_id: str, buy: OrderRequest, sell: OrderRequest, now: int, *, held: Side | None = None
 ) -> DoubleState:
-    """`held`: el lado que espera a la primera pierna (D-75)."""
+    """`held`: the side waiting for the first leg (D-75)."""
     state = DoubleState(double_id, Leg(buy), Leg(sell), now)
     if held is not None:
         state = state._with(held, replace(state.leg(held), status="held"))
@@ -111,7 +110,7 @@ def start(
 
 
 def on_order(state: DoubleState, order: Order, now: int) -> DoubleState:
-    """Aplica una orden si es de una de las piernas; si no, devuelve el mismo estado."""
+    """Apply an order if it belongs to a leg; otherwise return the same state."""
     for leg in state.legs:
         if leg.matches(order):
             updated = replace(
@@ -130,7 +129,7 @@ def _rebalance(state: DoubleState, now: int) -> DoubleState:
 
 
 def hanging(state: DoubleState, now: int, after_ms: int) -> str | None:
-    """Motivo si hay pierna colgada ahora mismo; None si no."""
+    """Reason if a leg hangs right now; None otherwise."""
     buy, sell = state.legs
     if buy.filled == sell.filled:
         return None

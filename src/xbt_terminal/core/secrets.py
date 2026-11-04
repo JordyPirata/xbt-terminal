@@ -1,13 +1,13 @@
-"""Secret (nunca se imprime) y Redactor para journal y logs.
+"""Secret (never printed) and Redactor for journal and logs.
 
-`Secret` hace que filtrar una key por descuido sea difícil: cualquier forma de
-convertirlo en texto da `***`, y no se puede serializar. El valor solo sale con
-`.reveal()`, que se llama exclusivamente en el adaptador al firmar.
+`Secret` makes leaking a key by accident hard: any conversion to text gives `***`,
+and it cannot be serialized. The value only comes out through `.reveal()`, called
+solely in the adapter when signing.
 
-`Redactor` es la segunda barrera: el journal y los logs pasan su texto final por
-él, por si un secreto ya revelado vuelve dentro de una respuesta del exchange.
+`Redactor` is the second barrier: the journal and logs pass their final text through
+it, in case a revealed secret comes back inside an exchange response.
 
-Spec: RF-12, CA-07 · design.md §8 · Tarea: T-03
+Spec: RF-12, CA-07 · design.md §8 · Task: T-03
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class Secret:
 
 class Redactor:
     def __init__(self, secrets: Iterable[Secret]) -> None:
-        # el más largo primero, por si un secreto contiene a otro
+        # longest first, in case one secret contains another
         self.secrets = tuple(sorted(secrets, key=lambda s: len(s.reveal()), reverse=True))
 
     def redact(self, text: str) -> str:

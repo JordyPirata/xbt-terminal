@@ -1,13 +1,12 @@
-"""Daemon: el motor sin pantalla, en primer plano, hasta que le piden parar.
+"""Daemon: the engine without a screen, in the foreground, until asked to stop.
 
-No sabe nada del gestor de servicios que lo lance (D-61): quien lo supervise
-le manda SIGTERM o SIGINT (`__main__` los convierte en `stop`). Al parar,
-desarma el bot, espera a los envíos y cancelaciones en vuelo (RNF-15) y, en
-live, apunta si quedan órdenes abiertas: no hay a quién preguntar. Los avisos
-que la terminal mostraría van al log de diagnóstico, y los de error también
-al journal como `notice`.
+It knows nothing of the service manager launching it (D-61): whoever supervises it
+sends SIGTERM or SIGINT (`__main__` turns them into `stop`). On stopping, it disarms
+the bot, waits for sends and cancels in flight (RNF-15) and, in live, notes any open
+orders: there is nobody to ask. Notices the terminal would show go to the diagnostic
+log, and error ones to the journal too, as `notice`.
 
-Spec: RF-30, RNF-15 · design.md §6.13 · Tarea: T-51 · D-61
+Spec: RF-30, RNF-15 · design.md §6.13 · Task: T-51 · D-61
 """
 
 from __future__ import annotations
@@ -33,8 +32,8 @@ async def run_daemon(
     book_depth: int = BOOK_DEPTH,
     view: ClientView | None = None,
 ) -> None:
-    """Con `socket`, abre el de control para el cliente `xbt` (RF-31); el book
-    viaja con `book_depth` niveles por lado (D-66)."""
+    """With `socket`, opens the control one for the `xbt` client (RF-31); the book travels
+    with `book_depth` levels per side (D-66)."""
 
     def heard(notice: Notice) -> None:
         if not notice.error:
@@ -50,29 +49,29 @@ async def run_daemon(
         else None
     )
     if control is not None:
-        await control.start()  # antes que las tareas: si falla, no queda nada corriendo
-    # cada servicio aísla sus fallos (RNF-14): una tarea por servicio, como los workers
+        await control.start()  # before the tasks: if it fails, nothing is left running
+    # each service isolates its faults (RNF-14): one task per service, like the workers
     tasks = [
         asyncio.create_task(work(), name=name)
         for name, work in engine.services() + engine.watchers()
     ]
-    log.info("daemon en marcha en %s", engine.mode)
+    log.info("daemon running in %s", engine.mode)
     if on_ready is not None:
         on_ready()
     try:
         await stop.wait()
     finally:
-        log.info("daemon: parando")
+        log.info("daemon: stopping")
         if control is not None:
-            await control.aclose()  # las TUI conectadas ven que se fue
+            await control.aclose()  # attached TUIs see it leave
         if engine.bot is not None:
             engine.bot.disarm()
         for task in tasks:
-            task.cancel()  # los envíos en vuelo van protegidos (D-29)
+            task.cancel()  # sends in flight are protected (D-29)
         await asyncio.gather(*tasks, return_exceptions=True)
         _open_orders_note(engine)
         await engine.aclose()
-        log.info("daemon parado")
+        log.info("daemon stopped")
 
 
 def _open_orders_note(engine: Engine) -> None:
@@ -81,7 +80,7 @@ def _open_orders_note(engine: Engine) -> None:
     n = sum(len(st.orders) for st in engine.account.state.values())
     if n:
         what = "1 orden abierta" if n == 1 else f"{n} órdenes abiertas"
-        text = f"daemon parado con {what} en el exchange: siguen ahí (no se cancelan)"
+        text = f"daemon stopped con {what} en el exchange: siguen ahí (no se cancelan)"
         log.warning("%s", text)
         _record(engine, text)
 
@@ -91,5 +90,5 @@ def _record(engine: Engine, text: str) -> None:
         return
     try:
         engine.journal.write("notice", data={"text": text})
-    except (OSError, ValueError) as exc:  # disco lleno o journal cerrado: queda el log
-        log.error("aviso sin escribir en el journal: %s", exc)
+    except (OSError, ValueError) as exc:  # disk full or journal closed: the log remains
+        log.error("notice not written to the journal: %s", exc)

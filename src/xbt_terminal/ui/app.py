@@ -1,27 +1,26 @@
-"""App Textual: layout 2x3, paneles y línea de comandos.
+"""Textual app: 2x3 layout, panels and command line.
 
-    ┌ velas nk ─────────┬ velas nx ─────────┐  1fr
-    ├ book nk ──────────┼ book nx ──────────┤  N niveles + 4
-    ├ barra inferior (dos columnas) ────────┤
-    └ línea de comandos ────────────────────┘
+    ┌ candles nk ───────┬ candles nx ───────┐  1fr
+    ├ book nk ──────────┼ book nx ──────────┤  N levels + 4
+    ├ bottom bar (two columns) ─────────────┤
+    └ command line ─────────────────────────┘
 
-La UI es el cliente del daemon (RF-31, D-66): habla con las caras de
-`services/remote.py` (mercado, cuenta, órdenes, bot, resultados, depósitos y
-reequilibrio) y no importa ningún servicio que hable con los venues. Los tests
-le pasan los servicios de verdad, que tienen la misma cara, y un `Runner` que
-corre sus bucles. Los avisos del mercado marcan paneles como sucios
-y se redibujan con throttle: books cada 100 ms (RNF-06 pide < 500 ms) y velas
-cada segundo. Por debajo de 160×45 se muestra un aviso en lugar del layout.
+The UI is the daemon's client (RF-31, D-66): it talks to the faces in
+`services/remote.py` (market, account, orders, bot, results, deposits and rebalance)
+and imports no service that talks to venues. Tests hand it the real services, which
+have the same face, and a `Runner` running their loops. Market notices mark panels
+dirty and redraws are throttled: books every 100 ms (RNF-06 asks < 500 ms) and candles
+every second. Below 160×45 a warning replaces the layout.
 
-Una orden con envío incierto (RNF-12) se avisa en rojo y la barra de estado las
-cuenta; la reconciliación la hace el daemon y sus avisos llegan como `Notice`.
+An order with an uncertain send (RNF-12) is flagged in red and the status bar counts
+them; the daemon reconciles and its notices arrive as `Notice`.
 
-Las pantallas modales (confirmar, ayuda, órdenes, resultados, depósitos y
-reequilibrio) están en `ui/screens/`, una por módulo (T-83).
+Modal screens (confirm, help, orders, results, deposits and rebalance) are in
+`ui/screens/`, one per module (T-83).
 
 Spec: RF-02..RF-08, RF-25, RF-28, RF-29, RNF-02, RNF-06, RNF-12 · design.md §9,
 §6.10, §6.11, §6.12
-Tareas: T-13..T-19, T-25, T-40, T-42, T-45, T-65, T-83
+Tasks: T-13..T-19, T-25, T-40, T-42, T-45, T-65, T-83
 """
 
 from __future__ import annotations
@@ -106,11 +105,11 @@ from .screens.results import ResultsScreen
 from .status import StatusBar, VenueLink
 
 MIN_SIZE = (160, 45)  # RNF-02
-VENUES: tuple[VenueId, ...] = ("nk", "nx")  # izquierda, derecha
+VENUES: tuple[VenueId, ...] = ("nk", "nx")  # left, right
 BOOK_EVERY_S = 0.1
 CHART_EVERY_S = 1.0
-STATUS_EVERY_S = 1.0  # antigüedad de los estados; los cambios se pintan al llegar
-# conectada al daemon todo pasa por el socket (RF-31, D-66)
+STATUS_EVERY_S = 1.0  # state age; changes are drawn on arrival
+# attached to the daemon everything goes through the socket (RF-31, D-66)
 ATTACHED_HINT = (
     "cliente del daemon: buy · sell · dbl · cancel · bot on/off · results · ? ayuda"
     " · q desconecta (el daemon sigue)"
@@ -118,8 +117,8 @@ ATTACHED_HINT = (
 
 
 class Runner(Protocol):
-    """Lo que la app necesita de quien corre los servicios: con daemon, un
-    `Engine` sin órdenes sobre el mercado remoto; en los tests, el de verdad."""
+    """What the app needs from whoever runs the services: with a daemon, an order-less
+    `Engine` on the remote market; in tests, the real one."""
 
     @property
     def fault_count(self) -> int: ...
@@ -134,19 +133,19 @@ class Runner(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ClientServices:
-    """Las caras del daemon que usa la pantalla (RF-31); en los tests, los servicios
-    de verdad, que tienen la misma cara. Sin ninguna, la pantalla solo mira."""
+    """The daemon faces the screen uses (RF-31); in tests, the real services, which have
+    the same face. With none, the screen only watches."""
 
     orders: RemoteOrders | None = None
     account: RemoteAccount | None = None
     bot: RemoteBot | None = None
     results: RemoteResults | None = None
-    deposits: RemoteDeposits | None = None  # solo venues con keys (RF-28)
-    rebalance: RemoteRebalance | None = None  # comisiones de retiro (RF-29)
-    remote: RemoteEngine | None = None  # conectada al daemon: mira y arma o para el bot
+    deposits: RemoteDeposits | None = None  # venues with keys only (RF-28)
+    rebalance: RemoteRebalance | None = None  # withdrawal fees (RF-29)
+    remote: RemoteEngine | None = None  # attached to the daemon: watches and arms or stops the bot
 
 
-READ_ONLY = ClientServices()  # sin caras: la pantalla solo mira
+READ_ONLY = ClientServices()  # no faces: the screen only watches
 
 
 class TooSmall(Static):
@@ -169,7 +168,7 @@ class TooSmall(Static):
 
 class XbtApp(App[None]):
     TITLE = f"Terminal {BASE_LABEL}"
-    # sin foco inicial en la línea de comandos: si no, 1-5/q se escribirían en ella
+    # no initial focus on the command line: otherwise 1-5/q would be typed into it
     AUTO_FOCUS = None
     CSS = """
     #layout {
@@ -180,7 +179,7 @@ class XbtApp(App[None]):
     #bottom { column-span: 2; height: auto; }
     #account-row { height: auto; }
     """
-    BINDINGS = [  # noqa: RUF012  (así lo declara Textual)
+    BINDINGS = [  # noqa: RUF012  (Textual declares it so)
         Binding("1", "timeframe('1m')", "1m"),
         Binding("2", "timeframe('5m')", "5m"),
         Binding("3", "timeframe('1h')", "1h"),
@@ -196,7 +195,7 @@ class XbtApp(App[None]):
         Binding("e", "rebalance", "reequilibrio"),
         Binding("x", "cancel_all", "cancelar todo"),
         Binding("p", "bot_off", "parar bot"),
-        # parada del bot que llega aunque la línea de comandos tenga el foco (D-39)
+        # bot stop that works even with the command line focused (D-39)
         Binding("ctrl+b", "bot_off", "parar bot", priority=True),
         Binding("question_mark", "help", "ayuda"),
         Binding("escape", "release", show=False),
@@ -218,14 +217,14 @@ class XbtApp(App[None]):
     ) -> None:
         super().__init__()
         self.hub = hub
-        # la config que manda el daemon en `hello` (D-66)
+        # the config the daemon sends in `hello` (D-66)
         self.book_levels = view.book_levels
         self.timeframe: Timeframe = view.timeframe
-        self.inventory_target = view.inventory  # ratio de inventario (RF-27)
-        self.bot_limits = view.bot_limits  # para las dobles que pagan el reequilibrio
-        # descuento de fee por venue, solo para el panel cruzado (RF-24, D-38)
+        self.inventory_target = view.inventory  # inventory ratio (RF-27)
+        self.bot_limits = view.bot_limits  # for the doubles that pay the rebalance
+        # fee discount per venue, for the cross panel only (RF-24, D-38)
         self._fee_discounts = dict(view.fee_discounts)
-        # las caras del daemon (RF-31)
+        # the daemon faces (RF-31)
         self.remote = services.remote
         self.orders = services.orders
         self.account = services.account
@@ -236,16 +235,16 @@ class XbtApp(App[None]):
         self.mode = mode
         self._run_hub = run_hub
         self.can_trade = dict(can_trade or {})
-        # copia con wl-copy/xclip/xsel además de OSC 52; None en tests (D-52)
+        # copies with wl-copy/xclip/xsel on top of OSC 52; None in tests (D-52)
         self.system_clipboard = clipboard
         self.last_message = ""
         self.last_error = False
-        self._clock = clock or hub.clock  # el del hub: ui no importa adapters (D-54)
+        self._clock = clock or hub.clock  # the hub's: ui does not import adapters (D-54)
         self.startup_warnings = tuple(startup_warnings)
         self._dirty_books: set[VenueId] = set()
         self._dirty_charts: set[VenueId] = set()
         self._shown_double: str | None = None
-        # avisos, fallos y bucles que no dependen de la pantalla (D-61, D-66)
+        # notices, faults and loops that do not depend on the screen (D-61, D-66)
         self.engine = engine
 
     def compose(self) -> ComposeResult:
@@ -258,7 +257,7 @@ class XbtApp(App[None]):
                 yield BookPanel(venue, self.book_levels)
             with Vertical(id="bottom"):
                 yield CrossPanel()
-                with Horizontal(id="account-row"):  # piernas a la derecha (D-67)
+                with Horizontal(id="account-row"):  # legs on the right (D-67)
                     yield BalancesPanel(
                         visible=self.account is not None, target=self.inventory_target
                     )
@@ -270,7 +269,7 @@ class XbtApp(App[None]):
 
     def on_mount(self) -> None:
         self.hub.subscribe(self._on_hub)
-        # velas | book (N niveles + cabecera, resumen y bordes) | barra y comandos
+        # candles | book (N levels + header, summary and borders) | bar and commands
         self.query_one("#layout").styles.grid_rows = f"1fr {self.book_levels + 4} auto"
         self._apply_size(self.size)
         self.set_interval(BOOK_EVERY_S, self._flush_books)
@@ -292,18 +291,18 @@ class XbtApp(App[None]):
             self.remote.subscribe(self._on_notice)
             self.remote.subscribe_link(lambda _up: self.call_later(self._draw_status))
             self.run_worker(self.remote.run(), name="daemon", exit_on_error=False)
-        # los servicios aíslan sus fallos (RNF-14): ningún worker cierra la app
+        # services isolate their faults (RNF-14): no worker closes the app
         tasks = self.engine.watchers() + (self.engine.services() if self._run_hub else [])
         for name, work in tasks:
             self.run_worker(work(), name=name, exit_on_error=False)
 
     async def on_unmount(self) -> None:
-        await self.engine.aclose()  # envíos y cancelaciones en vuelo, al journal (RNF-15)
+        await self.engine.aclose()  # sends and cancels in flight, to the journal (RNF-15)
         if self.remote is not None:
             await self.remote.aclose()
 
     def on_resize(self, event: events.Resize) -> None:
-        self._apply_size(event.size)  # self.size aún no está al día
+        self._apply_size(event.size)  # self.size is not up to date yet
 
     def _apply_size(self, size: Size) -> None:
         width, height = size
@@ -350,7 +349,7 @@ class XbtApp(App[None]):
         )
         try:
             self.query_one(BalancesPanel).show(views, inv, self._clock())
-        except NoMatches:  # puede llegar un aviso mientras se desmonta
+        except NoMatches:  # a notice may arrive while unmounting
             pass
 
     def _open_orders(self) -> list[Order]:
@@ -368,7 +367,7 @@ class XbtApp(App[None]):
             return
         try:
             self._draw_books()
-        except NoMatches:  # el temporizador puede saltar mientras se desmonta
+        except NoMatches:  # the timer may fire while unmounting
             pass
 
     def _draw_books(self) -> None:
@@ -400,7 +399,7 @@ class XbtApp(App[None]):
         }
         uncertain = len(self.orders.uncertain) if self.orders is not None else 0
         faults = self.engine.fault_count
-        if remote is not None:  # lo del daemon (RF-31)
+        if remote is not None:  # the daemon's part (RF-31)
             uncertain, faults = len(remote.uncertain), faults + remote.faults
         bot = self.bot.state.status if self.bot is not None else None
         try:
@@ -408,14 +407,14 @@ class XbtApp(App[None]):
                 links, self.mode, self._clock(), uncertain=uncertain, faults=faults, bot=bot,
                 daemon=remote.connected if remote is not None else None,
             )  # fmt: skip
-        except NoMatches:  # el temporizador puede saltar mientras se desmonta
+        except NoMatches:  # the timer may fire while unmounting
             pass
-        self._draw_balances()  # la antigüedad de los saldos avanza con el reloj
+        self._draw_balances()  # the balances' age advances with the clock
         if remote is not None:
             self._follow_remote_legs()
 
     def _quote(self, venue: VenueId) -> Quote | None:
-        """Mejores precios y fee taker del venue; None sin spec (sin fee no hay neto)."""
+        """Best prices and taker fee of the venue; None without spec (no fee, no net)."""
         st = self.hub.state[venue]
         if st.spec is None:
             return None
@@ -427,7 +426,7 @@ class XbtApp(App[None]):
         try:
             for venue in self._dirty_charts:
                 self._draw_chart(venue)
-        except NoMatches:  # el temporizador puede saltar mientras se desmonta
+        except NoMatches:  # the timer may fire while unmounting
             pass
         self._dirty_charts.clear()
 
@@ -440,11 +439,11 @@ class XbtApp(App[None]):
         for venue in VENUES:
             self._draw_chart(venue)
 
-    # -- salir (RNF-15, D-29) -------------------------------------------------------
+    # -- exiting (RNF-15, D-29) -------------------------------------------------------
 
     async def action_quit(self) -> None:
-        """En live, con órdenes abiertas, se pregunta: siguen en el exchange al salir.
-        Conectada al daemon, solo se desconecta: no hay nada que preguntar."""
+        """In live, with open orders, it asks: they stay on the exchange after exiting.
+        Attached to the daemon it only disconnects: nothing to ask."""
         if self.remote is not None:
             self.say("desconectando: el daemon y el bot siguen igual")
             self.exit()
@@ -454,7 +453,7 @@ class XbtApp(App[None]):
             self._quit()
             return
         if isinstance(self.screen, ConfirmScreen):
-            return  # ya hay un diálogo abierto
+            return  # a dialog is already open
         what = "1 orden abierta" if n == 1 else f"{n} órdenes abiertas"
         summary = f"hay {what} en el exchange: siguen ahí al salir (no se cancelan)"
         self.push_screen(ConfirmScreen(summary, self.mode, action="quit"), self._quit_confirmed)
@@ -468,7 +467,7 @@ class XbtApp(App[None]):
             self.say(f"saliendo: se espera a {self.orders.in_flight} envío(s) en vuelo")
         self.exit()
 
-    # -- fallos (RNF-14, D-28) -----------------------------------------------------
+    # -- faults (RNF-14, D-28) -----------------------------------------------------
 
     def _on_fault(self, fault: Fault) -> None:
         self.call_later(self._show_fault, fault)
@@ -485,7 +484,7 @@ class XbtApp(App[None]):
         self._draw_status()
 
     async def _guarded(self, work: Awaitable[None], where: str = "ui") -> None:
-        """Un bug en una acción se reporta y la terminal sigue."""
+        """A bug in an action is reported and the terminal goes on."""
         try:
             await work
         except (DaemonGoneError, DaemonRefusedError) as exc:
@@ -493,11 +492,11 @@ class XbtApp(App[None]):
         except Exception as exc:
             self.engine.report_fault(where, exc)
 
-    # -- comandos ---------------------------------------------------------------
+    # -- commands ---------------------------------------------------------------
 
     def say(self, message: str, *, error: bool = False) -> None:
         self.last_message, self.last_error = message, error
-        # sin markup: los errores del venue pueden traer corchetes ("[1002]")
+        # no markup: venue errors may bring brackets ("[1002]")
         self.notify(message, severity="error" if error else "information", timeout=8, markup=False)
 
     def action_command(self, prefix: str) -> None:
@@ -525,7 +524,7 @@ class XbtApp(App[None]):
             return
         try:
             await self._dispatch(command)
-        # conectada: el daemon no está o no quiso
+        # attached: the daemon is away or refused
         except (DaemonGoneError, DaemonRefusedError) as exc:
             self.say(str(exc), error=True)
 
@@ -552,7 +551,7 @@ class XbtApp(App[None]):
         else:
             await self._cancel(command)
 
-    # -- bot (fase 2) -----------------------------------------------------------
+    # -- bot (phase 2) -----------------------------------------------------------
 
     def _bot_command(self, command: BotCommand) -> None:
         if self.bot is None:
@@ -626,7 +625,7 @@ class XbtApp(App[None]):
 
         return callback
 
-    # -- orden doble ------------------------------------------------------------
+    # -- double order ------------------------------------------------------------
 
     async def _double(self, command: DoubleOrder) -> None:
         if self.orders is None:
@@ -670,7 +669,7 @@ class XbtApp(App[None]):
             self.call_later(self._draw_legs)
 
     def _follow_remote_legs(self) -> None:
-        """Conectada al daemon: la última doble que el daemon conoce."""
+        """Attached to the daemon: the last double the daemon knows."""
         assert self.remote is not None
         doubles = self.remote.doubles
         if doubles:
@@ -682,15 +681,16 @@ class XbtApp(App[None]):
         if source is None or self._shown_double is None:
             return
         state = source.doubles.get(self._shown_double)
-        if state is None:  # con daemon, la foto que la trae aún no ha llegado: se pinta al llegar
+        # with a daemon, the snapshot bringing it has not arrived: drawn on arrival
+        if state is None:
             return
         specs = {vid: self.hub.state[vid].spec for vid in VENUES}
         try:
             self.query_one(LegsPanel).show(state, source.hanging.get(state.id), specs)
-        except NoMatches:  # puede llegar un aviso mientras se desmonta
+        except NoMatches:  # a notice may arrive while unmounting
             pass
 
-    # -- envíos inciertos (RNF-12) ------------------------------------------------
+    # -- uncertain sends (RNF-12) ------------------------------------------------
 
     def _say_uncertain(self, result: Uncertain) -> None:
         r = result.req
@@ -701,7 +701,7 @@ class XbtApp(App[None]):
         )
         self._draw_status()
 
-    # -- órdenes abiertas y cancelar ---------------------------------------------
+    # -- open orders and cancelling ---------------------------------------------
 
     def action_orders(self) -> None:
         self._show_orders(None)
@@ -744,7 +744,7 @@ class XbtApp(App[None]):
 
         return callback
 
-    # -- ayuda y clic en el book -------------------------------------------------
+    # -- help and click on the book -------------------------------------------------
 
     def action_results(self) -> None:
         self._show_results("dia")
@@ -772,7 +772,7 @@ class XbtApp(App[None]):
         )
 
     def rebalance_holdings(self) -> Mapping[VenueId, Holding] | str:
-        """Saldos de los dos venues y su mid, o por qué faltan (RF-29)."""
+        """Balances of both venues and their mid, or why they are missing (RF-29)."""
         if self.account is None:
             return "sin saldos: hace falta abrir la terminal con keys"
         balances = {
@@ -782,11 +782,11 @@ class XbtApp(App[None]):
         return holdings(balances, {vid: self.hub.state[vid].book.mid for vid in VENUES})
 
     async def copy_text(self, text: str) -> str | None:
-        """OSC 52 siempre y, si hay, la herramienta del sistema, cuyo nombre
-        devuelve (D-52): GNOME Terminal ignora OSC 52 sin avisar."""
+        """OSC 52 always and, if present, the system tool, whose name it returns (D-52):
+        GNOME Terminal silently ignores OSC 52."""
         try:
             self.copy_to_clipboard(text)
-        except Exception:  # el portapapeles es un extra: OSC 52 no siempre existe
+        except Exception:  # the clipboard is an extra: OSC 52 does not always exist
             pass
         return None if self.system_clipboard is None else await self.system_clipboard(text)
 
@@ -794,8 +794,8 @@ class XbtApp(App[None]):
         self.push_screen(HelpScreen(self.mode))
 
     def on_book_panel_picked(self, event: BookPanel.Picked) -> None:
-        """RF-16, D-18: con la línea vacía, la orden entera (precio y cantidad del
-        nivel); con texto, solo el precio en el cursor."""
+        """RF-16, D-18: with an empty line, the whole order (the level's price and quantity);
+        with text, just the price at the cursor."""
         price = f"{event.price:.{event.price_decimals}f}"
         self.run_worker(self.copy_text(price), group="copy")
         cmd = self.query_one(CommandLine)

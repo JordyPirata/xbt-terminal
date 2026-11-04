@@ -1,10 +1,10 @@
-"""Modelos de dominio en Decimal: MarketSpec, Level, BookSnapshot, Order, Fill...
+"""Domain models in Decimal: MarketSpec, Level, BookSnapshot, Order, Fill...
 
-Todos los importes son `Decimal` y se comprueba al construir: un `float` lanza
-TypeError en vez de colarse en un precio. Los timestamps son milisegundos epoch
-UTC (`int`), que es lo que devuelven ambos venues y se agrupa sin ambigüedad.
+All amounts are `Decimal`, checked at construction: a `float` raises TypeError
+instead of slipping into a price. Timestamps are epoch milliseconds UTC (`int`),
+which both venues return and which group unambiguously.
 
-Spec: RNF-07 · design.md §3 · Tarea: T-02
+Spec: RNF-07 · design.md §3 · Task: T-02
 """
 
 from __future__ import annotations
@@ -24,26 +24,26 @@ ConnStatus = Literal["up", "reconnecting", "down"]
 ZERO = Decimal(0)
 DONE_STATUSES = frozenset({"filled", "cancelled", "rejected"})
 
-# Nombre que se muestra de cada activo (D-48). Solo presentación: símbolos,
-# claves de saldo, config y journal siguen con el ticker del venue.
+# Display name of each asset (D-48). Presentation only: symbols, balance keys,
+# config and journal keep the venue ticker.
 ASSET_LABELS = {"BTCB2": "XBT"}
 BASE_LABEL = ASSET_LABELS["BTCB2"]
 
 
 def asset_label(asset: str) -> str:
-    """Nombre del activo en la UI y los mensajes."""
+    """Asset name in the UI and messages."""
     return ASSET_LABELS.get(asset, asset)
 
 
 def D(value: Decimal | str | int) -> Decimal:  # noqa: N802 — idioma para Decimal
-    """Construye un Decimal rechazando float, que ya llegaría con error binario."""
+    """Build a Decimal rejecting float, which would already carry binary error."""
     if isinstance(value, float):
         raise TypeError(f"float no permitido en importes: {value!r}; usar str")
     return value if isinstance(value, Decimal) else Decimal(value)
 
 
 def _check_decimals(obj: object) -> None:
-    """Toda anotación `Decimal` del dataclass debe contener un Decimal de verdad."""
+    """Every `Decimal` annotation of the dataclass must hold a real Decimal."""
     for f in fields(obj):  # type: ignore[arg-type]
         if f.type in ("Decimal", Decimal):
             value = getattr(obj, f.name)
@@ -54,14 +54,14 @@ def _check_decimals(obj: object) -> None:
 
 
 def _snap(value: Decimal, step: Decimal, rounding: str) -> Decimal:
-    """Lleva `value` al múltiplo de `step` en la dirección dada, con el exponente de step."""
+    """Bring `value` to a multiple of `step` in the given direction, with step's exponent."""
     units = (value / step).to_integral_value(rounding=rounding)
     return (units * step).quantize(step)
 
 
 @dataclass(frozen=True, slots=True)
 class MarketSpec:
-    """Reglas del mercado. Se leen del venue al arrancar, no se hardcodean."""
+    """Market rules. Read from the venue at startup, never hardcoded."""
 
     venue: VenueId
     symbol: str
@@ -80,8 +80,8 @@ class MarketSpec:
             raise ValueError(f"{self.venue}: tick_size y lot_size deben ser > 0")
 
     def quantize_price(self, price: Decimal, side: Side) -> Decimal:
-        """Redondea al tick en la dirección que no deja la orden por detrás de lo
-        pedido: una compra hacia arriba, una venta hacia abajo."""
+        """Round to the tick in the direction that does not leave the order behind what
+        was asked: a buy up, a sell down."""
         if side == "buy":
             return _snap(price, self.tick_size, ROUND_CEILING)
         if side == "sell":
@@ -89,7 +89,7 @@ class MarketSpec:
         raise ValueError(f"lado inválido: {side!r}")
 
     def quantize_qty(self, qty: Decimal) -> Decimal:
-        """Trunca al lote: nunca se envía más cantidad de la pedida."""
+        """Truncate to the lot: never send more than asked."""
         return _snap(qty, self.lot_size, ROUND_FLOOR)
 
 
@@ -97,7 +97,7 @@ class MarketSpec:
 class Level:
     price: Decimal
     qty: Decimal
-    amm: bool = False  # Neoxa mezcla liquidez de AMM en el book
+    amm: bool = False  # Neoxa mixes AMM liquidity into the book
 
     def __post_init__(self) -> None:
         _check_decimals(self)
@@ -114,7 +114,7 @@ class BookSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class BookDelta:
-    """Cambios de nivel; qty == 0 borra el nivel."""
+    """Level changes; qty == 0 deletes the level."""
 
     venue: VenueId
     bids: tuple[Level, ...]
@@ -128,7 +128,7 @@ class Trade:
     venue: VenueId
     price: Decimal
     qty: Decimal
-    side: Side  # lado del taker
+    side: Side  # taker side
     ts: int
 
     def __post_init__(self) -> None:
@@ -150,22 +150,22 @@ class Candle:
 
 @dataclass(frozen=True, slots=True)
 class DepositAddress:
-    """Dirección de depósito de un activo del par en un venue (RF-28). `asset` es
-    el del par (BTC, BTCB2) y `ticker` el nombre que le da el venue."""
+    """Deposit address of a pair asset on a venue (RF-28). `asset` is the pair's (BTC,
+    BTCB2) and `ticker` the venue's name for it."""
 
     venue: VenueId
     asset: str
     ticker: str
     network: str
     address: str
-    memo: str = ""  # payment id o tag, si el venue lo pide
+    memo: str = ""  # payment id or tag, if the venue asks for it
     min_deposit: Decimal | None = None
     confirmations: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DepositRow:
-    """Una fila de la ventana de depósitos (RF-28): la dirección o por qué no llegó."""
+    """A row of the deposits window (RF-28): the address or why it did not arrive."""
 
     venue: VenueId
     asset: str
@@ -175,10 +175,10 @@ class DepositRow:
 
 @dataclass(frozen=True, slots=True)
 class WithdrawalFee:
-    """Comisión de retiro de un activo del par en un venue (RF-29), en ese
-    activo. `minimum` es el retiro mínimo, si el venue lo da; `active` es falso
-    si los retiros están cerrados o en mantenimiento. `on_top`: la comisión se
-    cobra aparte de lo pedido (llega lo pedido) en vez de descontarse (D-53)."""
+    """Withdrawal fee of a pair asset on a venue (RF-29), in that asset. `minimum` is
+    the minimum withdrawal, if the venue gives it; `active` is false if withdrawals
+    are closed or under maintenance. `on_top`: the fee is charged on top of the
+    amount (the amount arrives) instead of deducted from it (D-53)."""
 
     venue: VenueId
     asset: str
@@ -248,7 +248,7 @@ class Order:
 
 @dataclass(frozen=True, slots=True)
 class Fill:
-    """Ejecución propia. Neoxa no dice a qué orden pertenece: `order_id` None (D-14)."""
+    """Own execution. Neoxa does not say which order it belongs to: `order_id` None (D-14)."""
 
     venue: VenueId
     trade_id: str
@@ -266,16 +266,16 @@ class Fill:
 
 @dataclass(frozen=True, slots=True)
 class PastFill:
-    """Un trade que ya estaba en el venue al arrancar (D-68): no es un fill nuevo
-    para piernas ni bot, pero la cuenta lo compara con el journal."""
+    """A trade already on the venue at startup (D-68): not a new fill for legs or bot,
+    but the account compares it with the journal."""
 
     fill: Fill
 
 
 @dataclass(frozen=True, slots=True)
 class FeeUpdate:
-    """El venue cambió la fee de un fill ya avisado (NonKYC la rehace en NKYC,
-    D-64). La cantidad no cambia: no es otro fill."""
+    """The venue changed the fee of an already reported fill (NonKYC redoes it in NKYC,
+    D-64). The quantity does not change: it is not another fill."""
 
     venue: VenueId
     trade_id: str
@@ -290,11 +290,11 @@ class FeeUpdate:
 
 @dataclass(frozen=True, slots=True)
 class ConnState:
-    """Estado de una conexión para el indicador de RF-14."""
+    """State of a connection for the RF-14 indicator."""
 
     venue: VenueId
     channel: Channel
-    source: Source  # "rest" = polling de respaldo (RF-01)
+    source: Source  # "rest" = fallback polling (RF-01)
     status: ConnStatus
     latency_ms: float | None
     since: int

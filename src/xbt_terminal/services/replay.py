@@ -1,15 +1,14 @@
-"""Reproducción de una grabación (RF-34, RF-35, D-80): venues simulados bajo el
-`Engine` de siempre.
+"""Replay of a recording (RF-34, RF-35, D-80): simulated venues under the usual `Engine`.
 
-- `ReplayVenue` cumple `MarketData`: saca los eventos con sus tiempos relativos.
-- `SimVenue` opera contra el book de un `ReplayVenue`: la orden llega tras
-  `latency_ms`, casa como taker (`core.replay.match`) y lo demás queda abierto.
-- `VirtualLoop` es un bucle de asyncio sin esperas: el reloj salta al siguiente
-  temporizador. Con él, el informe tarda segundos y sale siempre igual.
+- `ReplayVenue` fulfils `MarketData`: emits the events with their relative times.
+- `SimVenue` trades against a `ReplayVenue`'s book: the order arrives after
+  `latency_ms`, matches as taker (`core.replay.match`) and the rest stays open.
+- `VirtualLoop` is an asyncio loop with no waiting: the clock jumps to the next timer.
+  With it, the report takes seconds and always comes out the same.
 
-Bot, RiskCheck, journal y resultados no saben que esto es una reproducción.
+Bot, RiskCheck, journal and results do not know this is a replay.
 
-Spec: RF-34, RF-35, CA-19, CA-20 · design.md §6.14 · Tarea: T-87
+Spec: RF-34, RF-35, CA-19, CA-20 · design.md §6.14 · Task: T-87
 """
 
 from __future__ import annotations
@@ -51,16 +50,16 @@ from .engine import Engine
 from .market import MarketHub
 from .recording import RecordingInfo, read_recording
 
-MATCH_DEPTH = 200  # niveles por lado contra los que casa una orden
-PROBE_DEPTH = 50  # los mismos que mira el bot
-PLENTY = Decimal(10**9)  # saldo de sobra para contar cruces
-TAIL_S = 30.0  # tras la grabación, para que cierre la última doble
+MATCH_DEPTH = 200  # levels per side an order matches against
+PROBE_DEPTH = 50  # the same the bot looks at
+PLENTY = Decimal(10**9)  # balance to spare for counting crossings
+TAIL_S = 30.0  # after the recording, so the last double closes
 CLOCK_RESOLUTION_S = 1e-6
 _ARMED = BotState(status="armed")
 
 
 class Timeline:
-    """Origen de tiempos común a los venues de una reproducción."""
+    """Time origin shared by the venues of a replay."""
 
     def __init__(self, info: RecordingInfo, clock: Callable[[], int], *, venues: int) -> None:
         self._info = info
@@ -71,7 +70,7 @@ class Timeline:
 
     @property
     def offset(self) -> int:
-        """Ahora menos el primer evento; se fija la primera vez que se pide."""
+        """Now minus the first event; fixed the first time it is asked."""
         if self._offset is None:
             self._offset = self._clock() - self._info.first
         return self._offset
@@ -87,8 +86,8 @@ class Timeline:
 
 
 def _shifted(event: Any, offset: int) -> Any:
-    """El evento en el tiempo de la reproducción: el hub tira los trades "de
-    antes de cargar", y la pantalla pinta velas con estas horas."""
+    """The event in replay time: the hub drops trades "from before loading", and the
+    screen draws candles with these times."""
     if isinstance(event, ConnState):
         return replace(event, since=event.since + offset)
     if isinstance(event, BookSnapshot | BookDelta | Trade):
@@ -97,7 +96,7 @@ def _shifted(event: Any, offset: int) -> Any:
 
 
 class ReplayVenue:
-    """`MarketData` que lee una grabación; sin red."""
+    """`MarketData` reading a recording; no network."""
 
     def __init__(
         self,
@@ -113,7 +112,7 @@ class ReplayVenue:
         self.timeline = timeline
         self._clock = clock
         self.book = L2Book(venue)
-        self.on_book: Callable[[], None] = lambda: None  # lo usa `SimVenue`
+        self.on_book: Callable[[], None] = lambda: None  # used by `SimVenue`
 
     def apply(self, event: BookSnapshot | BookDelta) -> None:
         self.book.apply(event, received_at=self._clock())
@@ -128,7 +127,7 @@ class ReplayVenue:
         return self.spec
 
     async def book_snapshot(self, depth: int) -> BookSnapshot:
-        """El book reproducido: el contraste de RNF-24 coincide siempre."""
+        """The replayed book: the RNF-24 check always matches."""
         return self.book.snapshot(depth) or BookSnapshot(self.id, (), (), self._clock())
 
     async def recent_trades(self, limit: int) -> list[Trade]:
@@ -147,16 +146,16 @@ class ReplayVenue:
             if isinstance(event, BookSnapshot | BookDelta):
                 self.apply(event)
             yield event
-        await self._until(self.timeline.last + offset)  # un venue no acaba antes que el otro
+        await self._until(self.timeline.last + offset)  # one venue does not end before the other
         self.timeline.finish()
         yield ConnState(self.id, "market", "ws", "down", None, self._clock())
-        await asyncio.Event().wait()  # sin más mercado, hasta que paren el daemon
+        await asyncio.Event().wait()  # no more market, until the daemon is stopped
 
 
 class SimVenue(DryRunVenue):
-    """Órdenes contra el book de la grabación, con un competidor que se lleva
-    niveles enteros. El book grabado no cambia con lo casado, pero lo casado no
-    se vuelve a casar: queda gastado hasta que la grabación mueva ese nivel (D-80)."""
+    """Orders against the recording's book, with a competitor taking whole levels. The
+    recorded book does not change with what matched, but that does not match again: it
+    stays spent until the recording moves that level (D-80)."""
 
     def __init__(
         self, feed: ReplayVenue, config: ReplayConfig, *, clock: Callable[[], int] = now_ms
@@ -172,15 +171,15 @@ class SimVenue(DryRunVenue):
         self._latency_s = config.latency_ms / 1000
         self._competitor_pct = config.competitor_pct
         self._rng = random.Random(f"{config.seed}-{feed.id}")
-        # (lado, precio) → (cantidad grabada del nivel, gastado de ella)
+        # (side, price) → (recorded level quantity, spent of it)
         self._spent: dict[tuple[Side, Decimal], tuple[Decimal, Decimal]] = {}
 
     def _taken(self, level: object) -> bool:
         return Decimal(self._rng.randrange(10_000)) / 100 < self._competitor_pct
 
     def _on_book(self) -> None:
-        """La grabación movió el book: lo gastado de un nivel que cambió o ya no
-        está deja de contar."""
+        """The recording moved the book: what was spent of a level that changed or left stops
+        counting."""
         book = self._feed.book.snapshot(MATCH_DEPTH)
         if not self._spent or book is None:
             return
@@ -189,7 +188,7 @@ class SimVenue(DryRunVenue):
         self._spent = {key: spent for key, spent in self._spent.items() if now.get(key) == spent[0]}
 
     def _unspent(self, side: Side, levels: tuple[Level, ...]) -> list[Level]:
-        """Los niveles con lo que les queda."""
+        """The levels with what they have left."""
         out = []
         for level in levels:
             left = level.qty - self._spent.get((side, level.price), (ZERO, ZERO))[1]
@@ -218,7 +217,7 @@ class SimVenue(DryRunVenue):
 
 
 class _VirtualSelector(selectors.DefaultSelector):
-    """En vez de esperar, avanza el reloj del bucle hasta el siguiente temporizador."""
+    """Instead of waiting, advance the loop clock to the next timer."""
 
     loop: VirtualLoop
 
@@ -238,8 +237,8 @@ class VirtualLoop(asyncio.SelectorEventLoop):
         selector.loop = self
         self._now = start_s
         super().__init__(selector)
-        # con la hora epoch, sumar 1 ns no mueve un float: un temporizador que
-        # vence justo ahora no llegaría a dispararse nunca
+        # with epoch time, adding 1 ns does not move a float: a timer due right now would
+        # never fire
         self._clock_resolution = CLOCK_RESOLUTION_S
 
     def time(self) -> float:
@@ -253,8 +252,8 @@ class VirtualLoop(asyncio.SelectorEventLoop):
 
 
 class CrossingProbe:
-    """Cuenta los cruces sobre el umbral: cada tramo seguido en que la decisión
-    del bot dispararía con saldo de sobra, sin cooldown ni topes (RF-35)."""
+    """Count crossings over the threshold: each run in which the bot's decision would
+    fire with balance to spare, without cooldown or caps (RF-35)."""
 
     def __init__(self, hub: MarketHub, limits: BotLimits, clock: Callable[[], int]) -> None:
         self._hub = hub
@@ -279,8 +278,8 @@ class CrossingProbe:
 
 
 async def run_report(engine: Engine, timeline: Timeline, *, tail_s: float = TAIL_S) -> None:
-    """Los servicios del motor hasta acabar la grabación, con el bot armado. Una
-    pierna colgada lo rearma: aquí se mide, no se opera (RF-35)."""
+    """The engine's services until the recording ends, with the bot armed. A hanging leg
+    re-arms it: this measures, it does not trade (RF-35)."""
     bot = engine.bot
     assert bot is not None
     loop = asyncio.get_running_loop()

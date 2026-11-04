@@ -1,15 +1,14 @@
-"""Paneles de la pantalla: book L2, velas, barra inferior y línea de comandos.
+"""Screen panels: L2 book, candles, bottom bar and command line.
 
-El book va en escalera horizontal (compras a la izquierda, ventas a la derecha)
-para que los N niveles de RF-02 quepan en 160×45 junto a los gráficos. Las velas
-convierten a float solo para dibujar: los precios que se muestran en texto salen
-del Decimal (RNF-07).
+The book is a horizontal ladder (bids left, asks right) so the N levels of RF-02 fit
+in 160×45 next to the charts. Candles convert to float only for drawing: prices shown
+as text come from the Decimal (RNF-07).
 
-El panel de piernas de la orden doble (T-18) solo aparece tras la primera. El de
-balances (T-19) solo cuando hay cuenta (dry-run o live).
+The double order legs panel (T-18) only appears after the first. The balances one
+(T-19) only with an account (dry-run or live).
 
 Spec: RF-02, RF-03, RF-04, RF-05, RF-07, RNF-02, RNF-06 · design.md §6.4, §6.6, §9
-Tareas: T-13, T-14b, T-18, T-19
+Tasks: T-13, T-14b, T-18, T-19
 """
 
 from __future__ import annotations
@@ -40,19 +39,18 @@ TITLES: dict[VenueId, str] = {
     "nx": f"Neoxa {BASE_LABEL}/BTC",
 }
 HUNDRED = Decimal(100)
-# Ancho de una fila: 2 × (12 + 12 + 11 + 2) + 3 = 77, cabe en media pantalla
-# (80 columnas menos los 2 del borde)
+# Row width: 2 × (12 + 12 + 11 + 2) + 3 = 77, fits half a screen (80 columns minus
+# the 2 of the border)
 QTY_W, PRICE_W = 12, 11
-AMM_TAG = " A"  # marca de nivel AMM; la leyenda va en el borde
-SIDE_W = 2 * QTY_W + PRICE_W + len(AMM_TAG)  # ancho de cada lado de la escalera
+AMM_TAG = " A"  # AMM level mark; the legend is on the border
+SIDE_W = 2 * QTY_W + PRICE_W + len(AMM_TAG)  # width of each ladder side
 SEP = " │ "
-LADDER_W = 2 * SIDE_W + len(SEP)  # escalera entera, sin barras
+LADDER_W = 2 * SIDE_W + len(SEP)  # whole ladder, no bars
 
 
 def depth_bar(fraction: Decimal, width: int, side: str) -> str:
-    """Barra de profundidad de `width` columnas llena en `fraction` (0-1), con
-    medias celdas. Las compras crecen hacia la izquierda y las ventas hacia la
-    derecha, las dos desde la escalera; un nivel con algo ocupa media celda."""
+    """Depth bar of `width` columns filled to `fraction` (0-1), with half cells. Bids grow
+    left and asks right, both from the ladder; a level with anything fills half a cell."""
     halves = round(fraction * width * 2)
     if fraction > 0 and width:
         halves = max(halves, 1)
@@ -67,15 +65,15 @@ def _decimals(step: Decimal) -> int:
 
 
 class BookPanel(Static):
-    """Book L2 en escalera centrada, con la profundidad acumulada en barras a
-    los lados (D-49). Un clic en un nivel publica `Picked` (RF-16)."""
+    """L2 book as a centred ladder, with cumulative depth in bars on the sides (D-49). A
+    click on a level publishes `Picked` (RF-16)."""
 
     DEFAULT_CSS = """
     BookPanel { border: round $primary; padding: 0; }
     """
 
     class Picked(Message):
-        """Nivel elegido: precio y cantidad (la del nivel o la acumulada)."""
+        """Chosen level: price and quantity (the level's or the cumulative)."""
 
         def __init__(
             self, venue: VenueId, side: str, price: Decimal, qty: Decimal, decimals: tuple[int, int]
@@ -88,28 +86,28 @@ class BookPanel(Static):
         super().__init__(id=f"book-{venue}")
         self.venue = venue
         self.levels = levels
-        self.text = ""  # última versión en texto plano (tests y depuración)
+        self.text = ""  # last plain text version (tests and debugging)
         self.border_title = f"Book · {TITLES[venue]}"
         if venue == "nx":
             self.border_subtitle = f"{AMM_TAG.strip()} = liquidez AMM del pool"
-        self.styles.height = levels + 4  # cabecera, niveles, resumen y bordes
+        self.styles.height = levels + 4  # header, levels, summary and borders
         self._rows: tuple[tuple[BookRow, ...], tuple[BookRow, ...]] = ((), ())
-        self._decimals = (8, 8)  # (precio, cantidad) del último book pintado
+        self._decimals = (8, 8)  # (price, quantity) of the last drawn book
         self._last: tuple[L2Book | None, MarketSpec | None] = (None, None)
-        self.bar_width = 0  # columnas de cada barra de profundidad
-        self.ladder_x = 0  # columna de contenido donde empieza la escalera
+        self.bar_width = 0  # columns of each depth bar
+        self.ladder_x = 0  # content column where the ladder starts
 
     def on_mount(self) -> None:
         self.show(None, None)
 
     def level_at(self, x: int, y: int) -> tuple[str, Decimal, Decimal] | None:
-        """(lado, precio, cantidad) del nivel en (x, y) de contenido; None fuera de
-        un nivel. Fila 0: cabecera; 1..levels: niveles; a la izquierda del
-        separador, bid. En la columna de acumulado la cantidad es la acumulada."""
+        """(side, price, quantity) of the level at content (x, y); None off a level. Row 0:
+        header; 1..levels: levels; left of the separator, bid. In the cumulative column the
+        quantity is the cumulative one."""
         if not 1 <= y <= self.levels:
             return None
         bids, asks = self._rows
-        x -= self.ladder_x  # las barras quedan en negativo (compras) o tras las ventas
+        x -= self.ladder_x  # bars end up negative (bids) or past the asks
         ask_x = SIDE_W + len(SEP)
         if -self.ladder_x <= x < SIDE_W:
             side, rows, cumulative = "bid", bids, x < QTY_W
@@ -148,7 +146,7 @@ class BookPanel(Static):
         pd = _decimals(spec.tick_size)
         bids, asks = book.top(self.levels)
         self._rows, self._decimals = (bids, asks), (pd, qd)
-        # lo que sobra a cada lado de la escalera es barra, con 1 columna de hueco
+        # what remains on each side of the ladder is bar, with a 1 column gap
         width = self.content_size.width
         bar_w = max(0, (width - LADDER_W) // 2 - 1)
         side_w = bar_w + 1 if bar_w else 0
@@ -182,7 +180,7 @@ class BookPanel(Static):
 
     @staticmethod
     def _bar(row: BookRow | None, depth: Decimal, width: int, side: str) -> Text:
-        """Barra del acumulado del nivel respecto al más profundo de los dos lados."""
+        """Bar of the level's cumulative against the deepest of both sides."""
         if row is None or depth <= 0:
             return Text(" " * width)
         style = "green" if side == "bid" else "red"
@@ -216,15 +214,15 @@ class BookPanel(Static):
         )
 
 
-MAX_STEP = 4  # columnas por vela como mucho, para que pocas velas no parezcan sueltas
+MAX_STEP = 4  # columns per candle at most, so few candles do not look scattered
 Y_TICKS = 6
 
 
 def candle_layout(count: int, canvas: int) -> tuple[int, int]:
-    """(velas que se dibujan, columnas por vela) para `canvas` columnas (D-24).
+    """(candles drawn, columns per candle) for `canvas` columns (D-24).
 
-    El paso es entero e igual para todas: si plotext reparte N velas en M
-    columnas con M no múltiplo de N, deja columnas vacías sueltas."""
+    The step is whole and the same for all: if plotext spreads N candles over M columns
+    with M not a multiple of N, it leaves stray empty columns."""
     shown = min(count, max(canvas, 0))
     if shown == 0:
         return 0, 1
@@ -232,7 +230,7 @@ def candle_layout(count: int, canvas: int) -> tuple[int, int]:
 
 
 def _price_ticks(low: float, high: float) -> tuple[list[float], list[str]]:
-    """Marcas del eje Y con el mismo ancho, para saber cuánto ocupa (D-24)."""
+    """Y axis ticks with equal width, to know how much they take (D-24)."""
     if high <= low:
         high = low + abs(low) * 0.01 or 1.0
     gap = (high - low) / (Y_TICKS - 1)
@@ -254,7 +252,7 @@ class ChartPanel(PlotextPlot):
         self.border_title = f"Velas · {TITLES[venue]}"
 
     def show(self, candles: tuple[Candle, ...], timeframe: Timeframe) -> None:
-        """Guarda las velas; cuántas caben depende del ancho y se ve al pintar."""
+        """Keep the candles; how many fit depends on the width, seen on drawing."""
         self.candles = candles
         self.timeframe = timeframe
         self.border_subtitle = timeframe
@@ -270,10 +268,10 @@ class ChartPanel(PlotextPlot):
         if not self.candles:
             plt.title("cargando histórico…")
             return
-        # El ancho de las etiquetas del eje Y depende del rango, y el del área de
-        # dibujo de ellas: se calcula con todas y se recalcula con las que caben
+        # Y label width depends on the range, and the drawing area on them: computed with
+        # all and recomputed with those that fit
         ticks, labels = _price_ticks(*self._range(self.candles))
-        canvas = width - 2 - max(map(len, labels))  # 2 = los dos bordes del marco
+        canvas = width - 2 - max(map(len, labels))  # 2 = both frame borders
         shown, step = candle_layout(len(self.candles), canvas)
         candles = self.candles[len(self.candles) - shown :]
         ticks, labels = _price_ticks(*self._range(candles))
@@ -292,7 +290,7 @@ class ChartPanel(PlotextPlot):
                 "Low": [float(c.low) for c in candles],
             },
         )
-        # Con este rango, plotext pone la vela i en la columna canvas-1-step·(n-1-i)
+        # With this range, plotext puts candle i in column canvas-1-step·(n-1-i)
         plt.xlim(xs[-1] - (canvas - 1) / step, xs[-1])
         plt.ylim(ticks[0], ticks[-1])
         plt.yticks(ticks, labels)
@@ -309,8 +307,8 @@ class ChartPanel(PlotextPlot):
 
     @staticmethod
     def _range(candles: tuple[Candle, ...]) -> tuple[float, float]:
-        """Rango de los cuerpos, no de las mechas: una mecha suelta aplastaría
-        todas las velas; la que se sale queda cortada en el borde (D-67)."""
+        """Range of the bodies, not the wicks: a stray wick would crush every candle; the
+        one sticking out is cut at the border (D-67)."""
         bodies = [p for c in candles for p in (c.open, c.close)]
         return float(min(bodies)), float(max(bodies))
 
@@ -320,7 +318,7 @@ DASH = "—"
 
 
 def axis_format(timeframe: Timeframe) -> str:
-    """Etiquetas del eje X: con fecha cuando la hora sola se repite (D-23)."""
+    """X axis labels: with the date when the hour alone repeats (D-23)."""
     return {"1h": "%d %H:%M", "4h": "%d %H:%M", "1d": "%m-%d"}.get(timeframe, "%H:%M")
 
 
@@ -343,8 +341,8 @@ def _route_text(buy: VenueId, sell: VenueId, route: Route | None) -> Text:
 
 
 def render_cross(nk: Quote | None, nx: Quote | None, note: str = "") -> Text:
-    """Tres líneas: stats de cada venue a la izquierda y las dos rutas a la
-    derecha; abajo la diferencia de mids. Lo que no se puede calcular sale "—"."""
+    """Three lines: each venue's stats on the left and both routes on the right; below,
+    the mid difference. What cannot be computed comes out "—"."""
     stats = {"nk": venue_stats(nk) if nk else None, "nx": venue_stats(nx) if nx else None}
     view = cross(nk, nx) if nk and nx else None
     left = [_stats_line("nk", stats["nk"]), _stats_line("nx", stats["nx"])]
@@ -369,7 +367,7 @@ def render_cross(nk: Quote | None, nx: Quote | None, note: str = "") -> Text:
 
 
 class CrossPanel(Static):
-    """Panel cruzado (RF-04)."""
+    """Cross panel (RF-04)."""
 
     DEFAULT_CSS = """
     CrossPanel { height: 5; border: round $accent; padding: 0; }
@@ -397,14 +395,14 @@ def _age(ms: int) -> str:
 def _pair(bal: Balance | None, decimals: int) -> str:
     if bal is None:
         bal = Balance("-", Decimal(0))
-    if not bal.locked:  # lo en órdenes, solo si hay (D-67)
+    if not bal.locked:  # what is in orders, only if any (D-67)
         return f"{bal.available:.{decimals}f}"
     return f"{bal.available:.{decimals}f} + {bal.locked:.{decimals}f}"
 
 
 @dataclass(frozen=True, slots=True)
 class AccountView:
-    """Lo que el panel de balances necesita de un venue con keys."""
+    """What the balance panel needs of a venue with keys."""
 
     balances: dict[str, Balance] | None
     balances_at: int | None
@@ -412,7 +410,7 @@ class AccountView:
 
 
 def _ratio(pct: Decimal | None, target: InventoryTarget | None) -> Text:
-    """% del valor en BTCB2 (RF-27): verde dentro de la banda, amarillo fuera."""
+    """% of the value in BTCB2 (RF-27): green inside the band, yellow outside."""
     if pct is None:
         return Text(f"{BASE_LABEL} — %")
     style = "" if target is None else "green" if target.in_band(pct) else "yellow"
@@ -425,9 +423,8 @@ def render_balances(
     now: int,
     target: InventoryTarget | None = None,
 ) -> tuple[str, Text]:
-    """(título, líneas). Una línea por venue: disponible + en órdenes de cada
-    activo, su valor en BTC al mid y el % en BTCB2; en el título, el inventario
-    neto total."""
+    """(title, lines). One line per venue: available + in orders of each asset, its BTC
+    value at the mid and the % in BTCB2; in the title, the total net inventory."""
     out = Text()
     for i, vid in enumerate(("nk", "nx")):
         if i:
@@ -440,7 +437,7 @@ def render_balances(
         if view.balances is None:
             out.append("cargando…", style="dim")
         else:
-            # 8 decimales siempre: el saldo puede tener más que el lote de órdenes
+            # always 8 decimals: the balance may have more than the order lot
             out.append(f"BTC {_pair(view.balances.get('BTC'), 8)}")
             out.append(f" · {BASE_LABEL} {_pair(view.balances.get('BTCB2'), 8)}")
             item = inv.venues.get(vid)
@@ -453,7 +450,7 @@ def render_balances(
                 out.append(f" · hace {_age(now - view.balances_at)}", style="dim")
         if view.error:
             out.append(f" · ⚠ {view.error[:60]}", style="yellow")
-    # corto: comparte la fila con las piernas de la doble (D-67)
+    # short: it shares the row with the double's legs (D-67)
     title = "Balances"
     if inv.btc is not None and inv.btcb2 is not None:
         title += f" · BTC {inv.btc:.8f} · {BASE_LABEL} {inv.btcb2:.8f}"
@@ -466,7 +463,7 @@ def render_balances(
 
 
 class BalancesPanel(Static):
-    """Balances por venue e inventario neto (RF-05). Oculto sin cuenta."""
+    """Balances per venue and net inventory (RF-05). Hidden without an account."""
 
     DEFAULT_CSS = """
     BalancesPanel {
@@ -495,8 +492,8 @@ LEG_STATUS = {
     "filled": ("llena", "green"),
     "cancelled": ("cancelada", "dim"),
     "rejected": ("rechazada", "bold red"),
-    "unknown": ("INCIERTA", "bold magenta"),  # RNF-12: se está comprobando
-    "held": ("esperando", "yellow"),  # D-75: a que llene la primera pierna
+    "unknown": ("INCIERTA", "bold magenta"),  # RNF-12: being checked
+    "held": ("esperando", "yellow"),  # D-75: for the first leg to fill
     "skipped": ("sin enviar", "dim"),
 }
 LEG_SIDE = {"buy": "COMPRA", "sell": "VENTA"}
@@ -515,7 +512,7 @@ def _leg_line(leg: Leg, spec: MarketSpec | None) -> Text:
     out = Text(f" {LEG_SIDE[req.side]:<6} {VENUE_NAME[req.venue]:<6} ", style="bold")
     out.append(f"{num(req.qty, qd)} @ {num(req.price, pd)} · ")
     out.append(label, style=color)
-    # lo lleno (lo pedido va delante de la @); el id de orden está en `o` (D-67)
+    # what filled (the amount asked is before the @); the order id is under `o` (D-67)
     out.append(f" {num(leg.filled, qd)}")
     if leg.error:
         out.append(f" · {leg.error}", style="red")
@@ -539,8 +536,8 @@ def render_legs(
 
 
 class LegsPanel(Static):
-    """Piernas de la última orden doble (RF-07), a la derecha de los balances
-    (D-67). Oculto hasta la primera."""
+    """Legs of the last double order (RF-07), right of the balances (D-67). Hidden until
+    the first."""
 
     DEFAULT_CSS = """
     LegsPanel {
@@ -565,10 +562,10 @@ class LegsPanel(Static):
 
 
 class CommandLine(Input):
-    """Línea de comandos (design.md §9). Deshabilitada si no se puede operar."""
+    """Command line (design.md §9). Disabled if trading is not possible."""
 
     def __init__(self, enabled: bool, note: str = "", hint: str | None = None) -> None:
-        if hint is not None:  # la TUI conectada al daemon (RF-31) trae el suyo
+        if hint is not None:  # the TUI attached to the daemon (RF-31) brings its own
             pass
         elif enabled:
             hint = (
@@ -579,8 +576,8 @@ class CommandLine(Input):
             hint = note or (
                 "solo lectura: sin keys no hay órdenes · 1-5 timeframe · ? ayuda · q salir"
             )
-        # sin select_on_focus: al teclear tras b/s/d o tras un clic en el book, el
-        # primer carácter sustituiría todo el texto ya puesto
+        # no select_on_focus: when typing after b/s/d or a book click, the first character
+        # would replace all the text already there
         super().__init__(placeholder=hint, id="cmd", disabled=not enabled, select_on_focus=False)
 
     def place_cursor(self, position: int) -> None:
@@ -589,8 +586,8 @@ class CommandLine(Input):
 
 
 class ResultsChart(PlotextPlot):
-    """Resultado de las dobles cerradas en sats (RF-25): el acumulado como línea
-    o cada doble como barra, verde si gana y roja si pierde."""
+    """Result of closed doubles in sats (RF-25): the cumulative as a line or each double
+    as a bar, green if it wins and red if it loses."""
 
     DEFAULT_CSS = """
     ResultsChart { border: round $secondary; }
@@ -643,15 +640,15 @@ class ResultsChart(PlotextPlot):
         )
 
 
-MAX_POINTS = 300  # plotext no distingue más puntos que columnas
+MAX_POINTS = 300  # plotext cannot tell more points than columns
 VENUE_COLOR: dict[VenueId, str] = {"nk": "orange", "nx": "magenta"}
 
 
 class ValueChart(PlotextPlot):
-    """Valor de la cuenta en BTC contra la hora (RF-32): el total, o una línea
-    por venue. Se corta en los huecos (ratos sin daemon), sin interpolar. En
-    `relative` (el último tramo, D-69), el cambio en sats desde la primera
-    muestra: en BTC las etiquetas del eje no distinguen unos sats."""
+    """Account value in BTC against time (RF-32): the total, or one line per venue. Cut at
+    gaps (spells without daemon), not interpolated. In `relative` (the last stretch,
+    D-69), the change in sats since the first sample: in BTC the axis labels cannot tell
+    a few sats apart."""
 
     DEFAULT_CSS = """
     ValueChart { border: round $secondary; }
@@ -675,7 +672,7 @@ class ValueChart(PlotextPlot):
         self.refresh()
 
     def segments(self) -> list[tuple[ValueSample, ...]]:
-        """Tramos sin huecos, cada uno reducido en proporción a su tamaño."""
+        """Stretches without gaps, each reduced in proportion to its size."""
         found = segments(self.values)
         n = len(self.values)
         return [thin(seg, max(2, MAX_POINTS * len(seg) // max(n, 1))) for seg in found]
@@ -715,7 +712,7 @@ class ValueChart(PlotextPlot):
                     xs[: len(ys)], ys, color=VENUE_COLOR.get(vid, "white"),
                     marker="braille", label=label,
                 )  # fmt: skip
-        # eje ajustado a los datos; plano, plotext lo abriría un ±50 %
+        # axis fitted to the data; when flat, plotext would open it ±50 %
         lo, hi = min(all_ys), max(all_ys)
         pad = max((hi - lo) * 0.1, 1.0 if self.relative else 1e-8)
         plt.ylim(lo - pad, hi + pad)

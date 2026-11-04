@@ -1,9 +1,9 @@
-"""Poner el journal al día con los trades que el venue ya tenía al arrancar
-(D-68): qué se sabe de cada trade por el journal y qué hay que apuntar.
+"""Bring the journal up to date with the trades the venue already had at startup
+(D-68): what the journal knows of each trade and what must be written.
 
-Puro: las filas del journal entran ya leídas.
+Pure: journal rows come in already read.
 
-Spec: RF-11, RF-25 · design.md §6.5 · Tarea: T-68 · D-64, D-68
+Spec: RF-11, RF-25 · design.md §6.5 · Task: T-68 · D-64, D-68
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from .models import Fill, VenueId
 
 @dataclass
 class JournalIndex:
-    """Lo que el journal (live) sabe de los trades y de las órdenes propias."""
+    """What the (live) journal knows of trades and own orders."""
 
     fees: dict[tuple[str, str], tuple[Decimal, str | None]] = field(default_factory=dict)
     ours: dict[tuple[str, str], str | None] = field(default_factory=dict)  # → client_id
@@ -28,8 +28,8 @@ class JournalIndex:
 
 
 def index(rows: Iterable[Mapping[str, Any]]) -> JournalIndex:
-    """En orden del journal: la última fee de cada trade (`fill` y luego `fill_fee`)
-    y el `order_id` de cada `order_ack`, con su `client_id`. Solo filas de live."""
+    """In journal order: the last fee of each trade (`fill`, then `fill_fee`) and the
+    `order_id` of each `order_ack`, with its `client_id`. Live rows only."""
     out = JournalIndex()
     for row in rows:
         if row.get("mode") != "live":
@@ -53,9 +53,9 @@ Action = Literal["fee", "fill"] | None
 
 
 def decide(fill: Fill, known: JournalIndex) -> tuple[Action, str | None]:
-    """Qué apuntar de un trade que ya estaba: `fee` si el journal lo tiene con otra
-    fee, `fill` si no lo tiene y es de una orden nuestra, None si nada. Con el
-    `client_id` de la orden, si se conoce."""
+    """What to write for a trade already there: `fee` if the journal has another fee,
+    `fill` if it lacks it and the order is ours, None for nothing. With the order's
+    `client_id`, if known."""
     key = (fill.venue, fill.trade_id)
     client_id = known.ours.get((fill.venue, fill.order_id)) if fill.order_id else None
     if key in known.fees:

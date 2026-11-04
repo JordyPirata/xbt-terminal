@@ -1,10 +1,10 @@
-"""Modelos ↔ JSON para el socket del daemon: una línea, un objeto.
+"""Models ↔ JSON for the daemon socket: one line, one object.
 
-`encode` recorre dataclasses, diccionarios y secuencias y deja los `Decimal`
-como texto (RNF-07: nada de `float` en dinero). `decode` rehace el tipo pedido
-con sus anotaciones; un número donde va un `Decimal` es error, no se redondea.
+`encode` walks dataclasses, dicts and sequences and leaves `Decimal`s as text
+(RNF-07: no `float` in money). `decode` rebuilds the requested type from its
+annotations; a number where a `Decimal` goes is an error, not rounded.
 
-Spec: RF-31, RNF-07 · design.md §6.13 · Tareas: T-52, T-62 · D-61, D-66
+Spec: RF-31, RNF-07 · design.md §6.13 · Tasks: T-52, T-62 · D-61, D-66
 """
 
 from __future__ import annotations
@@ -75,13 +75,13 @@ def _hints(cls: type) -> dict[str, Any]:
 
 
 def decode(tp: Any, data: Any) -> Any:
-    """Rehace `tp` desde el JSON de `data`; `TypeError` o `ValueError` si no encaja."""
+    """Rebuild `tp` from the JSON `data`; `TypeError` or `ValueError` if it does not fit."""
     return _decoder(tp)(tp, data)
 
 
 @cache
 def _decoder(tp: Any) -> Callable[[Any, Any], Any]:
-    """El decodificador de `tp`, elegido una vez por tipo: va en cada mensaje."""
+    """The decoder of `tp`, chosen once per type: it runs on every message."""
     origin = typing.get_origin(tp)
     for matches, decoder in _DECODERS:
         if matches(tp, origin):
@@ -99,7 +99,7 @@ def _decode_none(tp: Any, data: Any) -> None:
 
 
 def _decode_union(tp: Any, data: Any) -> Any:
-    """Prueba cada tipo de la unión por orden; el primero que encaja gana."""
+    """Try each union type in order; the first that fits wins."""
     args = typing.get_args(tp)
     if data is None and type(None) in args:
         return None
@@ -131,7 +131,7 @@ def _decode_decimal(tp: Any, data: Any) -> Decimal:
 
 
 def _decode_dataclass(tp: Any, data: Any) -> Any:
-    """Solo los campos que llegan y van al `__init__`; el resto, por defecto."""
+    """Only the fields that arrive and go to `__init__`; the rest by default."""
     if not isinstance(data, dict):
         raise TypeError(f"{tp.__name__} llega como objeto")
     hints = _hints(tp)
@@ -141,7 +141,7 @@ def _decode_dataclass(tp: Any, data: Any) -> Any:
             continue
         value = decode(hints[f.name], data[f.name])
         if isinstance(value, deque) and f.default_factory is not dataclasses.MISSING:
-            fresh = f.default_factory()  # conserva el `maxlen` del campo
+            fresh = f.default_factory()  # keeps the field's `maxlen`
             fresh.extend(value)
             value = fresh
         kwargs[f.name] = value
@@ -156,7 +156,7 @@ def _decode_mapping(tp: Any, data: Any) -> dict[Any, Any]:
 
 
 def _decode_sequence(tp: Any, data: Any) -> Any:
-    """Listas, tuplas (de largo fijo o `tuple[X, ...]`), deques y conjuntos."""
+    """Lists, tuples (fixed length or `tuple[X, ...]`), deques and sets."""
     if not isinstance(data, list):
         raise TypeError("se esperaba una lista")
     origin, args = typing.get_origin(tp), typing.get_args(tp)
@@ -166,7 +166,7 @@ def _decode_sequence(tp: Any, data: Any) -> Any:
 
 
 def _decode_scalar(tp: Any, data: Any) -> Any:
-    """int, str, bool y float; un bool no vale como número."""
+    """int, str, bool and float; a bool is no number."""
     is_bool = isinstance(data, bool)
     if tp is float and isinstance(data, int) and not is_bool:
         return float(data)
@@ -175,7 +175,7 @@ def _decode_scalar(tp: Any, data: Any) -> Any:
     return data
 
 
-# Por orden: la primera que encaja decide (`decode`).
+# In order: the first that fits decides (`decode`).
 _DECODERS: tuple[tuple[Callable[[Any, Any], bool], Callable[[Any, Any], Any]], ...] = (
     (lambda tp, origin: tp is Any, lambda tp, data: data),
     (lambda tp, origin: tp is type(None), _decode_none),
@@ -189,32 +189,32 @@ _DECODERS: tuple[tuple[Callable[[Any, Any], bool], Callable[[Any, Any], Any]], .
 )
 
 
-# -- mensajes del daemon ----------------------------------------------------------
+# -- daemon messages ----------------------------------------------------------
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class ClientView:
-    """Lo que la pantalla necesita de la config del daemon; va en `hello`, así
-    el cliente no lee `config.toml` ni ve keys (D-66)."""
+    """What the screen needs from the daemon's config; goes in `hello`, so the client
+    neither reads `config.toml` nor sees keys (D-66)."""
 
     book_levels: int
     timeframe: Timeframe
-    fee_discounts: dict[VenueId, Decimal]  # solo para el panel cruzado (RF-24)
+    fee_discounts: dict[VenueId, Decimal]  # for the cross panel only (RF-24)
     inventory: InventoryTarget | None  # RF-27
-    bot_limits: BotLimits | None  # para las dobles que pagan el reequilibrio (RF-29)
+    bot_limits: BotLimits | None  # for the doubles that pay the rebalance (RF-29)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class BotView:
     state: BotState
     status_text: str
-    summary: str  # parámetros, para la confirmación de `bot on` (RF-18)
+    summary: str  # parameters, for the `bot on` confirmation (RF-18)
     refusal: str | None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Snapshot:
-    """Lo que el cliente necesita del motor, salvo el mercado (`MarketView`)."""
+    """What the client needs of the engine, except the market (`MarketView`)."""
 
     mode: str
     bot: BotView | None
@@ -225,7 +225,7 @@ class Snapshot:
     in_flight: int
     faults: int
     can_trade: dict[VenueId, bool]
-    # venues con keys para depósitos y comisiones de retiro, y si hay resultados (D-66)
+    # venues with keys for deposits and withdrawal fees, and whether there are results (D-66)
     deposit_venues: tuple[VenueId, ...] = ()
     fee_venues: tuple[VenueId, ...] = ()
     has_results: bool = False
@@ -256,11 +256,11 @@ def snapshot(engine: Engine) -> Snapshot:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class MarketView:
-    """Foto del mercado de un venue para el cliente: al conectar y cada vez que
-    el venue se carga de nuevo (D-66). Después llegan book, trades y conexión."""
+    """Market snapshot of a venue for the client: on connecting and each time the venue
+    reloads (D-66). Then book, trades and connection arrive."""
 
     spec: MarketSpec | None
-    book: BookSnapshot | None  # None: book no válido
+    book: BookSnapshot | None  # None: invalid book
     candles: dict[Timeframe, tuple[Candle, ...]]
     last_trade: Trade | None
     conn: ConnState | None
@@ -280,12 +280,12 @@ def market_view(st: VenueMarket, depth: int) -> MarketView:
     )
 
 
-# -- respuestas que no son un solo dataclass (D-66) --------------------------------
+# -- replies that are not a single dataclass (D-66) --------------------------------
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Rows:
-    """Las filas de direcciones de depósito (RF-28)."""
+    """Rows of deposit addresses (RF-28)."""
 
     rows: tuple[DepositRow, ...]
 
@@ -294,13 +294,13 @@ class Rows:
 class FeeRow:
     venue: VenueId
     asset: str
-    fee: WithdrawalFee | str  # str: por qué no llegó (RF-29)
+    fee: WithdrawalFee | str  # str: why it did not arrive (RF-29)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Fees:
-    """Las comisiones de retiro por venue y activo; en JSON una clave no puede
-    ser una tupla, así que viajan como filas."""
+    """Withdrawal fees by venue and asset; a JSON key cannot be a tuple, so they travel
+    as rows."""
 
     fees: tuple[FeeRow, ...]
 

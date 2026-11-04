@@ -1,16 +1,16 @@
-"""Rutas de config, `.env` y datos; permisos e instancia única.
+"""Paths of config, `.env` and data; permissions and single instance.
 
-Por defecto siguen XDG y no dependen del directorio de arranque (RNF-20):
+By default they follow XDG and do not depend on the startup directory (RNF-20):
 
     config  $XDG_CONFIG_HOME/xbt/config.toml   (~/.config/xbt)
     .env    $XDG_CONFIG_HOME/xbt/.env
-    datos   $XDG_STATE_HOME/xbt                (~/.local/state/xbt)
+    data    $XDG_STATE_HOME/xbt                (~/.local/state/xbt)
 
-Los flags las cambian; una ruta relativa se resuelve contra el cwd al arrancar
-y queda absoluta. El directorio de datos se crea `0700` y guarda el journal y el
-lock de instancia única (RNF-17, RNF-18).
+Flags change them; a relative path resolves against the cwd at startup and stays
+absolute. The data directory is created `0700` and holds the journal and the single
+instance lock (RNF-17, RNF-18).
 
-Spec: RNF-17, RNF-18, RNF-20 · design.md §8 · Tarea: T-30
+Spec: RNF-17, RNF-18, RNF-20 · design.md §8 · Task: T-30
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ class Paths:
 
 
 def _xdg(environ: Mapping[str, str], var: str, fallback: str) -> Path:
-    # XDG: una ruta relativa en la variable se ignora
+    # XDG: a relative path in the variable is ignored
     value = environ.get(var, "")
     if value and Path(value).is_absolute():
         return Path(value)
@@ -62,13 +62,13 @@ def resolve_paths(
 
 
 def private_dir(path: Path) -> None:
-    """Crea el directorio solo para el usuario; si ya existía, lo cierra a `0700`."""
+    """Create the directory for the user only; if it existed, tighten it to `0700`."""
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     path.chmod(0o700)
 
 
 def env_permission_problem(path: Path) -> str | None:
-    """Qué falla en los permisos del `.env`, o None. Sin fichero no hay problema."""
+    """What is wrong with `.env` permissions, or None. No file, no problem."""
     try:
         mode = stat.S_IMODE(path.stat().st_mode)
     except FileNotFoundError:
@@ -86,11 +86,11 @@ class AlreadyRunningError(Exception):
 
 
 class InstanceLock:
-    """`flock` exclusivo sobre `<datos>/xbt.lock`, mientras corre la terminal.
+    """Exclusive `flock` on `<data>/xbt.lock`, while the terminal runs.
 
-    El kernel lo suelta si el proceso muere, así que un lock huérfano no bloquea.
-    El fichero guarda el pid, solo para el mensaje de error; no se borra al salir
-    (borrarlo dejaría a otra instancia con un lock sobre un fichero ya sin nombre).
+    The kernel releases it if the process dies, so an orphan lock blocks nothing. The
+    file keeps the pid, just for the error message; it is not deleted on exit (deleting
+    it would leave another instance with a lock on a nameless file).
     """
 
     def __init__(self, data: Path) -> None:
@@ -117,7 +117,7 @@ class InstanceLock:
 
     def release(self) -> None:
         if self._fd is not None:
-            os.close(self._fd)  # cerrar suelta el flock
+            os.close(self._fd)  # closing releases the flock
             self._fd = None
 
     def __enter__(self) -> InstanceLock:

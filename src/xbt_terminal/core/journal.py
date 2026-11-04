@@ -1,14 +1,14 @@
-"""Journal append-only en JSONL.
+"""Append-only JSONL journal.
 
-Una línea por evento en `<datos>/journal-YYYYMMDD.jsonl` (fecha UTC; por
-defecto, `~/.local/state/xbt`), con flush tras cada línea: si la terminal muere
-justo después de enviar una orden, la línea `order_sent` ya está en disco.
+One line per event in `<data>/journal-YYYYMMDD.jsonl` (UTC date; `~/.local/state/xbt`
+by default), flushed after each line: if the terminal dies right after sending an
+order, the `order_sent` line is already on disk.
 
-Los secretos se enmascaran sobre los valores *antes* de codificar a JSON, no
-sobre la línea final: así un secreto con caracteres que JSON escapa (`"`, `\\`)
-tampoco se escapa del Redactor.
+Secrets are masked on the values *before* encoding to JSON, not on the final line:
+that way a secret with characters JSON escapes (`"`, `\\`) does not slip past the
+Redactor.
 
-Spec: RF-11 · design.md §7 · Tarea: T-04
+Spec: RF-11 · design.md §7 · Task: T-04
 """
 
 from __future__ import annotations
@@ -34,16 +34,16 @@ EVENTS = frozenset(
         "cancel_sent",
         "cancel_ack",
         "fill",
-        "fill_fee",  # fee corregida de un fill ya apuntado (D-64)
+        "fill_fee",  # corrected fee of an already written fill (D-64)
         "hanging_leg",
         "conn",
         "error",
-        "bot_state",  # fase 2 (RF-23)
+        "bot_state",  # phase 2 (RF-23)
         "bot_fire",
-        "bot_miss",  # la primera pierna no llenó (D-75)
-        "notice",  # avisos del daemon (RF-30, D-61)
-        "value",  # valor de la cuenta (RF-32, D-69)
-        "book_resync",  # book local distinto del REST (RNF-24, D-76)
+        "bot_miss",  # the first leg did not fill (D-75)
+        "notice",  # daemon notices (RF-30, D-61)
+        "value",  # account value (RF-32, D-69)
+        "book_resync",  # local book differs from REST (RNF-24, D-76)
     }
 )
 
@@ -95,7 +95,7 @@ class Journal:
             "client_id": client_id,
             "data": data,
         }
-        # se codifica entero antes de tocar el fichero: un error no deja media línea
+        # encoded whole before touching the file: an error leaves no half line
         line = json.dumps(self._plain(record), ensure_ascii=False, separators=(",", ":"))
         out = self._open_for(now)
         out.write(line + "\n")
@@ -116,17 +116,17 @@ class Journal:
         day = now.astimezone(UTC).strftime("%Y%m%d")
         if self._file is None or day != self._day:
             self.close()
-            # solo el usuario lee el journal (RNF-18): directorio 0700, fichero 0600
+            # only the user reads the journal (RNF-18): directory 0700, file 0600
             self.directory.mkdir(mode=0o700, parents=True, exist_ok=True)
             self.directory.chmod(0o700)
             path = self.directory / f"journal-{day}.jsonl"
             out = open(path, "a", encoding="utf-8", opener=_private)
-            os.fchmod(out.fileno(), 0o600)  # uno ya creado con más permisos
+            os.fchmod(out.fileno(), 0o600)  # one already created with wider permissions
             self._file, self._day = out, day
         return self._file
 
     def _plain(self, value: Any) -> Any:
-        """Convierte a tipos JSON enmascarando cada string, incluidas las claves."""
+        """Convert to JSON types, masking every string, keys included."""
         if isinstance(value, Secret):
             return str(value)
         if isinstance(value, str):
@@ -134,7 +134,7 @@ class Journal:
         if value is None or isinstance(value, bool | int | float):
             return value
         if isinstance(value, Decimal):
-            return format(value, "f")  # str() daría "6E-8" en una fee de 6 sats
+            return format(value, "f")  # str() would give "6E-8" for a 6 sat fee
         if isinstance(value, datetime):
             return _iso_ms(value)
         if isinstance(value, Mapping):

@@ -1,12 +1,12 @@
-"""Motor sin pantalla: lo que la terminal hace aunque nadie la mire.
+"""Engine without a screen: what the terminal does even if nobody watches.
 
-Agrupa hub, cuenta, órdenes y bot, y corre los bucles que antes vivían en la
-app: piernas colgadas cada segundo (RF-07), reconciliación de inciertas
-(RNF-12), aviso de reloj desfasado (RNF-16) y, al cerrar, la espera a los
-envíos en vuelo (RNF-15). Lo que la terminal diría en pantalla sale como
-`Notice` a quien se suscriba: la app lo muestra y el daemon lo apunta.
+Groups hub, account, orders and bot, and runs the loops that used to live in the app:
+hanging legs every second (RF-07), reconciliation of uncertain orders (RNF-12), skewed
+clock warning (RNF-16) and, on closing, waiting for sends in flight (RNF-15). What the
+terminal would say on screen comes out as `Notice` to subscribers: the app shows it
+and the daemon notes it.
 
-Spec: RF-30, RNF-12, RNF-15, RNF-16 · design.md §6.13 · Tarea: T-50 · D-61
+Spec: RF-30, RNF-12, RNF-15, RNF-16 · design.md §6.13 · Task: T-50 · D-61
 """
 
 from __future__ import annotations
@@ -28,8 +28,8 @@ from .rebalance import RebalanceService
 from .results import ResultsService
 from .valuation import ValueRecorder
 
-RECONCILE_EVERY_S = 3.0  # búsqueda de órdenes inciertas (RNF-12)
-DOUBLES_EVERY_S = 1.0  # piernas colgadas (RF-07)
+RECONCILE_EVERY_S = 3.0  # search for uncertain orders (RNF-12)
+DOUBLES_EVERY_S = 1.0  # hanging legs (RF-07)
 
 
 class Engine:
@@ -51,23 +51,23 @@ class Engine:
         clock: Callable[[], int] = now_ms,
     ) -> None:
         self.hub = hub
-        # lo que el cliente pide por el socket sin que sea operar (D-66)
+        # what the client asks for over the socket without trading (D-66)
         self.results = results
         self.deposits = deposits
         self.rebalance = rebalance
         self.mode = mode
-        self.journal = journal  # el de órdenes; None en solo lectura
+        self.journal = journal  # the orders' one; None in read-only
         self.orders = orders
         self.account = account
         self.bot = bot
-        self._max_skew_s = max_clock_skew_s  # None: no se comprueba
+        self._max_skew_s = max_clock_skew_s  # None: not checked
         self._reconcile_every_s = reconcile_every_s
         self._skew_warned: set[VenueId] = set()
         self._listeners: list[Callable[[Notice], None]] = []
-        # registros de fallos de órdenes, cuenta y hub (en la app real, uno compartido)
+        # fault registries of orders, account and hub (one shared in the real app)
         found = (s.faults for s in (orders, account, hub) if s is not None)
         self.faults: list[Faults] = list({id(f): f for f in found}.values())
-        # valor de la cuenta en el journal (RF-32, D-69): hace falta la cuenta
+        # account value in the journal (RF-32, D-69): needs the account
         self.values: ValueRecorder | None = None
         if value_every_s is not None and account is not None and journal is not None:
             self.values = ValueRecorder(
@@ -76,27 +76,27 @@ class Engine:
             )  # fmt: skip
         hub.subscribe(self._on_hub)
         if orders is not None and account is not None:
-            # las órdenes de la cuenta actualizan las piernas de las dobles (T-18).
-            # Vivía en la app: sin esto el daemon no veía los fills (D-61, d-68e3ed)
+            # account orders update the legs of doubles (T-18). This lived in the app: without
+            # it the daemon did not see fills (D-61, d-68e3ed)
             account.subscribe_events(orders.on_private_event)
 
     def subscribe(self, listener: Callable[[Notice], None]) -> None:
         self._listeners.append(listener)
 
-    # -- fallos (RNF-14, D-78) ----------------------------------------------------
+    # -- faults (RNF-14, D-78) ----------------------------------------------------
 
     def report_fault(self, where: str, exc: BaseException) -> Fault:
-        """Apunta un fallo en el registro principal: el de órdenes si hay, si no el
-        de la cuenta, si no el del hub (siempre hay uno)."""
+        """Note a fault in the main registry: the orders' if any, else the account's, else
+        the hub's (there is always one)."""
         return self._main_faults.report(where, exc)
 
     @property
     def _main_faults(self) -> Faults:
-        return self.faults[0]  # el hub siempre trae uno: nunca está vacía
+        return self.faults[0]  # the hub always brings one: never empty
 
     @property
     def fault_count(self) -> int:
-        """Fallos de la sesión, sumados entre todos los registros."""
+        """Session faults, added across all registries."""
         return sum(f.count for f in self.faults)
 
     def subscribe_faults(self, listener: Callable[[Fault], None]) -> None:
@@ -108,11 +108,11 @@ class Engine:
         for listener in self._listeners:
             listener(notice)
 
-    # -- tareas -------------------------------------------------------------------
+    # -- tasks -------------------------------------------------------------------
 
     def services(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]:
-        """Mercado, cuenta, bot y muestreo del valor, cada uno con su nombre; cada
-        servicio aísla sus fallos (RNF-14), así que quien las corra no las supervisa."""
+        """Market, account, bot and value sampling, each named; each service isolates its
+        faults (RNF-14), so whoever runs them does not supervise them."""
         out: list[tuple[str, Callable[[], Awaitable[None]]]] = [("market-hub", self.hub.run)]
         if self.account is not None:
             out.append(("account", self.account.run))
@@ -123,7 +123,7 @@ class Engine:
         return out
 
     def watchers(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]:
-        """Piernas colgadas y reconciliación; sin órdenes, ninguno."""
+        """Hanging legs and reconciliation; without orders, none."""
         if self.orders is None:
             return []
         return [("doubles", self.watch_doubles), ("reconcile", self.watch_uncertain)]
@@ -138,17 +138,17 @@ class Engine:
             await asyncio.sleep(self._reconcile_every_s)
             try:
                 await self.reconcile()
-            except Exception as exc:  # un bug aquí no puede parar la búsqueda
+            except Exception as exc:  # a bug here cannot stop the search
                 self.report_fault("reconcile", exc)
 
-    # -- piernas colgadas (RF-07) -------------------------------------------------
+    # -- hanging legs (RF-07) -------------------------------------------------
 
     def check_doubles(self) -> None:
         if self.orders is None:
             return
         try:
             new = self.orders.check_doubles()
-        except Exception as exc:  # cada segundo: un bug aquí no puede cerrar nada
+        except Exception as exc:  # every second: a bug here cannot close anything
             self.report_fault("engine", exc)
             return
         for double_id in new:
@@ -156,7 +156,7 @@ class Engine:
                 f"⚠ pierna colgada en {double_id}: {self.orders.hanging[double_id]}", error=True
             )
 
-    # -- envíos inciertos (RNF-12) ------------------------------------------------
+    # -- uncertain sends (RNF-12) ------------------------------------------------
 
     async def reconcile(self) -> list[Reconciled]:
         if self.orders is None or not self.orders.uncertain:
@@ -166,14 +166,14 @@ class Engine:
             self._say(r.message, error=r.error)
         return results
 
-    # -- reloj (RNF-16, D-30) -----------------------------------------------------
+    # -- clock (RNF-16, D-30) -----------------------------------------------------
 
     def _on_hub(self, venue: VenueId, what: str) -> None:
         if what == "market":
             self.check_skew(venue)
 
     def check_skew(self, venue: VenueId) -> None:
-        """Una vez por venue, al cargar su mercado: el desfase ya está medido."""
+        """Once per venue, on loading its market: the skew is measured by then."""
         skew = self.hub.clock_skew_ms(venue)
         cap = self._max_skew_s
         if cap is None or skew is None or abs(skew) <= cap * 1000:
@@ -193,10 +193,10 @@ class Engine:
             error=True,
         )
 
-    # -- cerrar (RNF-15, D-29) ----------------------------------------------------
+    # -- closing (RNF-15, D-29) ----------------------------------------------------
 
     async def aclose(self) -> None:
-        """Envíos y cancelaciones en vuelo, al journal; después se cierra todo."""
+        """Sends and cancels in flight, to the journal; then everything closes."""
         if self.orders is not None:
             await self.orders.drain()
             self.orders.close()

@@ -1,67 +1,66 @@
-"""OrderService: orden simple y doble, confirmación, journal.
+"""OrderService: simple and double orders, confirmation, journal.
 
-Flujo de la orden simple (design.md §6.2):
+Simple order flow (design.md §6.2):
 
-    prepare(cmd) ─ RiskCheck ─┬─ rechazo → journal reject_local → Rejected
-                              └─ ok → Pending (nocional y fee, para el diálogo)
-    confirm(pending) ─ RiskCheck otra vez ─┬─ rechazo → reject_local
-                                           └─ order_sent → place_limit → order_ack | order_error
+    prepare(cmd) ─ RiskCheck ─┬─ rejected → journal reject_local → Rejected
+                              └─ ok → Pending (notional and fee, for the dialog)
+    confirm(pending) ─ RiskCheck again ─┬─ rejected → reject_local
+                                        └─ order_sent → place_limit → order_ack | order_error
 
-Con la cantidad en % (RF-17, D-21), `prepare` la calcula antes con los mismos
-saldos y el diálogo dice de qué saldo sale.
+With the quantity in % (RF-17, D-21), `prepare` computes it first with the same
+balances and the dialog says which balance it comes from.
 
-Se valida otra vez al confirmar porque el mercado puede moverse con el diálogo
-abierto: ante la duda, no se envía. Saldos y órdenes salen de `AccountService`
-si tienen menos de `CACHE_MAX_AGE_MS`, más las recién enviadas que la cuenta aún
-no ha visto; si no, se piden al venue (RNF-11, D-18). El book es siempre el
-vivo. Un venue sin keys no está en `venues` y se rechaza como `read_only`. La
-frescura del book para `stale_data` es la más reciente entre la llegada de su
-último mensaje y el último latido de una conexión "up" (D-13), las dos con el
-reloj local (RNF-16). En live, un venue con el reloj desfasado más de
-`max_clock_skew_s`, o sin desfase medido, se rechaza como `clock_skew` (D-30).
+It validates again on confirming because the market can move with the dialog open:
+when in doubt, it does not send. Balances and orders come from `AccountService` if
+younger than `CACHE_MAX_AGE_MS`, plus those just sent the account has not seen yet;
+otherwise they are asked of the venue (RNF-11, D-18). The book is always the live
+one. A venue without keys is not in `venues` and is rejected as `read_only`. Book
+freshness for `stale_data` is the latest of its last message's arrival and the last
+heartbeat of an "up" connection (D-13), both on the local clock (RNF-16). In live, a
+venue skewed more than `max_clock_skew_s`, or with no measured skew, is rejected as
+`clock_skew` (D-30).
 
-Orden doble (design.md §6.4, D-15): las dos piernas pasan RiskCheck al preparar
-y al confirmar; si una falla no se envía ninguna. Una sola confirmación con los
-dos nocionales y el spread bruto y neto, envío con `asyncio.gather`, y cada
-pierna se sigue con las órdenes que llegan de la cuenta (`on_private_event`).
-`check_doubles` (cada segundo) escribe `hanging_leg` una vez por orden doble.
-Todo lo que escribe al journal una orden doble lleva `double` en `data`.
+Double order (design.md §6.4, D-15): both legs pass RiskCheck on preparing and
+confirming; if one fails neither is sent. One confirmation with both notionals and
+the gross and net spread, sending with `asyncio.gather`, and each leg is followed
+with the orders arriving from the account (`on_private_event`). `check_doubles`
+(every second) writes `hanging_leg` once per double order. Everything a double order
+writes to the journal has `double` in `data`.
 
-Doble del bot con `lead_venue` (D-75): `confirm_double(pending, lead=...)` valida
-las dos piernas pero envía solo la de ese venue; la otra queda `held`. El bot la
-envía después con `send_held` por lo que llenó la primera, o la deja `skipped`
-con `skip_held`. La `held` no tiene `order_id`: no se cancela ni se reconcilia.
+Bot double with `lead_venue` (D-75): `confirm_double(pending, lead=...)` validates both
+legs but sends only that venue's; the other stays `held`. The bot sends it later with
+`send_held` for what the first filled, or leaves it `skipped` with `skip_held`. The
+`held` one has no `order_id`: it is neither cancelled nor reconciled.
 
-Envío incierto (RNF-12, D-26): si el venue lanza `UncertainError`, el resultado
-es `Uncertain`, el journal dice `order_unknown` y la orden queda en `uncertain`
-(en una orden doble, la pierna `unknown`). `reconcile` (la UI lo llama cada pocos
-segundos mientras haya alguna) busca la orden en `recent_orders` del venue con
-`core/reconcile.py`: si aparece, `order_ack` con `reconciled`; si en 60 s no hay
-rastro, `order_error` con `reconciled`; con varias candidatas sigue incierta.
+Uncertain send (RNF-12, D-26): if the venue raises `UncertainError`, the result is
+`Uncertain`, the journal says `order_unknown` and the order stays in `uncertain` (in a
+double, the `unknown` leg). `reconcile` (the UI calls it every few seconds while any
+exists) looks for the order in the venue's `recent_orders` with `core/reconcile.py`:
+if it shows up, `order_ack` with `reconciled`; with no trace in 60 s, `order_error`
+with `reconciled`; with several candidates it stays uncertain.
 
-Envío atómico por venue (RNF-13, D-27): un `asyncio.Lock` por venue cubre
-revalidar → enviar → apuntar la orden (en `_just_sent` o en `uncertain`), así
-que otra orden del mismo venue se valida contando la que está en vuelo. La orden
-doble toma los dos locks, siempre en el mismo orden. Las inciertas cuentan como
-abiertas al validar mientras no se resuelvan.
+Atomic send per venue (RNF-13, D-27): one `asyncio.Lock` per venue covers revalidate →
+send → note the order (in `_just_sent` or `uncertain`), so another order of the same
+venue validates counting the one in flight. A double takes both locks, always in the
+same order. Uncertain ones count as open when validating until resolved.
 
-Journal que falla (RNF-14, D-28): sin `order_sent` no se envía (`Failed` local).
-Cualquier otra escritura que falle (el disco lleno tras enviar) no rompe nada:
-la orden cuenta igual y el fallo va a `faults`, que lo enseña en rojo.
+Failing journal (RNF-14, D-28): without `order_sent` nothing is sent (local `Failed`).
+Any other failed write (disk full after sending) breaks nothing: the order counts
+anyway and the fault goes to `faults`, shown in red.
 
-Salida segura (RNF-15, D-29): cada envío y cada cancelación corre en su propia
-tarea, protegida con `asyncio.shield`: si se cancela a quien la espera (al
-cerrar la app), la petición termina y queda en el journal. `drain` espera a las
-que estén en vuelo; la app lo llama antes de cerrar el journal.
+Safe exit (RNF-15, D-29): each send and cancel runs in its own task, protected with
+`asyncio.shield`: if its waiter is cancelled (closing the app), the request finishes
+and lands in the journal. `drain` waits for those in flight; the app calls it before
+closing the journal.
 
-Cancelar (RF-08, T-19): `plan_cancel` dice qué se va a cancelar, para confirmar,
-y `execute_cancel` lo hace: una orden con `cancel`, un venue o todos con su
-`cancel_all` (que en el venue cancela todas las del par, también las que no se
-enviaron desde la terminal). Después se cuentan las que siguen abiertas: CA-05
-pide cero. Journal: `cancel_sent`, `cancel_ack` con las que quedan, o `error`.
+Cancelling (RF-08, T-19): `plan_cancel` says what will be cancelled, to confirm, and
+`execute_cancel` does it: one order with `cancel`, a venue or all with their
+`cancel_all` (which on the venue cancels all of the pair, also those not sent from the
+terminal). Then those still open are counted: CA-05 asks for zero. Journal:
+`cancel_sent`, `cancel_ack` with those left, or `error`.
 
 Spec: RF-06, RF-07, RF-10, RF-11, RF-13, RF-17, RNF-12, RNF-13, RNF-14
-RNF-15 · design.md §6.2-6.4 · Tareas: T-16, T-18, T-23, T-25 a T-28
+RNF-15 · design.md §6.2-6.4 · Tasks: T-16, T-18, T-23, T-25 to T-28
 """
 
 from __future__ import annotations
@@ -83,7 +82,7 @@ from ..core.double import DoubleState, hanging, on_order, start
 from ..core.inventory import inventory
 from ..core.journal import Journal
 from ..core.models import ZERO, Balance, Order, OrderRequest, VenueId, asset_label
-from ..core.proposals import (  # re-exportados: la cara pública de las órdenes
+from ..core.proposals import (  # re-exported: the public face of orders
     NAMES,
     CancelPlan,
     CancelRefused,
@@ -104,8 +103,8 @@ from .account import AccountService
 from .faults import Faults
 from .market import MarketHub
 
-CACHE_MAX_AGE_MS = 30_000  # saldos de la cuenta válidos para validar (RNF-11)
-GIVE_UP_MS = WINDOW_MS  # sin rastro de una orden incierta en este tiempo: no existe (D-26)
+CACHE_MAX_AGE_MS = 30_000  # account balances valid for validating (RNF-11)
+GIVE_UP_MS = WINDOW_MS  # no trace of an uncertain order in this time: it does not exist (D-26)
 
 T = TypeVar("T")
 
@@ -122,14 +121,14 @@ def new_double_id() -> str:
 class UncertainOrder:
     req: OrderRequest
     sent_at: int
-    known: frozenset[str]  # órdenes del venue ya conocidas al enviar: no son candidatas
+    known: frozenset[str]  # venue orders known at send time: not candidates
     extra: dict[str, Any] = field(default_factory=dict)
-    warned: bool = False  # ya se avisó de que hay varias candidatas
+    warned: bool = False  # already warned of several candidates
 
 
 @dataclass(frozen=True, slots=True)
 class Reconciled:
-    """Lo que la reconciliación averiguó de una orden incierta, para avisar."""
+    """What reconciliation found about an uncertain order, to notify."""
 
     client_id: str
     venue: VenueId
@@ -157,8 +156,8 @@ class OrderService:
         live: bool = False,
     ) -> None:
         self._hub = hub
-        self._live = live  # el desfase de reloj solo bloquea órdenes reales (D-30)
-        self._venues = dict(venues)  # solo los que pueden operar
+        self._live = live  # clock skew only blocks real orders (D-30)
+        self._venues = dict(venues)  # only those able to trade
         self._journal = journal
         self.faults = faults or Faults(journal, clock=clock)
         self._limits = limits
@@ -166,20 +165,20 @@ class OrderService:
         self._new_client_id = new_client_id
         self._new_double_id = new_double_id
         self._account = account
-        self._just_sent: dict[VenueId, dict[str, Order]] = {}  # aún sin ver en la cuenta
-        self.uncertain: dict[str, UncertainOrder] = {}  # client_id → envío incierto
-        self._acked: dict[VenueId, set[str]] = {}  # órdenes que el venue confirmó a la terminal
-        self._locks: dict[VenueId, asyncio.Lock] = {}  # validar → enviar, uno por venue
-        self._inflight: set[asyncio.Task[Any]] = set()  # envíos y cancelaciones (RNF-15)
+        self._just_sent: dict[VenueId, dict[str, Order]] = {}  # not yet seen on the account
+        self.uncertain: dict[str, UncertainOrder] = {}  # client_id → uncertain send
+        self._acked: dict[VenueId, set[str]] = {}  # orders the venue confirmed to the terminal
+        self._locks: dict[VenueId, asyncio.Lock] = {}  # validate → send, one per venue
+        self._inflight: set[asyncio.Task[Any]] = set()  # sends and cancels (RNF-15)
         self.doubles: dict[str, DoubleState] = {}
-        self.hanging: dict[str, str] = {}  # id → motivo, una vez avisada
+        self.hanging: dict[str, str] = {}  # id → reason, once warned
         self._double_listeners: list[Callable[[str], None]] = []
 
     def close(self) -> None:
         self._journal.close()
 
     def _record(self, event: str, *, note: str | None = None, **kw: Any) -> None:
-        """Escribe en el journal; si falla, lo reporta y sigue (D-28)."""
+        """Write to the journal; on failure, report and go on (D-28)."""
         try:
             self._journal.write(event, **kw)
         except OSError as exc:
@@ -187,7 +186,7 @@ class OrderService:
             self.faults.report("journal", exc, venue=kw.get("venue"), note=note)
 
     def _protected(self, work: Coroutine[Any, Any, T]) -> Awaitable[T]:
-        """Lo que sale hacia el venue termina aunque se cancele a quien lo espera."""
+        """What goes out to the venue finishes even if its waiter is cancelled."""
         task = asyncio.ensure_future(work)
         self._inflight.add(task)
         task.add_done_callback(self._inflight.discard)
@@ -198,7 +197,7 @@ class OrderService:
         return len(self._inflight)
 
     async def drain(self) -> None:
-        """Espera a los envíos y cancelaciones en vuelo (antes de salir)."""
+        """Wait for sends and cancels in flight (before exiting)."""
         while self._inflight:
             await asyncio.gather(*self._inflight, return_exceptions=True)
 
@@ -223,13 +222,13 @@ class OrderService:
     async def _size(
         self, cmd: PlaceOrder, pct: Percent, client_id: str
     ) -> tuple[OrderRequest, str] | Rejected:
-        """Cantidad a partir del % del saldo del venue (RF-17, D-21), con los mismos
-        saldos con los que se valida. Sin saldo suficiente para un lote, rechazo."""
+        """Quantity from the % of the venue balance (RF-17, D-21), with the same balances
+        validated against. Without enough for a lot, reject."""
         req = OrderRequest(cmd.venue, cmd.side, ZERO, cmd.price, client_id)
         if bad := self._unavailable(req):
             return self._reject(req, bad)
         venue, spec = self._venues[cmd.venue], self._hub.state[cmd.venue].spec
-        assert spec is not None  # _unavailable lo comprueba
+        assert spec is not None  # _unavailable checks it
         try:
             _, balances = await self._snapshot(cmd.venue, venue)
         except (VenueError, httpx.HTTPError) as exc:
@@ -244,7 +243,7 @@ class OrderService:
 
     @asynccontextmanager
     async def _sending(self, *venues: VenueId) -> AsyncIterator[None]:
-        """Los locks de los venues, en orden fijo para que dos dobles no se bloqueen."""
+        """The venues' locks, in fixed order so two doubles do not deadlock."""
         async with AsyncExitStack() as stack:
             for vid in sorted(set(venues)):
                 await stack.enter_async_context(self._locks.setdefault(vid, asyncio.Lock()))
@@ -285,7 +284,7 @@ class OrderService:
             self.uncertain[req.client_id] = UncertainOrder(req, sent_at, known, extra)
             return Uncertain(req, describe(exc))
         except (VenueError, httpx.HTTPError) as exc:
-            # sin conectar la orden no salió: que no parezca un rechazo del venue (D-51)
+            # unconnected, the order never left: it must not look like a venue rejection (D-51)
             error = describe(exc)
             if isinstance(exc, NOT_SENT):
                 error = f"no enviada, sin conexión ({error})"
@@ -306,7 +305,7 @@ class OrderService:
             self._just_sent.setdefault(req.venue, {})[order.order_id] = order
         return Sent(order)
 
-    # -- orden doble ------------------------------------------------------------
+    # -- double order ------------------------------------------------------------
 
     def subscribe_doubles(self, listener: Callable[[str], None]) -> None:
         self._double_listeners.append(listener)
@@ -336,8 +335,8 @@ class OrderService:
     async def confirm_double(
         self, pending: PendingDouble, *, lead: VenueId | None = None
     ) -> DoubleSent | DoubleRejected:
-        """Con `lead` (el bot, D-75), solo sale la pierna de ese venue; la otra
-        queda `held` hasta `send_held` o `skip_held`."""
+        """With `lead` (the bot, D-75), only that venue's leg goes; the other stays `held`
+        until `send_held` or `skip_held`."""
         buy, sell = pending.buy.req, pending.sell.req
         async with self._sending(buy.venue, sell.venue):
             checked = await self._validate_double(pending.id, buy, sell)
@@ -359,8 +358,8 @@ class OrderService:
         return DoubleSent(self.doubles[pending.id])
 
     async def send_held(self, double_id: str, qty: Decimal) -> Sent | Failed | Uncertain:
-        """Envía la pierna `held` de la doble por `qty` (D-75). Ya se validó con la
-        primera al confirmar; `qty` no pasa de lo validado."""
+        """Send the double's `held` leg for `qty` (D-75). It was validated with the first on
+        confirming; `qty` does not exceed what was validated."""
         state = self.doubles[double_id]
         (side,) = (leg.req.side for leg in state.legs if leg.status == "held")
         state = state.resize(side, qty)
@@ -373,7 +372,7 @@ class OrderService:
         return result
 
     def skip_held(self, double_id: str) -> None:
-        """La pierna `held` no se envía (D-75): cuenta como cerrada con 0 lleno."""
+        """The `held` leg is not sent (D-75): counts as closed with 0 filled."""
         state = self.doubles[double_id]
         for leg in state.legs:
             if leg.status == "held":
@@ -392,8 +391,8 @@ class OrderService:
         self.doubles[double_id] = state
 
     def on_private_event(self, venue: VenueId, event: PrivateEvent) -> None:
-        """Órdenes de la cuenta (AccountService): actualizan las piernas, y una
-        orden recién enviada deja de contarse aparte en cuanto la cuenta la ve."""
+        """Account orders (AccountService): they update the legs, and an order just sent
+        stops being counted apart once the account sees it."""
         if not isinstance(event, Order):
             return
         self._just_sent.get(venue, {}).pop(event.order_id, None)
@@ -408,7 +407,7 @@ class OrderService:
                 self._changed(double_id)
 
     def check_doubles(self) -> list[str]:
-        """Ids que acaban de quedar con pierna colgada; escribe `hanging_leg` una vez."""
+        """Ids just left with a hanging leg; writes `hanging_leg` once."""
         now = self._clock()
         after_ms = self._limits.hanging_leg_after_s * 1000
         new: list[str] = []
@@ -441,17 +440,17 @@ class OrderService:
             self._changed(double_id)
         return new
 
-    # -- envíos inciertos (RNF-12, D-26) ------------------------------------------
+    # -- uncertain sends (RNF-12, D-26) ------------------------------------------
 
     def _known(self, vid: VenueId) -> frozenset[str]:
-        """Órdenes del venue que ya se conocen: abiertas de la cuenta y recién enviadas."""
+        """Venue orders already known: the account's open ones and those just sent."""
         st = self._account.state.get(vid) if self._account is not None else None
         ids = set(st.orders) if st is not None else set()
         return frozenset(ids | set(self._just_sent.get(vid, {})))
 
     async def reconcile(self) -> list[Reconciled]:
-        """Una vuelta: cada venue con inciertas se consulta una vez. Si el venue no
-        responde, se deja para la siguiente (sin mirar no se da nada por inexistente)."""
+        """One round: each venue with uncertain orders is queried once. If it does not
+        answer, it waits for the next (without looking, nothing is deemed nonexistent)."""
         by_venue: dict[VenueId, list[UncertainOrder]] = {}
         for u in self.uncertain.values():
             by_venue.setdefault(u.req.venue, []).append(u)
@@ -465,7 +464,7 @@ class OrderService:
                 continue
             now = self._clock()
             for u in pending:
-                # tampoco las que la terminal envió después con ack: son otras
+                # neither those the terminal sent later with an ack: they are others
                 known = u.known | self._acked.get(vid, set())
                 by_id = venue.keeps_client_id
                 found = candidates(u.req, orders, u.sent_at, known, by_client_id=by_id)
@@ -486,7 +485,7 @@ class OrderService:
     def _found(self, u: UncertainOrder, order: Order) -> Reconciled:
         req = u.req
         del self.uncertain[req.client_id]
-        order = replace(order, client_id=req.client_id)  # Neoxa no lo devuelve (PA-09)
+        order = replace(order, client_id=req.client_id)  # Neoxa does not return it (PA-09)
         self._record(
             "order_ack",
             venue=req.venue,
@@ -526,7 +525,7 @@ class OrderService:
         msg = f"orden incierta {req.client_id}: {error}; no se creó"
         return Reconciled(req.client_id, req.venue, "missing", msg)
 
-    # -- cancelar ---------------------------------------------------------------
+    # -- cancelling ---------------------------------------------------------------
 
     async def plan_cancel(
         self, cmd: CancelOrder | CancelVenue | CancelAll
@@ -555,8 +554,8 @@ class OrderService:
         return CancelPlan("venue" if isinstance(cmd, CancelVenue) else "all", found)
 
     async def cancel_double(self, double_id: str) -> CancelResult:
-        """Cancela las piernas de una doble que siguen abiertas en su venue (el bot,
-        al pasar `fill_timeout_ms`). Las inciertas no tienen id: no se tocan."""
+        """Cancel a double's legs still open on their venue (the bot, past `fill_timeout_ms`).
+        Uncertain ones have no id: left alone."""
         state = self.doubles[double_id]
         orders: dict[VenueId, tuple[Order, ...]] = {}
         for leg in state.legs:
@@ -573,7 +572,7 @@ class OrderService:
         return await self.execute_cancel(CancelPlan("order", orders))
 
     async def execute_cancel(self, plan: CancelPlan) -> CancelResult:
-        """Los venues a la vez; cada uno con su resultado aunque otro falle."""
+        """All venues at once; each with its result even if another fails."""
         results = await asyncio.gather(
             *(
                 self._protected(self._cancel_in(vid, plan.scope, orders))
@@ -599,7 +598,7 @@ class OrderService:
             else:
                 await venue.cancel_all()
             still = await venue.open_orders()
-            # una orden: si sigue ella; venue o todas: cualquiera del par (CA-05)
+            # one order: if it remains; venue or all: any of the pair (CA-05)
             left = sum(o.order_id in ids for o in still) if scope == "order" else len(still)
         except (VenueError, httpx.HTTPError) as exc:
             self._record(
@@ -614,7 +613,7 @@ class OrderService:
         )
         return vid, left, None
 
-    # -- validación -------------------------------------------------------------
+    # -- validation -------------------------------------------------------------
 
     async def _validate(
         self, req: OrderRequest, extra: dict[str, Any] | None = None, *, basis: str | None = None
@@ -623,7 +622,7 @@ class OrderService:
         if violations:
             return self._reject(req, violations, extra)
         spec = self._hub.state[req.venue].spec
-        assert spec is not None  # _violations lo comprueba
+        assert spec is not None  # _violations checks it
         return Pending(req, spec, req.notional, req.notional * spec.taker_fee, basis)
 
     def _reject(
@@ -644,7 +643,7 @@ class OrderService:
         return Rejected(req, tuple(violations))
 
     def _unavailable(self, req: OrderRequest) -> list[Violation]:
-        """Sin keys o sin mercado cargado no hay nada más que validar."""
+        """Without keys or a loaded market there is nothing more to validate."""
         if req.venue not in self._venues:
             return [Violation("read_only", f"{NAMES[req.venue]}: sin keys, solo lectura")]
         if self._hub.state[req.venue].spec is None:
@@ -653,7 +652,7 @@ class OrderService:
 
     @staticmethod
     def _unreadable(vid: VenueId, exc: Exception) -> Violation:
-        # sin saldos u órdenes no se puede validar: ante la duda, no se envía (D-16)
+        # without balances or orders it cannot validate: when in doubt, do not send (D-16)
         msg = f"{NAMES[vid]}: no se pudieron leer saldos u órdenes ({describe(exc)})"
         return Violation("venue_error", msg)
 
@@ -663,7 +662,7 @@ class OrderService:
         st = self._hub.state[req.venue]
         assert st.spec is not None
         try:
-            # todos los venues con keys: el tope por orden es un % del total (D-19)
+            # all venues with keys: the per order cap is a % of the total (D-19)
             snaps = {vid: await self._snapshot(vid, v) for vid, v in self._venues.items()}
         except (VenueError, httpx.HTTPError) as exc:
             return [self._unreadable(req.venue, exc)]
@@ -702,8 +701,8 @@ class OrderService:
     async def _snapshot(
         self, vid: VenueId, venue: Venue
     ) -> tuple[tuple[Order, ...], dict[str, Balance]]:
-        """Órdenes abiertas y saldos para RiskCheck: de la cuenta si están al día,
-        más las inciertas de ese venue (pueden existir, D-27)."""
+        """Open orders and balances for RiskCheck: the account's if up to date, plus that
+        venue's uncertain ones (they may exist, D-27)."""
         st = self._account.state.get(vid) if self._account is not None else None
         if (
             st is not None
@@ -729,9 +728,9 @@ class OrderService:
         return tuple(orders.values()), balances
 
     def fresh_at(self, venue: VenueId) -> int | None:
-        """Último momento en que el book se sabe al día: el último mensaje del book
-        o el último contraste con el REST que coincidió. La conexión viva ya no
-        basta (D-76, corrige D-13); un book en duda no está al día."""
+        """Last moment the book is known to be current: its last message or the last REST
+        check that matched. A live connection is no longer enough (D-76, fixes D-13); a
+        book in doubt is not current."""
         st = self._hub.state[venue]
         if not st.book.valid or st.suspect:
             return None

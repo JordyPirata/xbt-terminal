@@ -1,14 +1,13 @@
-"""Lee los journals para la ventana de resultados (RF-25).
+"""Reads the journals for the results window (RF-25).
 
-Lectura de ficheros, más una sola petición: el precio público del token de fee
-de cada venue (`pricers`, D-65), para restar en BTC las fees pagadas con él. Se
-pide con `refresh_prices` (la pantalla, al abrir y al cambiar de rango), a lo
-sumo una vez por minuto; `load` usa el último que llegó y, sin él, deja esas
-fees sin valorar. Para un rango por días se lee también el día anterior, para
-que una doble empezada antes de medianoche tenga sus envíos y los fills se
-asignen igual que leyendo todo (D-44, D-45).
+File reading, plus a single request: each venue's public fee token price (`pricers`,
+D-65), to subtract in BTC the fees paid with it. Asked with `refresh_prices` (the
+screen, on opening and on changing range), at most once a minute; `load` uses the
+last that arrived and, without it, leaves those fees unvalued. For a range in days the
+previous day is read too, so a double started before midnight has its sends and fills
+are assigned as when reading everything (D-44, D-45).
 
-Spec: RF-24, RF-25 · design.md §6.10 · Tareas: T-40, T-60
+Spec: RF-24, RF-25 · design.md §6.10 · Tasks: T-40, T-60
 """
 
 from __future__ import annotations
@@ -39,7 +38,7 @@ class ResultsService:
         clock: Callable[[], int] = now_ms,
         pricers: Mapping[str, Pricer] | None = None,
     ) -> None:
-        """`pricers`: por token de fee, cómo pedir su precio en BTC (D-65)."""
+        """`pricers`: per fee token, how to ask its BTC price (D-65)."""
         self.directory = Path(directory)
         self._clock = clock
         self._pricers = dict(pricers or {})
@@ -48,8 +47,8 @@ class ResultsService:
         self._priced_at: int | None = None
 
     async def refresh_prices(self) -> None:
-        """Pide el precio de cada token si el último tiene un minuto o más. Un
-        fallo se apunta en `price_errors` y conserva el precio anterior."""
+        """Ask each token's price if the last is a minute old or more. A failure is noted in
+        `price_errors` and keeps the previous price."""
         now = self._clock()
         fresh = self._priced_at is not None and now - self._priced_at < PRICE_EVERY_MS
         if not self._pricers or fresh:
@@ -67,8 +66,8 @@ class ResultsService:
                 self.price_errors.pop(asset, None)
 
     async def refresh(self, rng: Range) -> str | None:
-        """Lo que la ventana pide antes de redibujar: aquí, el precio del token
-        (el journal se lee en `load`). La misma cara que `RemoteResults` (D-66)."""
+        """What the window asks before redrawing: here, the token price (the journal is read
+        in `load`). The same face as `RemoteResults` (D-66)."""
         await self.refresh_prices()
         return None
 

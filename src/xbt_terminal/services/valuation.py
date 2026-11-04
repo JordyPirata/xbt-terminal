@@ -1,11 +1,11 @@
-"""ValueRecorder: el daemon apunta el valor de la cuenta en el journal (RF-32).
+"""ValueRecorder: the daemon notes the account value in the journal (RF-32).
 
-Espera al siguiente múltiplo UTC de `every_s`, calcula el inventario con los
-saldos de la cuenta y el mid del hub (como el panel de balances, RF-05) y, si
-el total existe, escribe un evento `value`. Si falta el saldo o el mid de algún
-venue, esa muestra no se apunta. Un fallo se reporta y el muestreo sigue.
+Waits for the next UTC multiple of `every_s`, computes the inventory with the account
+balances and the hub mid (like the balance panel, RF-05) and, if the total exists,
+writes a `value` event. If a venue lacks its balance or mid, that sample is not
+written. A fault is reported and sampling goes on.
 
-Spec: RF-05, RF-32, RNF-14 · design.md §6.5 · D-69 · Tarea: T-69
+Spec: RF-05, RF-32, RNF-14 · design.md §6.5 · D-69 · Task: T-69
 """
 
 from __future__ import annotations
@@ -24,11 +24,11 @@ VALUE_EVERY_S = 300
 
 
 class _Account(Protocol):
-    state: dict  # VenueId → estado con `balances`
+    state: dict  # VenueId → state with `balances`
 
 
 class _Hub(Protocol):
-    state: dict  # VenueId → estado con `book.mid`
+    state: dict  # VenueId → state with `book.mid`
 
 
 class ValueRecorder:
@@ -58,13 +58,13 @@ class ValueRecorder:
             await self._sleep((at - now) / 1000)
             try:
                 self.record(at)
-            except Exception as exc:  # un bug o el disco lleno no paran el muestreo
+            except Exception as exc:  # a bug or a full disk do not stop sampling
                 if self._faults is None:
                     raise
                 self._faults.report("value", exc)
 
     def record(self, at: int) -> ValueSample | None:
-        """Apunta la muestra de `at` si la hay."""
+        """Write the `at` sample if there is one."""
         balances = {vid: st.balances for vid, st in self._account.state.items()}
         mids = {vid: self._hub.state[vid].book.mid for vid in balances}
         s = sample(inventory(balances, mids), mids, at, self._every_ms)

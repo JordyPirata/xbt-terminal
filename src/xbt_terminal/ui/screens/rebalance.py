@@ -1,6 +1,6 @@
-"""Plan de reequilibrio entre venues.
+"""Rebalance plan between venues.
 
-Spec: RF-29 · Tareas: T-45, T-83
+Spec: RF-29 · Tasks: T-45, T-83
 """
 
 from __future__ import annotations
@@ -24,9 +24,8 @@ from ..panels import VENUE_NAME
 
 
 class RebalanceScreen(ModalScreen[None]):
-    """Plan de reequilibrio (RF-29): dos alternativas de una transferencia que
-    igualan el % de BTCB2 de los venues, con las comisiones pedidas al abrir y
-    con `r`. Solo calcula (D-53)."""
+    """Rebalance plan (RF-29): two alternatives of a transfer equalling the venues' BTCB2
+    %, with the fees asked on opening and with `r`. It only computes (D-53)."""
 
     DEFAULT_CSS = """
     RebalanceScreen { align: center middle; }
@@ -37,7 +36,7 @@ class RebalanceScreen(ModalScreen[None]):
     RebalanceScreen DataTable { height: 5; }
     RebalanceScreen Static { height: auto; }
     """
-    BINDINGS = [  # noqa: RUF012  (así lo declara Textual)
+    BINDINGS = [  # noqa: RUF012  (Textual declares it so)
         Binding("escape", "close", "cerrar"),
         Binding("e", "close", show=False),
         Binding("r", "reload", "volver a calcular"),
@@ -55,7 +54,7 @@ class RebalanceScreen(ModalScreen[None]):
         self._holdings = holdings
         self._target = target
         self._limits = limits
-        self.plan: Plan | None = None  # None: aún no hay plan
+        self.plan: Plan | None = None  # None: no plan yet
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -86,7 +85,7 @@ class RebalanceScreen(ModalScreen[None]):
             self._fail(str(self._holdings()))
             return
         fees = await self._source.load()
-        held = self._holdings()  # los saldos de ahora, no los de antes de pedir
+        held = self._holdings()  # current balances, not those from before asking
         result = held if isinstance(held, str) else plan(held, fees)
         if isinstance(result, str):
             self._fail(result)
@@ -159,7 +158,7 @@ class RebalanceScreen(ModalScreen[None]):
         self.query_one(f"#{widget}", Static).update(text)
 
     def text(self) -> str:
-        """Todo en texto plano (tests y depuración)."""
+        """Everything as plain text (tests and debugging)."""
         table = self.query_one(DataTable)
         rows = [" | ".join(str(c) for c in table.get_row_at(i)) for i in range(table.row_count)]
         parts = [str(self.query_one(f"#rebalance-{w}", Static).render()) for w in ("head", "state")]

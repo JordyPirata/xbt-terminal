@@ -1,15 +1,15 @@
-"""Inventario neto (RF-05, design.md §6.5).
+"""Net inventory (RF-05, design.md §6.5).
 
-Por venue: BTC y BTCB2 totales (disponible + bloqueado) y su valor en BTC al mid
-de ese venue. En total: la suma de los dos. Si a un venue le falta el mid, su
-valor es None y el total también, porque un total a medias engañaría. Solo
-cuentan BTC y BTCB2 (RNF-10).
+Per venue: total BTC and BTCB2 (available + locked) and their BTC value at that
+venue's mid. In total: the sum of both. If a venue has no mid, its value is None
+and so is the total, because a partial total would mislead. Only BTC and BTCB2
+count (RNF-10).
 
-Ratio de inventario (RF-26, D-46): el % del valor de un venue que está en
-BTCB2, y una banda objetivo alrededor de un %; una doble "empeora" un venue si
-lo deja fuera de la banda y más lejos del objetivo que antes.
+Inventory ratio (RF-26, D-46): the % of a venue's value in BTCB2, and a target
+band around a %; a double "worsens" a venue if it leaves it outside the band and
+further from the target than before.
 
-Spec: RF-05, RF-26, RF-27, RNF-10 · design.md §6.5, §6.9 · Tareas: T-19, T-41
+Spec: RF-05, RF-26, RF-27, RNF-10 · design.md §6.5, §6.9 · Tasks: T-19, T-41
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ HUNDRED = Decimal(100)
 
 
 def base_pct(btc: Decimal, btcb2: Decimal, price: Decimal) -> Decimal | None:
-    """% del valor en BTCB2 a `price`; None si no hay nada que valorar."""
+    """% of the value in BTCB2 at `price`; None if there is nothing to value."""
     value = btc + btcb2 * price
     return btcb2 * price / value * HUNDRED if value > 0 else None
 
@@ -36,7 +36,7 @@ def _pct_of(btc: Decimal, value: Decimal | None) -> Decimal | None:
 
 @dataclass(frozen=True, slots=True)
 class InventoryTarget:
-    """Sección `[inventory]`: % objetivo de BTCB2 y banda a cada lado (RF-26)."""
+    """`[inventory]` section: target BTCB2 % and band on each side (RF-26)."""
 
     target_pct: Decimal
     band_pct: Decimal
@@ -53,7 +53,7 @@ class InventoryTarget:
         return self.low <= pct <= self.high
 
     def worsens(self, before: Decimal, after: Decimal) -> bool:
-        """Fuera de la banda y más lejos del objetivo que antes."""
+        """Outside the band and further from the target than before."""
         return not self.in_band(after) and abs(after - self.target_pct) > abs(
             before - self.target_pct
         )
@@ -63,7 +63,7 @@ class InventoryTarget:
 class VenueInventory:
     btc: Decimal
     btcb2: Decimal
-    value: Decimal | None  # en BTC al mid del venue
+    value: Decimal | None  # in BTC at the venue mid
 
     @property
     def base_pct(self) -> Decimal | None:

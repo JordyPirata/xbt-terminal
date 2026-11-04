@@ -1,1 +1,1 @@
-"""Pantallas modales de la terminal: una por módulo (D-77, T-83)."""
+"""Modal screens of the terminal: one per module (D-77, T-83)."""

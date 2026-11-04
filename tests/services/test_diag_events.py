@@ -23,7 +23,7 @@ async def test_reconexion_del_ws(caplog):
     venue = FakeVenue([WS_BOOK, "drop"], [WS_BOOK])
     await run(venue, lambda evs: count(evs, ("ws", "up")) == 2)
     text = "\n".join(messages(caplog))
-    assert "Fake: WS caído" in text and "caída" in text and "reintento en" in text
+    assert "Fake: WS down" in text and "caída" in text and "retrying in" in text
     assert "Fake: WS conectado" in text
 
 
@@ -33,7 +33,7 @@ async def test_respaldo_rest(caplog):
     venue = FakeVenue("fail", "fail", "fail", [WS_BOOK])
     await run(venue, lambda evs: count(evs, ("ws", "up")) == 1)
     text = "\n".join(messages(caplog))
-    assert "Fake: polling REST de respaldo" in text
+    assert "Fake: fallback REST polling" in text
     assert "conexión rechazada" in text
 
 
@@ -44,8 +44,8 @@ async def test_carga_del_mercado(caplog):
     async with Hub(**feeds) as h:
         await h.until(lambda: h.hub.state["nk"].ready and h.hub.state["nx"].ready)
     warnings = messages(caplog, logging.WARNING)
-    assert any("nk: no se pudo cargar el mercado" in m and "sin red" in m for m in warnings)
-    assert sum("mercado cargado" in m for m in messages(caplog)) == 2
+    assert any("nk: could not load the market" in m and "sin red" in m for m in warnings)
+    assert sum("market loaded" in m for m in messages(caplog)) == 2
 
 
 @pytest.mark.spec("RNF-19")

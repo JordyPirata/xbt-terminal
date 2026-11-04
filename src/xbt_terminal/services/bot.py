@@ -1,55 +1,55 @@
-"""BotService: el bucle del bot de arbitraje taker sobre OrderService (fase 2).
+"""BotService: the taker arbitrage bot's loop over OrderService (phase 2).
 
-Se despierta con cada cambio de book o de saldos (y cada `tick_s`, para el
-enfriamiento), y si está `armed` arma la foto de cada venue (`VenueView`) y
-llama a `core/bot.decide`. Un venue se bloquea si (RF-19):
+It wakes on each book or balance change (and every `tick_s`, for the cooldown), and
+if `armed` builds each venue's view (`VenueView`) and calls `core/bot.decide`. A
+venue is blocked if (RF-19):
 
-- no tiene keys o su mercado no ha cargado;
-- su book no es válido o es más viejo que `risk.stale_after_s` (reloj local);
-- su conexión de mercado no está `up`, o el hub o la cuenta tienen un error;
-- en live, su desfase de reloj no se ha medido o pasa de `max_clock_skew_s`;
-- la cuenta no tiene saldos.
+- it has no keys or its market has not loaded;
+- its book is invalid or older than `risk.stale_after_s` (local clock);
+- its market connection is not `up`, or the hub or account have an error;
+- in live, its clock skew is unmeasured or above `max_clock_skew_s`;
+- the account has no balances.
 
-Con `max_move_pct` (D-71) tampoco dispara si el mid de algún venue se movió más
-de ese % en los últimos `move_window_ms`: el bot guarda el mid de cada cambio de
-book y `bot_fire` apunta el movimiento de cada venue, con filtro o sin él.
+With `max_move_pct` (D-71) it does not fire either if a venue's mid moved more than
+that % in the last `move_window_ms`: the bot keeps the mid of each book change and
+`bot_fire` notes each venue's move, filter or not.
 
-Y no se dispara mientras haya una orden incierta o una doble sin terminar (del
-bot o manual): una doble a la vez.
+And it does not fire while there is an uncertain order or an unfinished double (the
+bot's or manual): one double at a time.
 
-Un disparo (`Fire`) es una orden doble normal, sin diálogo (armar fue la
-confirmación, RF-18): `prepare_double` + `confirm_double`, así que pasa RiskCheck,
-los locks por venue, las inciertas y el journal como cualquier otra. Después:
+A shot (`Fire`) is a normal double order, with no dialog (arming was the
+confirmation, RF-18): `prepare_double` + `confirm_double`, so it passes RiskCheck,
+venue locks, uncertain handling and journal like any other. Then:
 
-1. Espera a que las dos piernas acaben, hasta `fill_timeout_ms`. Si una se
-   rechaza o queda incierta, no espera.
-2. Cancela lo que siga abierto (`cancel_double`).
-3. Espera hasta `settle_s` a que las piernas cierren (Neoxa avisa por polling).
-4. Llenados iguales → `cooldown`. Si no, o hubo rechazo, incierta o una pierna
-   que no cerró → `halted` con el motivo (RF-21). Nada se cubre ni se reintenta.
+1. Wait for both legs to end, up to `fill_timeout_ms`. If one is rejected or left
+   uncertain, no wait.
+2. Cancel what stays open (`cancel_double`).
+3. Wait up to `settle_s` for the legs to close (Neoxa reports by polling).
+4. Equal fills → `cooldown`. Otherwise, or with a rejection, an uncertain leg or one
+   that did not close → `halted` with the reason (RF-21). Nothing is hedged or retried.
 
-Con `lead_venue` (D-75) sale primero solo la pierna de ese venue (Neoxa casa al
-recibir la orden, así que el ack ya dice si llenó). Lo que no llenó se cancela
-al momento y, cuando la primera cierra, la otra sale por lo llenado, al lote
-hacia abajo, y sigue los pasos de arriba. Si no llenó nada, la otra no sale:
-`bot_miss` y `cooldown`, sin contar como fallo. Si la cancelación falla porque
-ya llenó, la cuenta lo trae al cerrar la orden (Neoxa, por polling).
+With `lead_venue` (D-75) only that venue's leg goes first (Neoxa matches on receipt,
+so the ack already says if it filled). What did not fill is cancelled at once and,
+when the first closes, the other goes for what filled, rounded down to the lot, and
+follows the steps above. If nothing filled, the other does not go: `bot_miss` and
+`cooldown`, not counted as a failure. If the cancel fails because it had filled, the
+account brings it when the order closes (Neoxa, by polling).
 
-Sin tope diario para un lote más (`Skip("day_cap")`) el bot pasa a `halted`,
-igual que cuando lo agota un disparo (RF-22).
+Without daily cap for another lot (`Skip("day_cap")`) the bot goes `halted`, as when
+a shot uses it up (RF-22).
 
-Un rechazo de RiskCheck antes de enviar cuenta como fallo y vuelve a `armed`
-(`core/bot.rejected`). Un bug en el bucle pasa a `halted` y se reporta en
-`faults`; si había una doble en vuelo, se intenta cancelar.
+A RiskCheck rejection before sending counts as a failure and returns to `armed`
+(`core/bot.rejected`). A bug in the loop goes `halted` and is reported to `faults`;
+a double in flight gets a cancel attempt.
 
-Journal (RF-23): `bot_state` en cada cambio de estado y `bot_fire` en cada
-disparo, con `at` (ms) y `notional` para rehacer los contadores al arrancar
-(`journal-<hoy>.jsonl`, mismo modo).
+Journal (RF-23): `bot_state` on each state change and `bot_fire` on each shot, with
+`at` (ms) and `notional` to rebuild the counters at startup (`journal-<today>.jsonl`,
+same mode).
 
-Los plazos (`fill_timeout_ms`, `settle_s`) se miden con el reloj del bucle de
-asyncio; los estados del bot, con `clock` (ms epoch), como el resto.
+Deadlines (`fill_timeout_ms`, `settle_s`) use the asyncio loop clock; bot states use
+`clock` (epoch ms), like everything else.
 
-Spec: RF-18 a RF-23, CA-08, CA-09 · design.md §6.9 · D-71, D-75 · Tareas: T-36, T-73,
+Spec: RF-18 to RF-23, CA-08, CA-09 · design.md §6.9 · D-71, D-75 · Tasks: T-36, T-73,
 T-77
 """
 
@@ -97,8 +97,8 @@ from .orders import DoubleRejected, OrderService
 
 log = logging.getLogger(__name__)
 
-BOOK_LEVELS = 50  # de sobra para la profundidad hasta el precio límite
-SETTLE_S = 15.0  # tras cancelar, hasta que las piernas cierran (Neoxa: polling de 3 s)
+BOOK_LEVELS = 50  # plenty for the depth up to the limit price
+SETTLE_S = 15.0  # after cancelling, until the legs close (Neoxa: 3 s polling)
 TICK_S = 1.0
 POLL_S = 0.05
 
@@ -135,8 +135,8 @@ class BotService:
         self._journal = journal
         self._config = config
         self._limits = config.limits
-        self._target = target  # ratio de inventario (RF-26)
-        self._fee_tokens = dict(fee_tokens or {})  # fee pagada en token (RF-24, D-63)
+        self._target = target  # inventory ratio (RF-26)
+        self._fee_tokens = dict(fee_tokens or {})  # fee paid in token (RF-24, D-63)
         self._live = live
         self.faults = faults
         self._clock = clock
@@ -144,8 +144,8 @@ class BotService:
         self._tick_s = tick_s
         self._wake = asyncio.Event()
         self._listeners: list[Listener] = []
-        self._firing: str | None = None  # id de la doble en vuelo
-        # (hora, mid) de cada cambio de book en la ventana de `move_window_ms` (D-71)
+        self._firing: str | None = None  # id of the double in flight
+        # (time, mid) of each book change within `move_window_ms` (D-71)
         self._mids: dict[VenueId, deque[tuple[int, Decimal]]] = {}
         self.last_skip: Skip | None = None
         self.state = self._restore()
@@ -159,14 +159,14 @@ class BotService:
         self._listeners.append(listener)
 
     def refusal(self) -> str | None:
-        """Por qué no se puede armar, o None (RF-18)."""
+        """Why it cannot be armed, or None (RF-18)."""
         if self._live and not self._config.enabled:
             return "en live el bot solo se arma con bot.enabled = true en config.toml"
         return None
 
     @property
     def summary(self) -> str:
-        """Parámetros, para la confirmación de armado."""
+        """Parameters, for the arming confirmation."""
         lim = self._limits
         return (
             "BOT DE ARBITRAJE TAKER\n"
@@ -200,7 +200,7 @@ class BotService:
         return " · ".join(parts)
 
     def arm(self) -> str | None:
-        """Arma el bot; devuelve por qué no se puede, o None (RF-18)."""
+        """Arm the bot; return why it cannot be, or None (RF-18)."""
         if refusal := self.refusal():
             return refusal
         if self.state.status in ("armed", "firing", "cooldown"):
@@ -210,14 +210,14 @@ class BotService:
         return None
 
     def disarm(self) -> None:
-        """Para el bot. Una doble en vuelo sigue su curso hasta cerrar."""
+        """Stop the bot. A double in flight runs its course until it closes."""
         if self.state.status != "off":
             self._set(disarm(self.state))
 
     async def run(self) -> None:
         await supervised(self._loop, self._crash, retry_s=self._tick_s)
 
-    # -- bucle --------------------------------------------------------------------
+    # -- loop --------------------------------------------------------------------
 
     def _on_change(self, venue: VenueId, what: str) -> None:
         if what == "book":
@@ -225,7 +225,7 @@ class BotService:
         if what in ("book", "balances", "conn", "market"):
             self._wake.set()
 
-    # -- movimiento del mid (RF-19, D-71) -----------------------------------------
+    # -- mid move (RF-19, D-71) -----------------------------------------
 
     def _sample_mid(self, vid: VenueId) -> None:
         st = self._hub.state.get(vid)
@@ -238,13 +238,13 @@ class BotService:
         self._forget(window, now)
 
     def _forget(self, window: deque[tuple[int, Decimal]], now: int) -> None:
-        """Olvida los mids de antes de la ventana menos el último: es el que
-        regía al empezarla, y sin él un salto tras un book quieto da 0 (D-72)."""
+        """Forget mids from before the window except the last: it ruled when the window
+        began, and without it a jump after a quiet book gives 0 (D-72)."""
         while len(window) > 1 and now - window[1][0] > self._limits.move_window_ms:
             window.popleft()
 
     def _move_pct(self, vid: VenueId, now: int) -> Decimal | None:
-        """Movimiento del mid en la ventana, con el de ahora: un book quieto da 0."""
+        """Mid move in the window, with the current one: a quiet book gives 0."""
         window = self._mids.setdefault(vid, deque())
         self._forget(window, now)
         mids = [mid for _, mid in window]
@@ -267,10 +267,10 @@ class BotService:
         self.faults.report("bot", exc)
         reason = f"bug: {type(exc).__name__}: {exc}"
         self._set(replace(self.state, status="halted", reason=reason))
-        if self._firing is not None:  # lo que quedara abierto de la doble (RF-21)
+        if self._firing is not None:  # whatever stayed open of the double (RF-21)
             task = asyncio.ensure_future(self._orders.cancel_double(self._firing))
             task.add_done_callback(lambda t: t.exception())
-            self._orders.skip_held(self._firing)  # la otra pierna ya no sale (D-75)
+            self._orders.skip_held(self._firing)  # the other leg no longer goes (D-75)
             self._firing = None
 
     async def _evaluate(self) -> None:
@@ -286,9 +286,9 @@ class BotService:
         if isinstance(result, Skip):
             was = self.last_skip.reason if self.last_skip is not None else None
             if result.reason == "volatile" and was != "volatile":
-                log.info("bot: sin disparar por movimiento brusco (%s)", result.detail)
+                log.info("bot: not firing, sharp move (%s)", result.detail)
             self.last_skip = result
-            if result.reason == "day_cap":  # sin tope para un lote más: parar (RF-22)
+            if result.reason == "day_cap":  # no cap for another lot: stop (RF-22)
                 self._set(capped(self.state, self._limits))
             return
         self.last_skip = None
@@ -300,7 +300,7 @@ class BotService:
             if st.spec is None:
                 continue
             bids, asks = st.book.top(BOOK_LEVELS)
-            # el estado de la cuenta se lee una vez por venue (D-70)
+            # the account state is read once per venue (D-70)
             acct = self._account.state.get(vid) if self._account is not None else None
             balances = (acct.balances if acct is not None else None) or {}
             quote, base = balances.get(st.spec.quote), balances.get(st.spec.base)
@@ -319,7 +319,7 @@ class BotService:
             )
         return views
 
-    # -- fee pagada en token (RF-24, D-63) -----------------------------------------
+    # -- fee paid in token (RF-24, D-63) -----------------------------------------
 
     def _acct(self, vid: VenueId) -> VenueAccount | None:
         return self._account.state.get(vid) if self._account is not None else None
@@ -342,7 +342,7 @@ class BotService:
         return token_fee(taker, token, self._token_available(vid, token.asset, acct))
 
     def _token_text(self) -> str:
-        """Líneas de la confirmación con la fee en token de cada venue, o nada."""
+        """Confirmation lines with each venue's token fee, or nothing."""
         return "".join(
             f"{NAMES[vid]} fee taker -{t.discount_pct} % mientras haya {t.min_available} "
             f"{t.asset} disponibles; si no, la completa\n"
@@ -369,7 +369,7 @@ class BotService:
             return "book viejo"
         if st.conn is None or st.conn.status != "up":
             return f"mercado {st.conn.status if st.conn else 'sin conexión'}"
-        if st.error is not None:  # un error sin texto también bloquea (D-51)
+        if st.error is not None:  # an error without text blocks too (D-51)
             return f"error del mercado: {st.error or '?'}"
         if acct is not None and acct.error is not None:
             return f"error de la cuenta: {acct.error or '?'}"
@@ -381,7 +381,7 @@ class BotService:
                 return "reloj desfasado o sin medir"
         return None
 
-    # -- disparo ------------------------------------------------------------------
+    # -- firing ------------------------------------------------------------------
 
     async def _fire(self, fire: Fire, move: Mapping[VenueId, Decimal | None]) -> None:
         now = self._clock()
@@ -407,16 +407,16 @@ class BotService:
         self._end(finished(self.state, self._limits, self._clock(), error=error))
 
     def _end(self, state: BotState) -> None:
-        """Estado al acabar un disparo. Si lo apagaron mientras disparaba, se queda
-        `off` (D-40): sin esto pasaba a `cooldown` y se rearmaba solo. Un disparo
-        que acabó mal pasa igual a `halted`, para que el aviso no se pierda."""
+        """State when a shot ends. If it was turned off while firing, it stays `off` (D-40):
+        without this it went to `cooldown` and re-armed by itself. A shot that ended badly
+        goes `halted` anyway, so the warning is not lost."""
         if self.state.status == "off" and state.status != "halted":
             state = replace(state, status="off", reason=None)
         self._set(state)
 
     async def _lead(self, double_id: str, lead: VenueId) -> str | None:
-        """Primera pierna (D-75): lo que no llenó se cancela ya; la otra sale por
-        lo llenado o no sale. Devuelve qué falló, como `_follow`."""
+        """First leg (D-75): what did not fill is cancelled now; the other goes for what
+        filled or does not go. Returns what failed, like `_follow`."""
         loop = asyncio.get_running_loop()
         first = self._first(double_id, lead)
         cancel_errors: dict[VenueId, str] = {}
@@ -427,7 +427,7 @@ class BotService:
                 await asyncio.sleep(POLL_S)
                 first = self._first(double_id, lead)
         if first.status != "filled" and (not first.done or first.status == "rejected"):
-            self._orders.skip_held(double_id)  # incierta, rechazada o sin cerrar
+            self._orders.skip_held(double_id)  # uncertain, rejected or unclosed
             return _verdict(self._orders.doubles[double_id], cancel_errors)
         legs = self._orders.doubles[double_id].legs
         held = next(leg for leg in legs if leg.req.venue != lead)
@@ -438,13 +438,13 @@ class BotService:
                 {"double": double_id, "venue": lead, "price": first.req.price,
                  "qty": first.req.qty},
             )  # fmt: skip
-            log.info("bot: %s sin llenar en la doble %s; no sale la otra", first.label, double_id)
+            log.info("bot: %s unfilled in double %s; the other leg stays", first.label, double_id)
             return None
         spec = self._hub.state[held.req.venue].spec
-        assert spec is not None  # disparó con su book
+        assert spec is not None  # it fired with its book
         qty = spec.quantize_qty(first.filled)
         if qty < spec.min_qty or qty * held.req.price < spec.min_notional:
-            self._orders.skip_held(double_id)  # no llega al mínimo: queda colgada
+            self._orders.skip_held(double_id)  # below the minimum: it hangs
             return _verdict(self._orders.doubles[double_id], cancel_errors)
         await self._orders.send_held(double_id, qty)
         return await self._follow(double_id)
@@ -453,7 +453,7 @@ class BotService:
         return next(leg for leg in self._orders.doubles[double_id].legs if leg.req.venue == lead)
 
     async def _follow(self, double_id: str) -> str | None:
-        """Espera, cancela el resto y dice qué falló (None si quedó equilibrada)."""
+        """Wait, cancel the rest and say what failed (None if balanced)."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._limits.fill_timeout_ms / 1000
         while loop.time() < deadline:
@@ -470,7 +470,7 @@ class BotService:
             await asyncio.sleep(POLL_S)
         return _verdict(self._orders.doubles[double_id], cancel.errors)
 
-    # -- estado y journal ---------------------------------------------------------
+    # -- state and journal ---------------------------------------------------------
 
     def _set(self, state: BotState) -> None:
         old, self.state = self.state, state
@@ -498,7 +498,7 @@ class BotService:
                 "net": fire.net,
                 "net_pct": fire.net_pct,
                 "at": now,
-                # para ajustar `max_move_pct` con datos, con filtro o sin él (D-71)
+                # to tune `max_move_pct` with data, filter or not (D-71)
                 "move": dict(move),
                 **({"lead": lead} if (lead := self._limits.lead_venue) else {}),
             },
@@ -511,10 +511,10 @@ class BotService:
             self.faults.report("journal", exc, note=f"{event} sin escribir en el journal")
 
     def _restore(self) -> BotState:
-        """Contadores del día desde el journal (`bot_fire` del mismo modo): el bot
-        arranca `off`, pero los topes por hora y por día siguen contando."""
+        """Today's counters from the journal (`bot_fire` of the same mode): the bot starts
+        `off`, but the hourly and daily caps keep counting."""
         now = self._clock()
-        # el fichero de hoy según el reloj del journal, que es el que lo nombra
+        # today's file according to the journal's clock, which names it
         day = self._journal.clock().astimezone(UTC).strftime("%Y%m%d")
         path = self._journal.directory / f"journal-{day}.jsonl"
         fires: list[tuple[int, Decimal]] = []
@@ -529,7 +529,7 @@ class BotService:
                     continue
                 fires.append((int(row["data"]["at"]), Decimal(row["data"]["notional"])))
             except (ValueError, KeyError, TypeError):
-                continue  # una línea rara no impide arrancar
+                continue  # an odd line does not stop startup
         today = [(at, n) for at, n in fires if at // DAY_MS == now // DAY_MS]
         if not today:
             return BotState()
@@ -543,7 +543,7 @@ class BotService:
 
 
 def _walk_text(lim: BotLimits) -> str:
-    """Línea de la confirmación con el recorrido del book (RF-20, D-60), o nada."""
+    """Confirmation line with the book walk (RF-20, D-60), or nothing."""
     walk = [f"{NAMES[vid]} {pct} %" for vid, pct in lim.max_walk_pct.items() if pct > 0]
     if not walk:
         return ""
@@ -551,7 +551,7 @@ def _walk_text(lim: BotLimits) -> str:
 
 
 def _move_text(lim: BotLimits) -> str:
-    """Línea de la confirmación con el filtro de movimiento brusco (D-71), o nada."""
+    """Confirmation line with the sharp move filter (D-71), or nothing."""
     if lim.max_move_pct is None:
         return ""
     return (
@@ -561,7 +561,7 @@ def _move_text(lim: BotLimits) -> str:
 
 
 def _lead_text(lim: BotLimits) -> str:
-    """Línea de la confirmación con la primera pierna (D-75), o nada."""
+    """Confirmation line with the first leg (D-75), or nothing."""
     if lim.lead_venue is None:
         return ""
     return (

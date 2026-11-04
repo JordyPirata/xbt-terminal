@@ -1,16 +1,16 @@
-"""Panel cruzado: mid, spread interno y diferencia entre venues, bruta y neta.
+"""Cross panel: mid, inner spread and difference between venues, gross and net.
 
-Todo en BTC por 1 BTCB2 (RNF-10: ambos venues cotizan contra BTC, sin
-conversión). Para cada dirección ejecutable "comprar en A, vender en B":
+All in BTC per 1 BTCB2 (RNF-10: both venues quote against BTC, no conversion). For
+each executable direction "buy on A, sell on B":
 
-    bruto = bid_B - ask_A
-    neto  = bid_B × (1 - taker_B) - ask_A × (1 + taker_A)
+    gross = bid_B - ask_A
+    net   = bid_B × (1 - taker_B) - ask_A × (1 + taker_A)
 
-con los % sobre ask_A. Se usan fees taker porque la ruta cruza ambos books.
-Una ruta solo necesita el ask de donde se compra y el bid de donde se vende;
-las stats de un venue, en cambio, exigen los dos lados y un book sin cruzar.
+with the % over ask_A. Taker fees are used because the route crosses both books. A
+route only needs the ask where it buys and the bid where it sells; a venue's stats,
+instead, need both sides and an uncrossed book.
 
-Spec: RF-04 · design.md §6.6 · Tarea: T-14a
+Spec: RF-04 · design.md §6.6 · Task: T-14a
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class Quote:
 class VenueStats:
     mid: Decimal
     spread: Decimal
-    spread_pct: Decimal  # sobre el mid
+    spread_pct: Decimal  # of the mid
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,7 +45,7 @@ class Route:
     sell_venue: VenueId
     gross: Decimal
     net: Decimal
-    gross_pct: Decimal  # sobre el ask de compra
+    gross_pct: Decimal  # of the buy ask
     net_pct: Decimal
 
 
@@ -53,7 +53,7 @@ class Route:
 class CrossView:
     stats: dict[VenueId, VenueStats | None]
     mid_diff: Decimal | None  # mid_b - mid_a
-    mid_diff_pct: Decimal | None  # sobre mid_a
+    mid_diff_pct: Decimal | None  # of mid_a
     routes: tuple[Route | None, Route | None]  # a→b, b→a
 
     def route(self, buy: VenueId, sell: VenueId) -> Route | None:
@@ -68,7 +68,7 @@ def sats(btc: Decimal) -> Decimal:
 
 
 def venue_stats(q: Quote) -> VenueStats | None:
-    """None si falta un lado o el book está cruzado: no hay precio fiable."""
+    """None if a side is missing or the book is crossed: no reliable price."""
     if q.best_bid is None or q.best_ask is None or q.best_bid >= q.best_ask:
         return None
     mid = (q.best_bid + q.best_ask) / 2

@@ -1,10 +1,10 @@
-"""Carga y validación de config.toml y .env; resolución del modo.
+"""Loading and validation of config.toml and .env; mode resolution.
 
-La validación es estricta a propósito: una clave mal escrita en `[risk]` que se
-ignorase en silencio dejaría un límite sin aplicar. Los importes van como
-string en el TOML ("0.05"), porque un número TOML se lee como float.
+Validation is strict on purpose: a mistyped `[risk]` key silently ignored would
+leave a limit unapplied. Amounts are strings in the TOML ("0.05"), because a TOML
+number reads as float.
 
-Spec: RF-12, RF-13, RNF-08 · design.md §8 · Tarea: T-03
+Spec: RF-12, RF-13, RNF-08 · design.md §8 · Task: T-03
 """
 
 from __future__ import annotations
@@ -31,30 +31,30 @@ LogLevel = Literal["debug", "info", "warning", "error"]
 VENUE_IDS: tuple[VenueId, ...] = get_args(VenueId)
 ENV_PREFIX: dict[VenueId, str] = {"nk": "NONKYC", "nx": "NEOXA"}
 
-# RNF-10: nada de stablecoins; el par es siempre BTCB2 contra BTC
+# RNF-10: no stablecoins; the pair is always BTCB2 against BTC
 REQUIRED_BASE, REQUIRED_QUOTE = "BTCB2", "BTC"
 
-# RNF-03: publicado por Neoxa menos el 20% de margen
+# RNF-03: published by Neoxa minus the 20% margin
 NEOXA_MAX = {"general_per_min": 480, "orders_per_10s": 8, "cancels_per_10s": 16}
 BALANCES_MAX_EVERY_S = 10  # RF-05
 
 
 class ConfigError(ValueError):
-    """Configuración inválida; el mensaje nombra la clave (`risk.max_order_pct`)."""
+    """Invalid configuration; the message names the key (`risk.max_order_pct`)."""
 
 
 @dataclass(frozen=True)
 class VenueConfig:
     id: VenueId
     name: str
-    symbol: str  # en mayúsculas, con el separador del venue: BTCB2/BTC, BTCB2_BTC
+    symbol: str  # uppercase, with the venue's separator: BTCB2/BTC, BTCB2_BTC
     maker_fee: Decimal
     taker_fee: Decimal
-    # % de descuento sobre la fee (pagando con el token del venue): lo usa el
-    # panel cruzado; el bot, solo con `fee_token` y su saldo (RF-24, D-38, D-63)
+    # % discount on the fee (paying with the venue token): used by the cross panel;
+    # by the bot, only with `fee_token` and its balance (RF-24, D-38, D-63)
     fee_discount_pct: Decimal = Decimal(0)
-    fee_token: str | None = None  # ticker del token, en mayúsculas
-    fee_token_min: Decimal | None = None  # disponible mínimo para que el bot cuente con él
+    fee_token: str | None = None  # token ticker, uppercase
+    fee_token_min: Decimal | None = None  # minimum available for the bot to count on it
 
     @property
     def base(self) -> str:
@@ -76,7 +76,7 @@ class PollingConfig:
     neoxa_private_every_s: int
     balances_every_s: int
     rest_fallback_every_s: int
-    value_every_s: int = 300  # valor de la cuenta en el journal (RF-32)
+    value_every_s: int = 300  # account value in the journal (RF-32)
 
 
 @dataclass(frozen=True)
@@ -93,18 +93,18 @@ class LogConfig:
 
 @dataclass(frozen=True)
 class BotConfig:
-    enabled: bool  # en live solo se arma con true (RF-18)
+    enabled: bool  # in live it only arms with true (RF-18)
     limits: BotLimits
 
 
 @dataclass(frozen=True)
 class ReplayConfig:
-    """`[replay]`: los venues simulados de una reproducción (RF-34, D-80)."""
+    """`[replay]`: the simulated venues of a replay (RF-34, D-80)."""
 
-    base_balance: Decimal  # BTCB2 en cada venue
-    quote_balance: Decimal  # BTC en cada venue
-    latency_ms: int = 300  # de enviar a llegar al venue: el ack p50 de Neoxa
-    competitor_pct: Decimal = Decimal(0)  # probabilidad de perder cada nivel
+    base_balance: Decimal  # BTCB2 on each venue
+    quote_balance: Decimal  # BTC on each venue
+    latency_ms: int = 300  # from sending to reaching the venue: Neoxa's ack p50
+    competitor_pct: Decimal = Decimal(0)  # probability of losing each level
     seed: int = 0
 
 
@@ -116,9 +116,9 @@ class AppConfig:
     risk: RiskLimits
     ratelimit: dict[VenueId, RateLimitConfig]
     log: LogConfig = LogConfig()
-    bot: BotConfig | None = None  # sin [bot], no hay bot (RF-18)
-    inventory: InventoryTarget | None = None  # sin [inventory], sin ratio (RF-26)
-    replay: ReplayConfig | None = None  # solo la lee --replay (RF-34)
+    bot: BotConfig | None = None  # without [bot], no bot (RF-18)
+    inventory: InventoryTarget | None = None  # without [inventory], no ratio (RF-26)
+    replay: ReplayConfig | None = None  # only read by --replay (RF-34)
 
 
 @dataclass(frozen=True)
@@ -133,8 +133,8 @@ class Settings:
     credentials: dict[VenueId, Credentials]
     mode: Mode
     redactor: Redactor
-    warnings: tuple[str, ...] = ()  # se muestran en rojo al arrancar
-    replay: bool = False  # venues simulados: se opera sin keys (RF-34)
+    warnings: tuple[str, ...] = ()  # shown in red at startup
+    replay: bool = False  # simulated venues: trades without keys (RF-34)
 
     def can_trade(self, venue: VenueId) -> bool:
         if self.replay:
@@ -142,11 +142,11 @@ class Settings:
         return self.mode != "read-only" and venue in self.credentials
 
 
-# --- lectura de valores -----------------------------------------------------
+# --- reading values ------------------------------------------------------------
 
 
 class _Section:
-    """Vista de una tabla TOML que recuerda su ruta y qué claves se han leído."""
+    """View of a TOML table remembering its path and which keys were read."""
 
     def __init__(self, data: Any, path: str) -> None:
         if not isinstance(data, dict):
@@ -220,8 +220,8 @@ def _split_symbol(symbol: str) -> tuple[str, str]:
 
 
 def _btc_symbol(sec: _Section) -> str:
-    """RNF-10: solo BTCB2 contra BTC. Se valida aquí para que un error en el TOML
-    nunca llegue a enviar una orden contra una stablecoin."""
+    """RNF-10: only BTCB2 against BTC. Validated here so a TOML mistake never gets to
+    send an order against a stablecoin."""
     symbol = sec.str("symbol").upper()
     if _split_symbol(symbol) != (REQUIRED_BASE, REQUIRED_QUOTE):
         raise ConfigError(
@@ -237,7 +237,7 @@ def _venue_ids(sec: _Section) -> None:
         raise ConfigError(f"{sec.path}: se esperan {', '.join(VENUE_IDS)}; hay {found}")
 
 
-# --- carga ------------------------------------------------------------------
+# --- loading -------------------------------------------------------------------
 
 
 def load_config(path: Path) -> AppConfig:
@@ -316,7 +316,7 @@ def load_config(path: Path) -> AppConfig:
     rl_sec.done()
 
     log = LogConfig()
-    if "log" in root.data:  # opcional: sin ella, info
+    if "log" in root.data:  # optional: without it, info
         lg = root.section("log")
         log = LogConfig(level=lg.choice("level", get_args(LogLevel)))
         lg.done()
@@ -346,8 +346,7 @@ def load_config(path: Path) -> AppConfig:
 
 
 def _replay(s: _Section) -> ReplayConfig:
-    """`[replay]` (RF-34, D-80): saldos obligatorios; latencia, competidor y
-    semilla, opcionales."""
+    """`[replay]` (RF-34, D-80): balances required; latency, competitor and seed optional."""
     extra: dict[str, Any] = {}
     if "latency_ms" in s.data:
         extra["latency_ms"] = s.int("latency_ms", min=0)
@@ -363,8 +362,8 @@ def _replay(s: _Section) -> ReplayConfig:
 
 
 def _inventory(s: _Section) -> InventoryTarget:
-    """`[inventory]` (RF-26, D-46): objetivo estrictamente entre 0 y 100; banda
-    > 0 y como mucho 50 puntos (más ancha no filtraría nada)."""
+    """`[inventory]` (RF-26, D-46): target strictly between 0 and 100; band > 0 and at
+    most 50 points (wider would filter nothing)."""
     target = _percent(s, "target_base_pct")
     if target >= 100:
         raise ConfigError(f"{s._key('target_base_pct')}: debe ser menor que 100")
@@ -376,9 +375,9 @@ def _inventory(s: _Section) -> InventoryTarget:
 
 
 def _bot(b: _Section) -> BotConfig:
-    """`[bot]` (design.md §6.9): una neta de 0 no deja margen para el error, así que
-    `min_net_pct` tiene que ser > 0; el slippage puede ser 0 (al mejor precio).
-    `max_walk_pct` es opcional y va por venue (D-60)."""
+    """`[bot]` (design.md §6.9): a net of 0 leaves no margin for error, so `min_net_pct`
+    must be > 0; slippage may be 0 (at the best price). `max_walk_pct` is optional
+    and per venue (D-60)."""
     config = BotConfig(
         enabled=b.bool("enabled"),
         limits=BotLimits(
@@ -400,8 +399,8 @@ def _bot(b: _Section) -> BotConfig:
 
 
 def _move(b: _Section) -> dict[str, Any]:
-    """`max_move_pct` y `move_window_ms` (RF-19, D-71): opcionales; sin el
-    primero no hay filtro."""
+    """`max_move_pct` and `move_window_ms` (RF-19, D-71): optional; without the first
+    there is no filter."""
     out: dict[str, Any] = {}
     if "max_move_pct" in b.data:
         out["max_move_pct"] = _percent(b, "max_move_pct")
@@ -411,15 +410,15 @@ def _move(b: _Section) -> dict[str, Any]:
 
 
 def _lead(b: _Section) -> dict[str, Any]:
-    """`lead_venue` (RF-20, D-75): opcional; uno de los venues."""
+    """`lead_venue` (RF-20, D-75): optional; one of the venues."""
     if "lead_venue" not in b.data:
         return {}
     return {"lead_venue": b.choice("lead_venue", VENUE_IDS)}
 
 
 def _fee_token(v: _Section) -> dict[str, Any]:
-    """`fee_token` y `fee_token_min` (RF-24, D-63): las dos o ninguna, con un
-    `fee_discount_pct` que descontar y un token que no sea del par."""
+    """`fee_token` and `fee_token_min` (RF-24, D-63): both or neither, with a
+    `fee_discount_pct` to discount and a token outside the pair."""
     has_token, has_min = "fee_token" in v.data, "fee_token_min" in v.data
     if not (has_token or has_min):
         return {}
@@ -452,7 +451,7 @@ def _percent(sec: _Section, key: str, *, positive: bool = True) -> Decimal:
 
 
 def load_credentials(env: Mapping[str, str | None]) -> dict[VenueId, Credentials]:
-    """Key y secret de cada venue. Vacías = ausentes; solo una de las dos = error."""
+    """Key and secret of each venue. Empty = absent; only one of the two = error."""
     creds: dict[VenueId, Credentials] = {}
     for vid in VENUE_IDS:
         key_name, secret_name = f"{ENV_PREFIX[vid]}_API_KEY", f"{ENV_PREFIX[vid]}_API_SECRET"
@@ -476,7 +475,7 @@ def resolve_mode(credentials: Mapping[VenueId, Credentials], live: bool) -> Mode
 def load_settings(
     config_path: Path, env_path: Path, live: bool, *, replay: bool = False
 ) -> Settings:
-    """Con `replay`, dry-run sobre venues simulados: el `.env` ni se abre (RF-34)."""
+    """With `replay`, dry-run on simulated venues: `.env` is not even opened (RF-34)."""
     config = load_config(config_path)
     if replay:
         if config.replay is None:

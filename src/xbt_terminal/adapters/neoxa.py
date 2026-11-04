@@ -1,27 +1,26 @@
-"""Adaptador de Neoxa (REST + WS público; privados por polling).
+"""Neoxa adapter (REST + public WS; private by polling).
 
-REST en `https://neoxa.exchange/api`; WS público Socket.IO en el namespace
-`/exchange` (D-09). Particularidades:
+REST at `https://neoxa.exchange/api`; public Socket.IO WS on the `/exchange`
+namespace (D-09). Peculiarities:
 
-- Números como floats en JSON: se leen con `parse_float=Decimal`, nunca float.
-- El book mezcla órdenes reales y liquidez AMM (`isAmm` → `Level.amm`). Si un
-  precio aparece en las dos, se suman y el nivel queda marcado como AMM.
-- Cada `exchange:orderbook` del WS es el book completo, sin `seq` ni hora: se
-  emite como `BookSnapshot` con la hora local.
-- Trades deduplicados por `trade_id` (base común, `streaming.py`). `side` se toma
-  como lado del taker (D-09).
-- Privado con cabeceras planas `X-API-Key` / `X-API-Secret`; las keys de Neoxa
-  no permiten retirar. El WS privado exige JWT de sesión web, así que órdenes y
-  fills se siguen por polling cada `private_every_s` (RNF-04, D-14).
-- `/balances` da `total` = `available` + `locked`, sin lo comprometido en
-  órdenes (`in_orders`): eso se suma a `Balance.locked`.
-- Los trades propios no dicen de qué orden son: `Fill.order_id` None (D-14).
-- Las órdenes se envían con los números como texto exacto en el JSON, nunca
-  pasando por float.
-- Un envío sin respuesta clara es incierto (D-26); sin client_id en el venue
-  (PA-09), se reconcilia por lado, precio y cantidad con `recent_orders`.
+- Numbers as JSON floats: read with `parse_float=Decimal`, never float.
+- The book mixes real orders and AMM liquidity (`isAmm` → `Level.amm`). If a price
+  appears in both, they add up and the level is marked AMM.
+- Each WS `exchange:orderbook` is the full book, without `seq` or time: emitted as
+  a `BookSnapshot` with local time.
+- Trades deduplicated by `trade_id` (common base, `streaming.py`). `side` is taken
+  as the taker side (D-09).
+- Private with plain `X-API-Key` / `X-API-Secret` headers; Neoxa keys cannot
+  withdraw. The private WS requires a web session JWT, so orders and fills are
+  followed by polling every `private_every_s` (RNF-04, D-14).
+- `/balances` gives `total` = `available` + `locked`, without what is committed in
+  orders (`in_orders`): that is added to `Balance.locked`.
+- Own trades do not say which order they belong to: `Fill.order_id` None (D-14).
+- Orders are sent with numbers as exact text in the JSON, never through float.
+- A send without a clear answer is uncertain (D-26); with no client_id on the venue
+  (PA-09), it is reconciled by side, price and quantity with `recent_orders`.
 
-Spec: RF-01, RF-05, RF-08, RF-09, RNF-03, RNF-04, RNF-12 · design.md §4-5 · Tareas: T-08, T-17, T-25
+Spec: RF-01, RF-05, RF-08, RF-09, RNF-03, RNF-04, RNF-12 · design.md §4-5 · Tasks: T-08, T-17, T-25
 """
 
 from __future__ import annotations
@@ -61,10 +60,10 @@ from .streaming import StreamingVenue, iso_ms
 REST_URL = "https://neoxa.exchange/api"
 WS_URL = "wss://neoxa.exchange/socket.io/?EIO=4&transport=websocket"
 NAMESPACE = "/exchange"
-MAX_TRADES = 100  # límite de /exchange/trades/{pair}
-MY_TRADES = 50  # trades propios por refresco: de sobra para 3 s
-HISTORY = 100  # órdenes terminadas en las que se busca una desaparecida
-DEPOSIT_CHAINS = {"BTC": "bitcoin", "BTCB2": "btcb2"}  # claves de /deposits/addresses (D-50)
+MAX_TRADES = 100  # limit of /exchange/trades/{pair}
+MY_TRADES = 50  # own trades per refresh: plenty for 3 s
+HISTORY = 100  # finished orders searched for one that disappeared
+DEPOSIT_CHAINS = {"BTC": "bitcoin", "BTCB2": "btcb2"}  # keys of /deposits/addresses (D-50)
 STATUSES: dict[str, OrderStatus] = {
     "open": "open",
     "partial": "partial",
@@ -73,7 +72,7 @@ STATUSES: dict[str, OrderStatus] = {
 }
 
 
-# --- parseo puro --------------------------------------------------------------
+# --- pure parsing --------------------------------------------------------------
 
 
 def parse_market(payload: dict[str, Any], symbol: str) -> MarketSpec:
@@ -93,7 +92,7 @@ def parse_market(payload: dict[str, Any], symbol: str) -> MarketSpec:
         tick_size=Decimal(1).scaleb(-int(pair["pricePrecision"])),
         lot_size=Decimal(1).scaleb(-int(pair["quantityPrecision"])),
         min_qty=D(pair["minQuantity"]),
-        min_notional=ZERO,  # Neoxa no tiene mínimo de nocional
+        min_notional=ZERO,  # Neoxa has no minimum notional
         maker_fee=D(pair["makerFeeRate"]),
         taker_fee=D(pair["takerFeeRate"]),
     )
@@ -154,8 +153,8 @@ def parse_candles(payload: dict[str, Any]) -> list[Candle]:
 
 
 def parse_balances(payload: dict[str, Any], assets: Iterable[str]) -> dict[str, Balance]:
-    """Solo los activos pedidos, los del par y el token de fee si lo hay (RNF-10,
-    D-63): el resto, stablecoins incluidas, se ignora."""
+    """Only the assets asked for, the pair's and the fee token if any (RNF-10, D-63):
+    the rest, stablecoins included, is ignored."""
     raw = payload.get("balances") or {}
     out: dict[str, Balance] = {}
     for asset in assets:
@@ -200,8 +199,8 @@ def parse_fill(raw: dict[str, Any]) -> Fill:
 
 
 def parse_deposit(payload: dict[str, Any], asset: str, chain: str) -> DepositAddress:
-    """`/deposits/addresses` trae todas las cadenas de la cuenta; una cerrada o
-    sin dirección es error, nunca una dirección (RF-28)."""
+    """`/deposits/addresses` brings every chain of the account; a closed one or one
+    without an address is an error, never an address (RF-28)."""
     closed = (payload.get("closedChains") or {}).get(chain)
     if closed:
         raise VenueError(f"Neoxa: depósitos de {chain} cerrados ({closed})")
@@ -212,9 +211,9 @@ def parse_deposit(payload: dict[str, Any], asset: str, chain: str) -> DepositAdd
 
 
 def parse_withdrawal_fee(payload: dict[str, Any], asset: str, chain: str) -> WithdrawalFee:
-    """`/withdrawals/fees` trae todos los tokens; vale la entrada del activo en
-    su cadena de depósito (RF-29). Fee y mínimo llegan como número o texto. La
-    comisión va aparte: su web pide 0.2, llegan 0.2 y descuenta 0.2001 (D-53)."""
+    """`/withdrawals/fees` brings every token; the asset's entry on its deposit chain
+    counts (RF-29). Fee and minimum come as number or text. The fee is on top: its
+    web asks 0.2, 0.2 arrives and 0.2001 is deducted (D-53)."""
     for f in payload.get("fees") or []:
         if f.get("token") == asset and f.get("chain") == chain:
             fee, minimum = f.get("withdrawalFee"), f.get("minWithdrawal")
@@ -228,21 +227,21 @@ def parse_withdrawal_fee(payload: dict[str, Any], asset: str, chain: str) -> Wit
 
 
 def order_body(symbol: str, req: OrderRequest) -> str:
-    """JSON con precio y cantidad como números escritos tal cual el Decimal."""
+    """JSON with price and quantity as numbers written exactly like the Decimal."""
     return (
         f'{{"pair":{json.dumps(symbol)},"side":{json.dumps(req.side)},'
         f'"quantity":{req.qty:f},"price":{req.price:f}}}'
     )
 
 
-# --- adaptador ----------------------------------------------------------------
+# --- adapter -------------------------------------------------------------------
 
 
 class NeoxaVenue(StreamingVenue):
     id = "nx"
     name = "Neoxa"
     max_trades = MAX_TRADES
-    keeps_client_id = False  # PA-09: se reconcilia por lado, precio y cantidad
+    keeps_client_id = False  # PA-09: reconciled by side, price and quantity
 
     def __init__(
         self,
@@ -257,8 +256,8 @@ class NeoxaVenue(StreamingVenue):
         fee_token: str | None = None,
         **stream_opts: Any,
     ) -> None:
-        """`stream_opts`: opciones del supervisor de `StreamingVenue` (backoff, latido...).
-        `fee_token`: su saldo sale con los del par, solo para leerlo (RF-24, D-63)."""
+        """`stream_opts`: `StreamingVenue` supervisor options (backoff, heartbeat...).
+        `fee_token`: its balance comes with the pair's, just to read it (RF-24, D-63)."""
         super().__init__(ws_url=ws_url, book_depth=book_depth, **stream_opts)
         self.symbol = symbol
         self._assets = tuple(symbol.split("_"))
@@ -342,7 +341,7 @@ class NeoxaVenue(StreamingVenue):
     def _parse_trades(self, raws: Iterable[dict[str, Any]]) -> list[tuple[str, Trade]]:
         return self.parsing(lambda rs: [parse_trade(r) for r in rs], list(raws))
 
-    # -- privado ---------------------------------------------------------------
+    # -- private ---------------------------------------------------------------
 
     async def _private(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         return await self._request("GET", path, kind="private", params=params, auth=True)
@@ -401,8 +400,8 @@ class NeoxaVenue(StreamingVenue):
         return order
 
     async def recent_orders(self, since: int) -> list[Order]:
-        """Activas y las últimas `HISTORY` terminadas del par; la ventana la aplica
-        quien reconcilia (D-26). `since` no se usa: el historial no se filtra por fecha."""
+        """Active ones and the last `HISTORY` finished of the pair; the reconciler applies
+        the window (D-26). `since` is unused: the history is not filtered by date."""
         active = await self.fetch_active()
         payload = await self._private("/exchange/orders/history", {"limit": HISTORY})
         now = self._clock()
@@ -416,8 +415,8 @@ class NeoxaVenue(StreamingVenue):
         await self._request("DELETE", f"/exchange/order/{order_id}", kind="cancel", auth=True)
 
     async def cancel_all(self) -> None:
-        """Neoxa no tiene "cancelar todas": se cancelan una a una y se intentan
-        todas aunque falle alguna."""
+        """Neoxa has no "cancel all": they are cancelled one by one, all attempted even
+        if one fails."""
         failed: list[str] = []
         for order in await self.open_orders():
             try:
@@ -428,7 +427,7 @@ class NeoxaVenue(StreamingVenue):
             raise VenueError("Neoxa: no se pudieron cancelar " + "; ".join(failed))
 
     async def private_stream(self) -> AsyncIterator[PrivateEvent]:
-        self._auth_headers()  # sin keys, ReadOnlyError antes de arrancar nada
+        self._auth_headers()  # without keys, ReadOnlyError before starting anything
         src = PrivateSource(self.fetch_active, self.fetch_fills, self.fetch_final)
         wake = asyncio.Event()
 
@@ -487,4 +486,4 @@ class NeoxaVenue(StreamingVenue):
             return list(self.fresh(self._parse_trades(data.get("trades") or [])))
         if p.event == "exchange:trade":
             return list(self.fresh(self._parse_trades([data])))
-        return []  # exchange:pool, pong y otros no interesan al MVP
+        return []  # exchange:pool, pong and others are of no interest to the MVP

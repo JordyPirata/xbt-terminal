@@ -1,7 +1,7 @@
-"""Lo puro del banco de pruebas (RF-34, RF-35, D-80): cómo casa una orden contra
-el book grabado y el informe a partir de las filas del journal.
+"""The pure part of the test bench (RF-34, RF-35, D-80): how an order matches against
+the recorded book, and the report from the journal rows.
 
-Spec: RF-34, RF-35, CA-19, CA-20 · design.md §6.14 · Tarea: T-87
+Spec: RF-34, RF-35, CA-19, CA-20 · design.md §6.14 · Task: T-87
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from .models import Level, Side
 SATS = Decimal(100_000_000)
 MINUTE_MS = 60_000
 HUNDRED = Decimal(100)
-HANGING = "hanging_leg"  # así empieza el motivo de una parada por pierna colgada
+HANGING = "hanging_leg"  # how the reason of a hanging leg stop begins
 
 
 def match(
@@ -26,8 +26,8 @@ def match(
     levels: Iterable[Level],
     taken: Callable[[Level], bool],
 ) -> list[tuple[Decimal, Decimal]]:
-    """(precio, cantidad) que casa una orden taker contra `levels`, del mejor al
-    peor, sin pasar de su límite. `taken`: el competidor se lleva ese nivel."""
+    """(price, quantity) a taker order matches against `levels`, best to worst, within
+    its limit. `taken`: the competitor takes that level."""
     fills: list[tuple[Decimal, Decimal]] = []
     left = qty
     for level in levels:
@@ -48,13 +48,13 @@ class ReplayReport:
     crossings: int
     fires: int
     filled: int
-    capture_pct: Decimal | None  # None sin cruces
+    capture_pct: Decimal | None  # None without crossings
     net: Decimal  # BTC
     misses: int
-    miss_per_100: Decimal | None  # None sin disparos
+    miss_per_100: Decimal | None  # None without shots
     hanging: int
     hanging_per_100: Decimal | None
-    halted: str | None  # por qué quedó parado el bot, si no fue una colgada
+    halted: str | None  # why the bot stayed stopped, if not a hanging leg
 
 
 def _share(part: int, whole: int) -> Decimal | None:

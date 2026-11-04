@@ -1,25 +1,23 @@
-"""Base común de los adaptadores con WS público y respaldo REST, y supervisor
-de conexión.
+"""Common base of adapters with public WS and REST fallback, and connection supervisor.
 
-Cada venue implementa `book_snapshot`, `_fetch_trades` (REST) y `_ws_events`
-(una sesión WS abierta con `ws_connect`: entrega datos y lanza al caer). Esta
-base pone el resto:
+Each venue implements `book_snapshot`, `_fetch_trades` (REST) and `_ws_events` (one
+WS session opened with `ws_connect`: delivers data and raises when it drops). This
+base adds the rest:
 
-- `market_stream` y su supervisor (D-11):
-  - Reconexión con backoff exponencial y jitter.
-  - Al tercer fallo seguido, polling REST en paralelo hasta que vuelva el WS.
-  - Emite `ConnState` y reemite el estado cada `latency_every_s` con la
-    latencia (media móvil del RTT de ping WS o de las peticiones REST).
-- Deduplicación de trades por id entre REST, lote inicial del WS y trades en
-  vivo, para que una reconexión no repita trades ya entregados.
-- `parsing`: un campo que falta o no encaja es un cambio de API → VenueError.
-- `sending`: un envío del que no se sabe si el venue lo aplicó → UncertainError
-  (RNF-12, D-26).
-- `timed`: cada respuesta REST con cabecera `Date` actualiza `clock_skew_ms`,
-  el desfase del reloj del venue contra el local (RNF-16, D-30).
+- `market_stream` and its supervisor (D-11):
+  - Reconnection with exponential backoff and jitter.
+  - From the third failure in a row, REST polling alongside until the WS is back.
+  - Emits `ConnState` and re-emits the state every `latency_every_s` with the
+    latency (moving average of the WS ping RTT or the REST requests).
+- Trade deduplication by id across REST, the initial WS batch and live trades, so
+  a reconnect does not repeat delivered trades.
+- `parsing`: a missing or mismatched field is an API change → VenueError.
+- `sending`: a send not known to have been applied → UncertainError (RNF-12, D-26).
+- `timed`: each REST response with a `Date` header updates `clock_skew_ms`, the
+  venue clock's skew against the local one (RNF-16, D-30).
 
 Spec: RF-01, RF-14, CA-06, RNF-03, RNF-09, RNF-12, RNF-16, RNF-24 · design.md §4, §6.1
-Tareas: T-08, T-09, T-12, T-25, T-29, T-78
+Tasks: T-08, T-09, T-12, T-25, T-29, T-78
 """
 
 from __future__ import annotations
@@ -46,15 +44,15 @@ log = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-TRADES_EVERY_POLLS = 5  # respaldo REST: trades cada 5 vueltas de book (D-09)
-FALLBACK_TRADES = 100  # trades por vuelta del respaldo: de sobra para 5 s
+TRADES_EVERY_POLLS = 5  # REST fallback: trades every 5 book rounds (D-09)
+FALLBACK_TRADES = 100  # trades per fallback round: plenty for 5 s
 SEEN_TRADES = 1000
 WS_ERRORS = (OSError, TimeoutError, websockets.WebSocketException, VenueError)
-# Al cerrar no se espera más que esto la respuesta del venue: con la cola de
-# recepción llena (16 frames sin leer) el cierre limpio tardaría los 10 s por defecto.
+# On close, wait no longer than this for the venue's reply: with the receive queue
+# full (16 unread frames) a clean close would take the default 10 s.
 WS_CLOSE_TIMEOUT_S = 1.0
 FALLBACK_AFTER_FAILURES = 3  # design.md §6.1
-# La petición no llegó a salir: un envío que falla así no creó nada (D-26)
+# The request never left: a send failing like this created nothing (D-26)
 NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
 PARSE_ERRORS = (KeyError, TypeError, ValueError, ArithmeticError)
 
@@ -67,10 +65,10 @@ def now_ms() -> int:
 
 
 def skew_ms(date: str | None, sent_ms: int, received_ms: int) -> int | None:
-    """Hora del venue menos la local, en ms, a partir de la cabecera `Date` de una
-    respuesta pedida en `sent_ms` y recibida en `received_ms` (hora local). `Date`
-    va truncada al segundo: se toma su mitad, así que el error es ±0,5 s más la
-    mitad del RTT. None si no hay cabecera o no se entiende."""
+    """Venue time minus local, in ms, from the `Date` header of a response requested at
+    `sent_ms` and received at `received_ms` (local time). `Date` is truncated to the
+    second: its midpoint is taken, so the error is ±0.5 s plus half the RTT. None if
+    there is no header or it is unreadable."""
     if not date:
         return None
     try:
@@ -82,7 +80,7 @@ def skew_ms(date: str | None, sent_ms: int, received_ms: int) -> int | None:
 
 
 def iso_ms(text: str) -> int:
-    """'2026-10-20T14:23:36.539Z' → ms epoch, sin pasar por float."""
+    """'2026-10-20T14:23:36.539Z' → epoch ms, without going through float."""
     dt = datetime.fromisoformat(text)
     if dt.tzinfo is None:
         raise ValueError(f"fecha sin zona horaria: {text!r}")
@@ -90,7 +88,7 @@ def iso_ms(text: str) -> int:
 
 
 class SeenIds:
-    """Ids de trade ya entregados, acotado a los últimos `size`."""
+    """Ids of trades already delivered, bounded to the last `size`."""
 
     def __init__(self, size: int = SEEN_TRADES) -> None:
         self._order: deque[str] = deque()
@@ -98,7 +96,7 @@ class SeenIds:
         self._size = size
 
     def add(self, trade_id: str) -> bool:
-        """True si es nuevo."""
+        """True if new."""
         if trade_id in self._ids:
             return False
         self._order.append(trade_id)
@@ -109,8 +107,8 @@ class SeenIds:
 
 
 class Backoff:
-    """Espera antes del reintento n (n ≥ 1): `min(max, base × 2^(n-1))` con ±20 %
-    de jitter, sin pasar nunca de `max`."""
+    """Wait before retry n (n ≥ 1): `min(max, base × 2^(n-1))` with ±20 % jitter, never
+    past `max`."""
 
     def __init__(
         self, base_s: float, max_s: float, rng: Callable[[], float] = random.random
@@ -125,8 +123,8 @@ class Backoff:
 
 
 class LatencyMeter:
-    """Media móvil exponencial en ms. Las muestras ≤ 0 se ignoran (websockets
-    da 0.0 hasta el primer ping)."""
+    """Exponential moving average in ms. Samples ≤ 0 are ignored (websockets gives 0.0
+    until the first ping)."""
 
     def __init__(self, alpha: float = 0.3) -> None:
         self._alpha = alpha
@@ -140,7 +138,7 @@ class LatencyMeter:
 
 @dataclass(frozen=True, slots=True)
 class _Crash:
-    """Error que no es de red (un bug): se relanza en el consumidor."""
+    """Non-network error (a bug): re-raised in the consumer."""
 
     exc: BaseException
 
@@ -148,7 +146,7 @@ class _Crash:
 class StreamingVenue:
     id: VenueId
     name: str
-    max_trades: int  # límite de trades por petición REST del venue
+    max_trades: int  # trade limit per REST request of the venue
 
     def __init__(
         self,
@@ -173,35 +171,35 @@ class StreamingVenue:
         self._latency_every_s = latency_every_s
         self._clock = clock
         self._seen = SeenIds()
-        self._ws: Any = None  # conexión abierta, para leer su latencia
+        self._ws: Any = None  # open connection, to read its latency
         self._ws_latency = LatencyMeter()
         self._rest_latency = LatencyMeter()
         self._current: ConnState | None = None
-        self.clock_skew_ms: int | None = None  # venue - local, de la última `Date` (RNF-16)
+        self.clock_skew_ms: int | None = None  # venue - local, from the last `Date` (RNF-16)
 
-    # -- a implementar por cada venue -----------------------------------------
+    # -- to implement by each venue -----------------------------------------
 
     async def book_snapshot(self, depth: int) -> BookSnapshot:
         raise NotImplementedError
 
     async def _fetch_trades(self, limit: int) -> list[tuple[str, Trade]]:
-        """(id, Trade) de los trades más recientes por REST, en cualquier orden."""
+        """(id, Trade) of the most recent REST trades, in any order."""
         raise NotImplementedError
 
     def _ws_events(self) -> AsyncIterator[MarketEvent]:
-        """Una sesión WS: datos (book, deltas, trades); lanza o termina al caer."""
+        """One WS session: data (book, deltas, trades); raises or ends when it drops."""
         raise NotImplementedError
 
     async def resync(self) -> None:
-        """Pide un book nuevo porque el local no coincide con el REST (D-76). Por
-        defecto cierra el WS: el supervisor reconecta y la sesión nueva empieza
-        con un snapshot. Sin WS abierto (respaldo REST), cada vuelta ya lo es."""
+        """Ask for a new book because the local one does not match REST (D-76). By default
+        closes the WS: the supervisor reconnects and the new session starts with a
+        snapshot. Without an open WS (REST fallback), each round already is one."""
         ws = self._ws
         if ws is not None:
-            log.warning("%s: book distinto del REST; se reconecta el WS", self.name)
+            log.warning("%s: book differs from REST; reconnecting the WS", self.name)
             await ws.close()
 
-    # -- utilidades para los venues --------------------------------------------
+    # -- helpers for the venues --------------------------------------------
 
     @asynccontextmanager
     async def ws_connect(self) -> AsyncIterator[Any]:
@@ -212,15 +210,15 @@ class StreamingVenue:
             ping_interval=self._ping_interval_s,
         ) as ws:
             self._ws = ws
-            await ws.ping()  # primera medida de latencia sin esperar al keepalive
+            await ws.ping()  # first latency measure without waiting for the keepalive
             try:
                 yield ws
             finally:
                 self._ws = None
 
     async def timed(self, request: Awaitable[T]) -> T:
-        """Espera una petición REST y anota su duración como latencia y, si trae
-        cabecera `Date`, el desfase de reloj con el venue."""
+        """Await a REST request and note its duration as latency and, with a `Date` header,
+        the clock skew with the venue."""
         start, sent = time.perf_counter(), self._clock()
         result = await request
         self._rest_latency.add((time.perf_counter() - start) * 1000)
@@ -239,10 +237,10 @@ class StreamingVenue:
             raise VenueError(f"{self.name}: respuesta inesperada ({exc!r})") from exc
 
     async def sending(self, request: Awaitable[Any], parse: Callable[[Any], T]) -> T:
-        """Espera un envío que crea algo en el venue y lee la respuesta con `parse`.
-        Si no se sabe si el venue lo aplicó, UncertainError (D-26): fallo de red
-        después de conectar, HTTP 5xx, 2xx que no es JSON o respuesta ilegible.
-        Sin conectar, 4xx o error explícito del venue, el error sale tal cual."""
+        """Await a send that creates something on the venue and read the reply with `parse`.
+        If unknown whether the venue applied it, UncertainError (D-26): network failure
+        after connecting, HTTP 5xx, a 2xx that is not JSON or an unreadable response.
+        Without connecting, a 4xx or an explicit venue error, the error passes as is."""
         try:
             payload = await request
         except NOT_SENT:
@@ -263,17 +261,17 @@ class StreamingVenue:
             raise UncertainError(f"{self.name}: respuesta al envío ilegible ({exc})") from exc
 
     async def recent_trades(self, limit: int) -> list[Trade]:
-        """Trades más recientes en orden cronológico. Los marca como vistos."""
+        """Most recent trades in chronological order. Marks them as seen."""
         trades = await self._fetch_trades(min(limit, self.max_trades))
         for trade_id, _ in trades:
             self._seen.add(trade_id)
         return sorted((t for _, t in trades), key=lambda t: t.ts)
 
     def fresh(self, trades: list[tuple[str, Trade]]) -> list[Trade]:
-        """Solo los no entregados aún, en orden cronológico."""
+        """Only those not delivered yet, in chronological order."""
         return sorted((t for i, t in trades if self._seen.add(i)), key=lambda t: t.ts)
 
-    # -- estado y latencia -----------------------------------------------------
+    # -- state and latency -----------------------------------------------------
 
     def _latency_ms(self, source: Source) -> float | None:
         if source == "ws":
@@ -289,8 +287,8 @@ class StreamingVenue:
     # -- supervisor --------------------------------------------------------------
 
     async def market_stream(self) -> AsyncIterator[MarketEvent]:
-        """Eventos de mercado de la fuente que esté viva, con `ConnState` al
-        cambiar de estado y como latido. Un bug (no un fallo de red) se relanza."""
+        """Market events from whichever source is alive, with `ConnState` on state changes
+        and as a heartbeat. A bug (not a network failure) is re-raised."""
         queue: asyncio.Queue[MarketEvent | _Crash] = asyncio.Queue()
         self._current = None
 
@@ -338,11 +336,11 @@ class StreamingVenue:
                         async for event in events:
                             if not got_book and isinstance(event, BookSnapshot):
                                 got_book, failures = True, 0
-                                log.info("%s: WS conectado", self.name)
+                                log.info("%s: WS connected", self.name)
                                 if poller is not None:
                                     await _stop(poller)
                                     poller = None
-                                    log.info("%s: fin del polling REST de respaldo", self.name)
+                                    log.info("%s: end of fallback REST polling", self.name)
                                 emit(self.state("ws", "up"))
                             emit(event)
                 except WS_ERRORS as exc:
@@ -350,13 +348,13 @@ class StreamingVenue:
                 failures += 1
                 delay = self._backoff.delay(failures)
                 log.warning(
-                    "%s: WS caído (%s); reintento en %.1f s", self.name, cause, delay
+                    "%s: WS down (%s); retrying in %.1f s", self.name, cause, delay
                 )  # fmt: skip
                 if poller is None:
                     emit(self.state("ws", "reconnecting"))
                     if failures >= self._fallback_after:
                         log.warning(
-                            "%s: polling REST de respaldo tras %d fallos del WS",
+                            "%s: fallback REST polling after %d WS failures",
                             self.name, failures,
                         )  # fmt: skip
                         poller = spawn(self._poll(emit))
@@ -366,7 +364,7 @@ class StreamingVenue:
                 await _stop(poller)
 
     async def _poll(self, emit: Callable[[MarketEvent], None]) -> None:
-        """Polling REST de respaldo hasta que lo cancele el supervisor."""
+        """Fallback REST polling until the supervisor cancels it."""
         status: ConnStatus | None = None
         n = 0
         while True:
@@ -379,10 +377,10 @@ class StreamingVenue:
             except (httpx.HTTPError, VenueError) as exc:
                 events, new_status = [], "down"
                 if status != "down":
-                    log.warning("%s: REST de respaldo caído: %s", self.name, describe(exc))
+                    log.warning("%s: fallback REST down: %s", self.name, describe(exc))
             if new_status != status:
                 if new_status == "up":
-                    log.info("%s: REST de respaldo con datos", self.name)
+                    log.info("%s: fallback REST has data", self.name)
                 status = new_status
                 emit(self.state("rest", status))
             for event in events:
@@ -391,7 +389,7 @@ class StreamingVenue:
             await asyncio.sleep(self._fallback_every_s)
 
     async def _heartbeat(self, emit: Callable[[MarketEvent], None]) -> None:
-        """Reemite el estado vivo con la latencia actual; reconectando, nada."""
+        """Re-emit the live state with the current latency; reconnecting, nothing."""
         while True:
             await asyncio.sleep(self._latency_every_s)
             current = self._current

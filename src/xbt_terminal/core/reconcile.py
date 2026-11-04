@@ -1,12 +1,12 @@
-"""Qué órdenes del venue pueden ser la de un envío incierto (RNF-12, D-26).
+"""Which venue orders may be the one of an uncertain send (RNF-12, D-26).
 
-Puro: recibe la petición, las órdenes recientes del venue, cuándo se envió y qué
-órdenes ya se conocían al enviar. Con `by_client_id` (el venue devuelve el
-client_id) solo vale la del mismo client_id. Sin él (Neoxa, PA-09), lado, precio
-y cantidad iguales y creada a menos de `window_ms` del envío, en los dos sentidos
-porque la hora es la del exchange. Una orden ya conocida nunca es candidata.
+Pure: takes the request, the venue's recent orders, when it was sent and which
+orders were already known then. With `by_client_id` (the venue returns the
+client_id) only the same client_id counts. Without it (Neoxa, PA-09), same side,
+price and quantity, created within `window_ms` of the send, in both directions
+because the time is the exchange's. An already known order is never a candidate.
 
-Spec: RNF-12 · design.md §6.2 · Tarea: T-25
+Spec: RNF-12 · design.md §6.2 · Task: T-25
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def candidates(
     by_client_id: bool,
     window_ms: int = WINDOW_MS,
 ) -> list[Order]:
-    """Candidatas sin repetir; si una orden sale dos veces, vale la última."""
+    """Candidates without repeats; if an order appears twice, the last one counts."""
     found: dict[str, Order] = {}
     for o in orders:
         if o.venue != req.venue or o.order_id in known:

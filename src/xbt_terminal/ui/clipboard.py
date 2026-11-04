@@ -1,14 +1,14 @@
-"""Copiar al portapapeles con la herramienta del sistema.
+"""Copy to the clipboard with the system tool.
 
-`App.copy_to_clipboard` de Textual solo manda OSC 52, y GNOME Terminal (VTE) lo
-ignora sin avisar: la dirección no llegaba al portapapeles (D-52). Aquí se
-prueban `wl-copy` (Wayland), `xclip` y `xsel` (X11), las que estén en el `PATH`
-y tengan sesión gráfica, en ese orden; la primera que sale bien gana.
+Textual's `App.copy_to_clipboard` only sends OSC 52, and GNOME Terminal (VTE) silently
+ignores it: the address did not reach the clipboard (D-52). Here `wl-copy` (Wayland),
+`xclip` and `xsel` (X11) are tried, those in the `PATH` with a graphical session, in
+that order; the first to succeed wins.
 
-Las tres se quedan en segundo plano sirviendo la selección: su salida va a
-`/dev/null`, porque con un pipe la espera duraría lo que viva ese proceso.
+All three stay in the background serving the selection: their output goes to
+`/dev/null`, because with a pipe the wait would last as long as that process.
 
-Spec: RF-28 · design.md §6.11 · Tareas: T-44
+Spec: RF-28 · design.md §6.11 · Tasks: T-44
 """
 
 from __future__ import annotations
@@ -55,8 +55,8 @@ async def system_copy(
     which: Callable[[str], str | None] = shutil.which,
     run: Run = _run,
 ) -> str | None:
-    """Copia `text` y devuelve el nombre de la herramienta que lo hizo, o `None`
-    si no hay ninguna o todas fallan."""
+    """Copy `text` and return the name of the tool that did, or `None` if there is none
+    or all fail."""
     for argv in _candidates(os.environ if env is None else env):
         path = which(argv[0])
         if path is None:

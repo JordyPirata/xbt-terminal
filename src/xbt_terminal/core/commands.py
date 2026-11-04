@@ -1,13 +1,13 @@
-"""Parser de la línea de comandos de la TUI.
+"""TUI command line parser.
 
-Solo traduce texto a comandos: no cuantiza al tick ni valida límites, eso es de
-RiskCheck (T-06), que conoce el mercado. Aquí se rechaza lo que no tiene sentido
-en ningún mercado: venue desconocido, números mal escritos, cantidades ≤ 0.
+Only turns text into commands: tick rounding and limits belong to RiskCheck (T-06),
+which knows the market. Rejected here is what makes no sense on any market: unknown
+venue, malformed numbers, quantities ≤ 0.
 
-Gramática (design.md §9):
+Grammar (design.md §9):
 
-    buy|sell <venue> <qty|N%> <price>      (N%: del saldo del venue, RF-17)
-    dbl <qty> <venue_compra> <precio_compra> <venue_venta> <precio_venta>
+    buy|sell <venue> <qty|N%> <price>      (N%: of the venue balance, RF-17)
+    dbl <qty> <buy_venue> <buy_price> <sell_venue> <sell_price>
     orders [venue]
     cancel <order_id> | cancel <venue> | cancel all
     tf <1m|5m|1h|4h|1d>
@@ -17,7 +17,7 @@ Gramática (design.md §9):
     help
 
 Spec: RF-03, RF-06, RF-07, RF-08, RF-15, RF-17, RF-25, RF-28, RF-29 · design.md §9
-Tareas: T-05, T-21, T-23, T-40, T-42, T-45
+Tasks: T-05, T-21, T-23, T-40, T-42, T-45
 """
 
 from __future__ import annotations
@@ -34,8 +34,8 @@ from .results import RANGES, Range
 VENUES: tuple[str, ...] = get_args(VenueId)
 TIMEFRAMES: tuple[str, ...] = get_args(Timeframe)
 
-# Solo notación decimal simple: "1e-2" o "NaN" son válidos para Decimal pero
-# no son algo que alguien quiera teclear en una orden.
+# Plain decimal notation only: "1e-2" or "NaN" are valid for Decimal, but nobody
+# means to type them in an order.
 _NUMBER = re.compile(r"^(\d+(\.\d*)?|\.\d+)$")
 
 USAGE = {
@@ -54,12 +54,12 @@ USAGE = {
 
 
 class CommandError(ValueError):
-    """Comando inválido; el mensaje es apto para mostrarlo en la barra de estado."""
+    """Invalid command; the message is fit for the status bar."""
 
 
 @dataclass(frozen=True, slots=True)
 class Percent:
-    """Cantidad como porcentaje del saldo del venue (RF-17); se resuelve al preparar."""
+    """Quantity as a percentage of the venue balance (RF-17); resolved when preparing."""
 
     value: Decimal
 
@@ -117,26 +117,26 @@ BOT_ACTIONS: tuple[str, ...] = get_args(BotAction)
 
 @dataclass(frozen=True, slots=True)
 class BotCommand:
-    """Armar, parar o consultar el bot de fase 2 (RF-18, RF-23)."""
+    """Arm, stop or query the phase 2 bot (RF-18, RF-23)."""
 
     action: BotAction
 
 
 @dataclass(frozen=True, slots=True)
 class ShowResults:
-    """Ventana de resultados de las dobles (RF-25)."""
+    """Results window of the doubles (RF-25)."""
 
     range: Range = "dia"
 
 
 @dataclass(frozen=True, slots=True)
 class ShowDeposits:
-    """Ventana de direcciones de depósito (RF-28)."""
+    """Deposit addresses window (RF-28)."""
 
 
 @dataclass(frozen=True, slots=True)
 class ShowRebalance:
-    """Ventana del plan de reequilibrio (RF-29)."""
+    """Rebalance plan window (RF-29)."""
 
 
 Command = (
@@ -226,7 +226,7 @@ def _parse_cancel(args: list[str]) -> Command:
         return CancelAll()
     if target.lower() in VENUES:
         return CancelVenue(_venue(target))
-    return CancelOrder(target)  # los ids de orden distinguen mayúsculas
+    return CancelOrder(target)  # order ids are case sensitive
 
 
 def _parse_timeframe(args: list[str]) -> Command:
@@ -254,7 +254,7 @@ def _parse_results(args: list[str]) -> Command:
 
 
 def _no_args(name: str, command: Command) -> Callable[[list[str]], Command]:
-    """Comando que no admite argumentos; `name` es la entrada de USAGE."""
+    """Command taking no arguments; `name` is the USAGE entry."""
 
     def parse_it(args: list[str]) -> Command:
         _arity(name, args, 0)
@@ -280,7 +280,7 @@ _PARSERS: dict[str, Callable[[list[str]], Command]] = {
 
 
 def parse(text: str) -> Command:
-    """Traduce una línea de la TUI a un comando; `CommandError` si no tiene sentido."""
+    """Turn a TUI line into a command; `CommandError` if it makes no sense."""
     tokens = text.split()
     if not tokens:
         raise CommandError("comando vacío")

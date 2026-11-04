@@ -1,29 +1,29 @@
-"""Adaptador de NonKYC (REST api.nonkyc.io + WS ws.nonkyc.io).
+"""NonKYC adapter (REST api.nonkyc.io + WS ws.nonkyc.io).
 
-REST en `https://api.nonkyc.io/api/v2`; WS público JSON-RPC 2.0 en
-`wss://ws.nonkyc.io` (D-10). Particularidades:
+REST at `https://api.nonkyc.io/api/v2`; public JSON-RPC 2.0 WS at
+`wss://ws.nonkyc.io` (D-10). Peculiarities:
 
-- Precios y cantidades como strings; `minQuote` y las velas como números JSON:
-  se lee todo con `parse_float=Decimal`.
-- El símbolo va como `BTCB2/BTC` en query y WS, y como `BTCB2_BTC` en rutas.
-- `sequence` del book: el del WS sirve para encadenar deltas; el del REST es
-  otro contador, así que los snapshots REST salen con `seq` None. Ante un hueco
-  el adaptador se vuelve a suscribir y llega un snapshot nuevo. Lo mismo con
-  `resync()`, cuando el book local no coincide con el REST (D-76).
-- Sin velas de 1m: se construyen con los últimos trades REST (máx. 500).
-- Fees no expuestas por API: vienen de la config (0.2 %/0.2 %, D-42).
-- Privado REST firmado: `X-API-SIGN` = HMAC-SHA256(secret, key + url + body +
-  nonce), con la url exacta (query incluida) y el body serializado una sola vez.
-  El nonce (ms) se fuerza a crecer aunque dos peticiones caigan en el mismo ms.
-- WS privado: `login` HS256 con firma HMAC-SHA256(secret, nonce) y
-  `subscribeReports`. El formato de los `report` no está documentado y no se ha
-  visto ninguno, así que solo despiertan un refresco REST de órdenes y trades
-  propios (D-14). Sin WS, el refresco va por polling cada `private_every_s`.
-- Un envío sin respuesta clara es incierto (D-26) y se reconcilia por
-  `userProvidedId` con `recent_orders`.
+- Prices and quantities as strings; `minQuote` and candles as JSON numbers: all read
+  with `parse_float=Decimal`.
+- The symbol is `BTCB2/BTC` in query and WS, and `BTCB2_BTC` in paths.
+- The book's `sequence`: the WS one chains deltas; the REST one is another counter,
+  so REST snapshots have `seq` None. On a gap the adapter resubscribes and a new
+  snapshot arrives. Likewise with `resync()`, when the local book does not match
+  REST (D-76).
+- No 1m candles: built from the latest REST trades (max 500).
+- Fees not exposed by API: they come from the config (0.2 %/0.2 %, D-42).
+- Signed private REST: `X-API-SIGN` = HMAC-SHA256(secret, key + url + body + nonce),
+  with the exact url (query included) and the body serialized only once. The nonce
+  (ms) is forced to grow even if two requests fall in the same ms.
+- Private WS: HS256 `login` signing HMAC-SHA256(secret, nonce) and `subscribeReports`.
+  The `report` format is undocumented and none has been seen, so they only wake a
+  REST refresh of own orders and trades (D-14). Without WS, the refresh polls every
+  `private_every_s`.
+- A send without a clear answer is uncertain (D-26) and reconciled by
+  `userProvidedId` with `recent_orders`.
 
 Spec: RF-01, RF-05, RF-08, RF-09, RNF-05, RNF-12, RNF-24 · design.md §4
-Tareas: T-09, T-17, T-25, T-78
+Tasks: T-09, T-17, T-25, T-78
 """
 
 from __future__ import annotations
@@ -71,14 +71,14 @@ log = logging.getLogger(__name__)
 
 REST_URL = "https://api.nonkyc.io/api/v2"
 WS_URL = "wss://ws.nonkyc.io"
-MAX_TRADES = 500  # tope real de /market/trades
-RESOLUTION: dict[Timeframe, int] = {"5m": 5, "1h": 60, "4h": 240, "1d": 1440}  # minutos; sin 1m
-REORDER_WAIT_S = 1.0  # cuánto se espera a un delta que llegó desordenado (D-10)
-PRIVATE_EVERY_S = 3.0  # polling privado sin WS (RF-09)
-PRIVATE_SAFETY_S = 15.0  # con el WS privado vivo, refresco de seguridad
+MAX_TRADES = 500  # real cap of /market/trades
+RESOLUTION: dict[Timeframe, int] = {"5m": 5, "1h": 60, "4h": 240, "1d": 1440}  # minutes; no 1m
+REORDER_WAIT_S = 1.0  # how long to wait for a delta that arrived out of order (D-10)
+PRIVATE_EVERY_S = 3.0  # private polling without WS (RF-09)
+PRIVATE_SAFETY_S = 15.0  # safety refresh with the private WS alive
 MY_TRADES = 50
-# ticker de depósito de cada activo del par: `BTC` a secas da 20010 "Must use
-# more specific ticker"; BTC-MAIN es la red principal de Bitcoin (D-50)
+# deposit ticker of each pair asset: plain `BTC` gives 20010 "Must use more
+# specific ticker"; BTC-MAIN is the Bitcoin main network (D-50)
 DEPOSIT_TICKERS = {"BTC": "BTC-MAIN", "BTCB2": "BTCB2"}
 
 
@@ -87,14 +87,14 @@ def _loads(text: str) -> Any:
 
 
 def _side(raw: Any) -> str:
-    # `account/orders` dice "BUY"/"SELL"; `getorder` y los trades, "buy" (D-22)
+    # `account/orders` says "BUY"/"SELL"; `getorder` and trades say "buy" (D-22)
     side = raw.lower() if isinstance(raw, str) else raw
     if side not in ("buy", "sell"):
         raise VenueError(f"NonKYC: lado de trade desconocido {raw!r}")
     return side
 
 
-# --- firma --------------------------------------------------------------------
+# --- signature -----------------------------------------------------------------
 
 
 def sign(key: str, secret: str, url: str, body: str, nonce: str) -> str:
@@ -109,7 +109,7 @@ def login_frame(key: str, secret: str, nonce: str, req_id: int) -> str:
     return json.dumps({"method": "login", "params": params, "id": req_id})
 
 
-# --- parseo puro --------------------------------------------------------------
+# --- pure parsing --------------------------------------------------------------
 
 
 def parse_market(
@@ -138,8 +138,8 @@ def parse_market(
 
 
 def parse_token_price(payload: dict[str, Any], symbol: str) -> Decimal:
-    """Mid de `getbysymbol` de otro mercado (`NKYC/BTC`), para valorar las fees
-    pagadas en ese token (D-65). Sin bid o ask, o de otro mercado, es error."""
+    """Mid of another market from `getbysymbol` (`NKYC/BTC`), to value fees paid in that
+    token (D-65). Without bid or ask, or from another market, an error."""
     if payload.get("symbol") != symbol:
         raise VenueError(f"NonKYC: se pidió {symbol} y el venue devolvió {payload.get('symbol')}")
     bid, ask = D(payload.get("bestBid") or 0), D(payload.get("bestAsk") or 0)
@@ -164,7 +164,7 @@ def parse_book(payload: dict[str, Any], ts: int, seq: int | None) -> BookSnapsho
 
 
 def parse_delta(params: dict[str, Any], ts: int) -> BookDelta:
-    """`quantity` llega como string, o como número 0 al borrar un nivel."""
+    """`quantity` comes as a string, or as number 0 when deleting a level."""
     return BookDelta(
         venue="nk",
         bids=tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in params.get("bids") or []),
@@ -195,9 +195,8 @@ def parse_ws_trade(raw: dict[str, Any]) -> tuple[str, Trade]:
 
 
 def ws_message(msg: Any, symbol: str, frame: str) -> dict[str, Any] | None:
-    """El mensaje del WS si es del par; None si es otra cosa (respuestas a
-    peticiones, otros símbolos). Un error del venue o algo que no es un objeto
-    cortan la sesión con `VenueError`."""
+    """The WS message if it is the pair's; None otherwise (replies to requests, other
+    symbols). A venue error or a non-object ends the session with `VenueError`."""
     if not isinstance(msg, dict):
         raise VenueError(f"NonKYC WS: mensaje inesperado {str(frame)[:80]!r}")
     if msg.get("error"):
@@ -225,9 +224,9 @@ def parse_candles(payload: dict[str, Any]) -> list[Candle]:
 
 
 def parse_balances(payload: list[dict[str, Any]], assets: Iterable[str]) -> dict[str, Balance]:
-    """Solo los activos pedidos, los del par y el token de fee si lo hay (RNF-10,
-    D-63). `pending` son depósitos sin confirmar: ni se pueden usar ni están en
-    órdenes, así que no cuentan."""
+    """Only the assets asked for, the pair's and the fee token if any (RNF-10, D-63).
+    `pending` are unconfirmed deposits: neither usable nor in orders, so they do not
+    count."""
     raw = {b.get("asset"): b for b in payload}
     out: dict[str, Balance] = {}
     for asset in assets:
@@ -237,8 +236,8 @@ def parse_balances(payload: list[dict[str, Any]], assets: Iterable[str]) -> dict
 
 
 def parse_deposit(payload: dict[str, Any], asset: str, ticker: str) -> DepositAddress:
-    """Respuesta de `getdepositaddress/{ticker}`; otro ticker o sin dirección es
-    error: mejor ninguna dirección que una equivocada (RF-28)."""
+    """Response of `getdepositaddress/{ticker}`; another ticker or no address is an
+    error: better no address than a wrong one (RF-28)."""
     if payload.get("ticker") != ticker:
         raise VenueError(f"NonKYC: pedí {ticker} y la dirección es de {payload.get('ticker')}")
     address = str(payload.get("address") or "").strip()
@@ -254,10 +253,9 @@ def parse_deposit(payload: dict[str, Any], asset: str, ticker: str) -> DepositAd
 
 
 def parse_withdrawal_fee(payload: dict[str, Any], asset: str, ticker: str) -> WithdrawalFee:
-    """Respuesta pública de `asset/getbyticker/{ticker}` (RF-29, D-53). BTC es
-    el hijo `BTC-MAIN`: el padre `BTC` da otra comisión que no es la de la red
-    principal. Supuesto (D-53): la comisión se descuenta de lo pedido; sin
-    confirmar en su web."""
+    """Public response of `asset/getbyticker/{ticker}` (RF-29, D-53). BTC is the child
+    `BTC-MAIN`: the parent `BTC` gives another fee, not the main network's. Assumption
+    (D-53): the fee is deducted from the amount; unconfirmed on its web."""
     if payload.get("ticker") != ticker:
         raise VenueError(f"NonKYC: pedí {ticker} y la comisión es de {payload.get('ticker')}")
     fee, minimum = payload.get("withdrawFee"), payload.get("minimumWithdraw")
@@ -284,7 +282,7 @@ def _status(raw: Any, executed: Decimal) -> OrderStatus:
 
 
 def parse_order(raw: dict[str, Any], now: int) -> Order:
-    """Vale para `Order` (createorder, getorder) y `Order2` (account/orders)."""
+    """Works for `Order` (createorder, getorder) and `Order2` (account/orders)."""
     executed = D(raw["executedQuantity"])
     ts = raw.get("timestamp") or raw.get("createdAt")
     return Order(
@@ -301,16 +299,16 @@ def parse_order(raw: dict[str, Any], now: int) -> Order:
 
 
 def other_market(raw: dict[str, Any], symbol: str) -> bool:
-    """La fila dice ser de otro mercado. `/account/orders` lo da en `symbol` y
-    `/account/trades` en `market.symbol`; sin ninguno, cuenta como del par."""
+    """The row claims to be from another market. `/account/orders` gives it in `symbol`
+    and `/account/trades` in `market.symbol`; with neither, it counts as the pair's."""
     market = raw.get("market")
     found = market.get("symbol") if isinstance(market, dict) else raw.get("symbol")
     return found is not None and found != symbol
 
 
 def parse_fill(raw: dict[str, Any], quote: str, names: Mapping[str, str] | None = None) -> Fill:
-    """La fee va en el activo de cotización, salvo si se pagó en otro: entonces
-    `alternateFeeAsset` es su `assetid`, que `names` traduce al ticker (D-63)."""
+    """The fee is in the quote asset, unless paid in another: then `alternateFeeAsset`
+    is its `assetid`, which `names` turns into the ticker (D-63)."""
     alt = raw.get("alternateFeeAsset")
     if alt and names:
         alt = names.get(alt, alt)
@@ -328,8 +326,8 @@ def parse_fill(raw: dict[str, Any], quote: str, names: Mapping[str, str] | None 
 
 
 def candles_from_trades(trades: list[Trade], limit: int, truncated: bool) -> list[Candle]:
-    """Velas de 1m con los trades dados. Si la lista está cortada por el tope de
-    la API, la vela más vieja puede estar incompleta y se descarta."""
+    """1m candles from the given trades. If the list is cut by the API cap, the oldest
+    candle may be incomplete and is dropped."""
     builder = CandleBuilder("1m", max_candles=limit + 1)
     for t in sorted(trades, key=lambda t: t.ts):
         builder.on_trade(t)
@@ -339,7 +337,7 @@ def candles_from_trades(trades: list[Trade], limit: int, truncated: bool) -> lis
     return candles[-limit:]
 
 
-# --- adaptador ----------------------------------------------------------------
+# --- adapter -------------------------------------------------------------------
 
 
 class NonKYCVenue(StreamingVenue):
@@ -365,19 +363,19 @@ class NonKYCVenue(StreamingVenue):
         fee_token: str | None = None,
         **stream_opts: Any,
     ) -> None:
-        """`stream_opts`: opciones del supervisor de `StreamingVenue` (backoff, latido...).
-        `fee_token`: su saldo sale con los del par, solo para leerlo (RF-24, D-63)."""
+        """`stream_opts`: `StreamingVenue` supervisor options (backoff, heartbeat...).
+        `fee_token`: its balance comes with the pair's, just to read it (RF-24, D-63)."""
         super().__init__(ws_url=ws_url, book_depth=book_depth, **stream_opts)
         self.symbol = symbol
         self._assets = tuple(symbol.split("/"))
         self._balance_assets = (*self._assets, fee_token) if fee_token else self._assets
-        self._asset_names: dict[str, str] = {}  # assetid → ticker, de `/balances`
+        self._asset_names: dict[str, str] = {}  # assetid → ticker, from `/balances`
         self._limiter = limiter
         self._maker_fee = maker_fee
         self._taker_fee = taker_fee
         self._http = http or httpx.AsyncClient(timeout=10.0)
         self._reorder_wait_s = reorder_wait_s
-        self._resync = False  # `resync()` pidió el book: la sesión espera el snapshot
+        self._resync = False  # `resync()` asked for the book: the session awaits the snapshot
         self._credentials = credentials
         self._private_every_s = private_every_s
         self._private_safety_s = private_safety_s
@@ -413,7 +411,7 @@ class NonKYCVenue(StreamingVenue):
         params: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
     ) -> Any:
-        """Petición firmada: la url y el body que se firman son los que viajan."""
+        """Signed request: the url and body signed are the ones that travel."""
         key, secret = self._keys()
         url = REST_URL + path + (f"?{urlencode(params)}" if params else "")
         text = json.dumps(body, separators=(",", ":")) if body is not None else ""
@@ -454,8 +452,8 @@ class NonKYCVenue(StreamingVenue):
         return self.parsing(parse_market, payload, self.symbol, self._maker_fee, self._taker_fee)
 
     async def token_price(self, asset: str) -> Decimal:
-        """Precio en el activo de cotización del par (BTC) del token de fee, por
-        la API pública (RF-25, D-65)."""
+        """Price of the fee token in the pair's quote asset (BTC), through the public API
+        (RF-25, D-65)."""
         symbol = f"{asset}/{self._assets[1]}"
         payload = await self._get(f"/market/getbysymbol/{symbol.replace('/', '_')}")
         return self.parsing(parse_token_price, payload, symbol)
@@ -481,7 +479,7 @@ class NonKYCVenue(StreamingVenue):
         }
         return self.parsing(parse_candles, await self._get("/market/candles", params))
 
-    # -- privado ---------------------------------------------------------------
+    # -- private ---------------------------------------------------------------
 
     async def balances(self) -> dict[str, Balance]:
         payload = await self._signed("GET", "/balances", kind="private")
@@ -509,10 +507,10 @@ class NonKYCVenue(StreamingVenue):
         return await self.fetch_active()
 
     async def fetch_active(self) -> list[Order]:
-        """Órdenes abiertas del par. `status=active` también devuelve órdenes ya
-        canceladas o llenas (D-59): se filtran por su estado. Las que desaparecen
-        así las resuelve el seguimiento con `fetch_final`, como cualquier otra.
-        El venue ignora `symbol` y trae todos los mercados (D-63)."""
+        """Open orders of the pair. `status=active` also returns already cancelled or
+        filled orders (D-59): filtered by their status. Those disappearing that way are
+        resolved by the tracker with `fetch_final`, like any other. The venue ignores
+        `symbol` and brings every market (D-63)."""
         params = {"symbol": self.symbol, "status": "active", "limit": 500}
         payload = await self._signed("GET", "/account/orders", kind="private", params=params)
         now = self._clock()
@@ -523,8 +521,8 @@ class NonKYCVenue(StreamingVenue):
         return [o for o in orders if o.status in ("open", "partial")]
 
     async def fetch_fills(self) -> list[Fill]:
-        """Trades propios del par; como en `fetch_active`, el venue trae todos los
-        mercados aunque se le pase `symbol` (D-63)."""
+        """Own trades of the pair; as in `fetch_active`, the venue brings every market even
+        when given `symbol` (D-63)."""
         params = {"symbol": self.symbol, "limit": MY_TRADES}
         payload = await self._signed("GET", "/account/trades", kind="private", params=params)
         quote, names = self._assets[1], self._asset_names
@@ -540,8 +538,8 @@ class NonKYCVenue(StreamingVenue):
         return self.parsing(parse_order, payload, self._clock())
 
     async def place_limit(self, req: OrderRequest) -> Order:
-        """`strictValidate`: si precio o cantidad no encajan en la rejilla, el venue
-        rechaza en vez de truncar (RiskCheck ya lo ha comprobado)."""
+        """`strictValidate`: if price or quantity do not fit the grid, the venue rejects
+        instead of truncating (RiskCheck already checked)."""
         body = {
             "symbol": self.symbol,
             "side": req.side,
@@ -559,8 +557,8 @@ class NonKYCVenue(StreamingVenue):
         return order
 
     async def recent_orders(self, since: int) -> list[Order]:
-        """Activas y, de los trades propios desde `since`, sus órdenes si no están
-        activas: una orden llena al instante nunca sale como activa (D-26)."""
+        """Active ones and, of own trades since `since`, their orders if not active: an
+        order filled instantly never shows as active (D-26)."""
         active = await self.fetch_active()
         known = {o.order_id for o in active}
         recent = {f.order_id for f in await self.fetch_fills() if f.ts >= since and f.order_id}
@@ -571,18 +569,18 @@ class NonKYCVenue(StreamingVenue):
         await self._signed("POST", "/cancelorder", kind="cancel", body={"id": order_id})
 
     async def cancel_all(self) -> None:
-        """`/cancelallorders` con `side: "all"` (OpenAPI 1.3.0, `docs/api/nonkyc`).
-        Sin `side` responde HTTP 200 con `400 Bad Request` (D-58). Sin
-        `success: true` es error."""
+        """`/cancelallorders` with `side: "all"` (OpenAPI 1.3.0, `docs/api/nonkyc`). Without
+        `side` it answers HTTP 200 with `400 Bad Request` (D-58). Without `success: true`
+        it is an error."""
         body = {"symbol": self.symbol, "side": "all"}
         payload = await self._signed("POST", "/cancelallorders", kind="cancel", body=body)
         if not (isinstance(payload, dict) and payload.get("success") is True):
             raise VenueError(f"NonKYC /cancelallorders sin success: {payload}")
 
     async def private_stream(self) -> AsyncIterator[PrivateEvent]:
-        """Polling de órdenes y trades propios; el WS privado lo despierta con cada
-        reporte y, mientras vive, el polling baja a `private_safety_s`."""
-        self._keys()  # sin keys, ReadOnlyError antes de arrancar nada
+        """Polling of own orders and trades; the private WS wakes it with each report and,
+        while alive, polling drops to `private_safety_s`."""
+        self._keys()  # without keys, ReadOnlyError before starting anything
         src = PrivateSource(self.fetch_active, self.fetch_fills, self.fetch_final)
         wake = asyncio.Event()
 
@@ -608,9 +606,9 @@ class NonKYCVenue(StreamingVenue):
                 yield event
 
     async def _private_ws(self, wake: asyncio.Event) -> None:
-        """Mantiene el WS privado: login, `subscribeReports` y un refresco por
-        cada `activeOrders` o `report`. Reconecta con backoff; el contador de
-        fallos vuelve a 0 cuando una sesión llega a recibir reportes."""
+        """Keep the private WS: login, `subscribeReports` and a refresh for each
+        `activeOrders` or `report`. Reconnects with backoff; the failure count returns to
+        0 once a session gets to receive reports."""
         failures = 0
         while True:
             try:
@@ -628,10 +626,10 @@ class NonKYCVenue(StreamingVenue):
     def _set_private_ws(self, up: bool, wake: asyncio.Event) -> None:
         if up != self._private_ws_up:
             self._private_ws_up = up
-            wake.set()  # el refresco reemite el estado con la nueva fuente
+            wake.set()  # the refresh re-emits the state with the new source
 
     async def _private_session(self) -> AsyncIterator[None]:
-        """Una sesión del WS privado: entrega un aviso por reporte; lanza al caer."""
+        """One private WS session: gives a wake per report; raises when it drops."""
         key, secret = self._keys()
         async with websockets.connect(
             self._ws_url, open_timeout=10, close_timeout=WS_CLOSE_TIMEOUT_S, ping_interval=20
@@ -656,12 +654,12 @@ class NonKYCVenue(StreamingVenue):
     # -- WS --------------------------------------------------------------------
 
     async def resync(self) -> None:
-        """Vuelve a pedir el book en el mismo WS, como ante un hueco (D-76). Lo que
-        llegue hasta el snapshot se descarta: puede encadenar con el book malo."""
+        """Ask for the book again on the same WS, as on a gap (D-76). What arrives until the
+        snapshot is dropped: it could chain onto the bad book."""
         ws = self._ws
         if ws is None:
             return
-        log.warning("%s: book distinto del REST; se vuelve a pedir", self.name)
+        log.warning("%s: book differs from REST; asking for it again", self.name)
         self._resync = True
         await ws.send(self._request("subscribeOrderbook", 4))
 
@@ -669,10 +667,10 @@ class NonKYCVenue(StreamingVenue):
         return json.dumps({"method": method, "params": {"symbol": self.symbol}, "id": req_id})
 
     async def _ws_events(self) -> AsyncIterator[MarketEvent]:
-        """Sesión WS. Los deltas del book llegan a veces desordenados (91663 antes
-        que 91662): uno adelantado espera hasta `reorder_wait_s` al que falta. Si
-        no llega, es un hueco real: se entregan los pendientes (L2Book queda
-        inválido) y se pide un snapshot nuevo volviendo a suscribirse."""
+        """WS session. Book deltas sometimes arrive out of order (91663 before 91662): an
+        early one waits up to `reorder_wait_s` for the missing one. If it does not arrive,
+        it is a real gap: the pending ones are delivered (L2Book goes invalid) and a new
+        snapshot is requested by resubscribing."""
         async with self.ws_connect() as ws:
             await ws.send(self._request("subscribeOrderbook", 1))
             await ws.send(self._request("subscribeTrades", 2))
@@ -696,7 +694,7 @@ class NonKYCVenue(StreamingVenue):
                     yield event
 
     def _ws_message_events(self, book: _BookOrder, msg: dict[str, Any]) -> Sequence[MarketEvent]:
-        """Lo que sale de un mensaje del par: book en orden o trades nuevos."""
+        """What comes out of a pair message: book in order or new trades."""
         method, params = msg.get("method"), msg["params"]
         if method == "snapshotOrderbook":
             snap = self.parsing(parse_book, params, int(msg["timestamp"]), int(params["sequence"]))
@@ -713,39 +711,38 @@ class NonKYCVenue(StreamingVenue):
 
 
 class _BookOrder:
-    """Orden de los deltas del book en una sesión WS: entrega cada uno cuando
-    encadena con el anterior y guarda los adelantados hasta que llega el que falta."""
+    """Order of book deltas in a WS session: delivers each one when it chains onto the
+    previous and keeps early ones until the missing one arrives."""
 
     def __init__(self) -> None:
-        self.seq: int | None = None  # último delta entregado; None = esperando snapshot
+        self.seq: int | None = None  # last delta delivered; None = awaiting a snapshot
         self.pending: dict[int, BookDelta] = {}
 
     @property
     def waiting(self) -> bool:
-        """Hay deltas adelantados esperando al que falta."""
+        """There are early deltas waiting for the missing one."""
         return bool(self.pending)
 
     def reset(self) -> None:
-        """A esperar un snapshot nuevo; lo pendiente se descarta."""
+        """Await a new snapshot; what is pending is dropped."""
         self.seq = None
         self.pending.clear()
 
     def gap(self) -> list[BookDelta]:
-        """Hueco real: los pendientes, en orden, y a esperar un snapshot."""
+        """Real gap: the pending ones, in order, then await a snapshot."""
         out = sorted(self.pending.values(), key=lambda d: d.seq or 0)
         self.reset()
         return out
 
     def snapshot(self, snap: BookSnapshot) -> list[MarketEvent]:
-        """El snapshot y los pendientes que encadenan con él."""
+        """The snapshot and the pending ones that chain onto it."""
         self.seq = snap.seq
         after = snap.seq
         self.pending = {k: d for k, d in self.pending.items() if after is not None and k > after}
         return [snap, *self._drain()]
 
     def delta(self, delta: BookDelta) -> list[MarketEvent]:
-        """Los deltas que ya se pueden entregar; nada si es viejo o llega antes del
-        snapshot."""
+        """Deltas ready for delivery; nothing if old or ahead of the snapshot."""
         if self.seq is None or delta.seq is None or delta.seq <= self.seq:
             return []
         self.pending[delta.seq] = delta

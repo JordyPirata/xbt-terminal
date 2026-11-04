@@ -1,42 +1,39 @@
-"""Bot de arbitraje taker: límites, decisión pura y máquina de estados (fase 2).
+"""Taker arbitrage bot: limits, pure decision and state machine (phase 2).
 
-`decide` mira las dos rutas ("comprar en A, vender en B") con lo que le da el
-servicio: el book de cada venue, los saldos disponibles y si el venue está
-bloqueado (book viejo, desfase de reloj, fallo, envío incierto...). Para cada
-ruta (design.md §6.9):
+`decide` looks at both routes ("buy on A, sell on B") with what the service gives
+it: each venue's book, available balances and whether the venue is blocked (stale
+book, clock skew, fault, uncertain send...). For each route (design.md §6.9):
 
-    buy_price  = tick hacia arriba (ref_A × (1 + slippage))
-    sell_price = tick hacia abajo  (ref_B × (1 - slippage))
-    neta/u     = sell_price × (1 - taker_B) - buy_price × (1 + taker_A)
+    buy_price  = tick up (ref_A × (1 + slippage))
+    sell_price = tick down (ref_B × (1 - slippage))
+    net/unit   = sell_price × (1 - taker_B) - buy_price × (1 + taker_A)
 
-La referencia es el mejor ask/bid o, con `max_walk_pct` del venue (D-60),
-cualquier nivel a no más de ese % del mejor: así una pierna puede tomar varios
-escalones del pool AMM de NonKYC hasta llegar al mínimo. Gana el par de
-referencias de mayor neta en BTC; no hace falta probarlos todos (D-70,
-`_Pairs.search`): la profundidad sale de sumas acumuladas y los pares se podan
-por la monotonía de la neta, con el mismo resultado que probándolos todos.
+The reference is the best ask/bid or, with the venue's `max_walk_pct` (D-60), any
+level within that % of the best: a leg can take several steps of NonKYC's AMM pool
+to reach the minimum. The reference pair with the highest net in BTC wins; not all
+need trying (D-70, `_Pairs.search`): depth comes from cumulative sums and pairs are
+pruned by the monotonicity of the net, with the same result as trying them all.
 
-La neta es pesimista: con los precios límite, no con el mejor precio, y con fee
-taker en las dos. La fee de la neta es `VenueView.net_fee` si el servicio la
-pone: la de un venue que paga en token y tiene saldo de él (`token_fee`, D-63).
-La cantidad es el mínimo de la profundidad del book hasta esos precios en los
-dos lados, el BTC de A (con su fee completa), el BTCB2 de B, `max_qty` y lo que
-queda del tope diario, al lote de los dos venues hacia abajo. El tope de
-RF-10 lo aplica después `OrderService.prepare_double`.
+The net is pessimistic: at limit prices, not the best price, and with taker fee on
+both legs. Its fee is `VenueView.net_fee` when the service sets it: that of a venue
+paying in a token it holds (`token_fee`, D-63). The quantity is the minimum of the
+book depth up to those prices on both sides, A's BTC (with its full fee), B's
+BTCB2, `max_qty` and what is left of the daily cap, rounded down to both venues'
+lots. `OrderService.prepare_double` applies the RF-10 cap afterwards.
 
-Con `max_move_pct` (D-71), no dispara si el mid de algún venue se movió más de
-ese % en la ventana de `move_window_ms`: tras un barrido, otros bots se llevan
-antes el precio y la pierna queda colgada.
+With `max_move_pct` (D-71), it does not fire if a venue's mid moved more than that
+% within `move_window_ms`: after a sweep, other bots take the price first and the
+leg hangs.
 
-Con `[inventory]` (RF-26, D-46), una ruta tampoco dispara si la doble dejaría
-algún venue fuera de la banda de % de BTCB2 y más lejos del objetivo que antes
-(`inventory_veto`). El bot nunca compra para llegar al objetivo: solo veta.
+With `[inventory]` (RF-26, D-46), a route does not fire either if the double would
+leave a venue outside the BTCB2 % band and further from the target than before
+(`inventory_veto`). The bot never buys to reach the target: it only vetoes.
 
-Estados: `off → armed → firing → cooldown → armed`; cualquier problema de una
-disparada → `halted`, del que solo se sale a mano (`arm`). Sin reloj propio:
-todo recibe `now` en ms.
+States: `off → armed → firing → cooldown → armed`; any problem while firing →
+`halted`, left only by hand (`arm`). No clock of its own: everything takes `now`
+in ms.
 
-Spec: RF-18 a RF-22, RF-24, RF-26, RNF-22, RNF-23 · design.md §6.9 · D-70, D-71 · Tareas:
+Spec: RF-18 to RF-22, RF-24, RF-26, RNF-22, RNF-23 · design.md §6.9 · D-70, D-71 · Tasks:
 T-34, T-35, T-41, T-49, T-57, T-72, T-73
 """
 
@@ -52,7 +49,7 @@ from typing import Literal
 from .inventory import InventoryTarget, base_pct
 from .models import BASE_LABEL, ZERO, Level, MarketSpec, VenueId
 
-MIN_COOLDOWN_S = 2  # Neoxa: 10 órdenes cada 10 s (RNF-03); un disparo usa 1 + 1 cancelación
+MIN_COOLDOWN_S = 2  # Neoxa: 10 orders every 10 s (RNF-03); a shot uses 1 + 1 cancel
 MIN_FILL_TIMEOUT_MS = 100
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -64,29 +61,29 @@ BotStatus = Literal["off", "armed", "firing", "cooldown", "halted"]
 
 @dataclass(frozen=True, slots=True)
 class BotLimits:
-    """Sección `[bot]` de config.toml, sin `enabled`."""
+    """`[bot]` section of config.toml, without `enabled`."""
 
-    min_net_pct: Decimal  # neta pesimista mínima, % sobre el precio de compra (RF-19)
-    max_slippage_pct: Decimal  # margen de las límites agresivas (RF-20)
-    max_qty: Decimal  # BTCB2 por disparo (RF-20)
-    fill_timeout_ms: int  # a partir de aquí se cancela el resto (RF-20)
-    cooldown_s: int  # entre disparos (RF-22)
+    min_net_pct: Decimal  # minimum pessimistic net, % of the buy price (RF-19)
+    max_slippage_pct: Decimal  # margin of the aggressive limits (RF-20)
+    max_qty: Decimal  # BTCB2 per shot (RF-20)
+    fill_timeout_ms: int  # the rest is cancelled after this (RF-20)
+    cooldown_s: int  # between shots (RF-22)
     max_trades_per_hour: int
-    max_daily_btc: Decimal  # nocional de compra enviado por día UTC
+    max_daily_btc: Decimal  # buy notional sent per UTC day
     max_consecutive_failures: int
-    # cuánto se aleja del mejor precio el nivel de referencia, por venue (RF-20, D-60)
+    # how far from the best price the reference level may be, per venue (RF-20, D-60)
     max_walk_pct: Mapping[VenueId, Decimal] = field(default_factory=dict)
-    # movimiento máximo del mid de un venue en la ventana; None = sin filtro (RF-19, D-71)
+    # maximum move of a venue's mid in the window; None = no filter (RF-19, D-71)
     max_move_pct: Decimal | None = None
     move_window_ms: int = 2000
-    # venue de la primera pierna: la otra sale solo por lo que llene; None = en
-    # paralelo (RF-20, D-75)
+    # venue of the first leg: the other goes out only for what it filled; None =
+    # in parallel (RF-20, D-75)
     lead_venue: VenueId | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class FeeToken:
-    """Token con que un venue cobra la fee con descuento (`fee_token`, RF-24, D-63)."""
+    """Token a venue charges discounted fees in (`fee_token`, RF-24, D-63)."""
 
     asset: str
     min_available: Decimal  # `fee_token_min`
@@ -94,8 +91,8 @@ class FeeToken:
 
 
 def token_fee(taker: Decimal, token: FeeToken, available: Decimal | None) -> Decimal | None:
-    """Fee taker con descuento si hay al menos `min_available` del token; si no,
-    o sin saldo leído, None: la neta va con la fee completa."""
+    """Discounted taker fee with at least `min_available` of the token; otherwise,
+    or with no balance read, None: the net uses the full fee."""
     if available is None or available < token.min_available:
         return None
     return taker * (1 - token.discount_pct / HUNDRED)
@@ -104,32 +101,32 @@ def token_fee(taker: Decimal, token: FeeToken, available: Decimal | None) -> Dec
 @dataclass(frozen=True, slots=True)
 class BotState:
     status: BotStatus = "off"
-    reason: str | None = None  # por qué está halted
-    fired_at: tuple[int, ...] = ()  # disparos de la última hora
-    day: int | None = None  # día UTC (ms // DAY_MS) al que corresponde day_btc
-    day_btc: Decimal = ZERO  # nocional de compra enviado ese día
-    failures: int = 0  # disparos rechazados seguidos
+    reason: str | None = None  # why it is halted
+    fired_at: tuple[int, ...] = ()  # shots of the last hour
+    day: int | None = None  # UTC day (ms // DAY_MS) that day_btc belongs to
+    day_btc: Decimal = ZERO  # buy notional sent that day
+    failures: int = 0  # consecutive rejected shots
     last_fire_at: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class VenueView:
-    """Lo que el bot ve de un venue al decidir."""
+    """What the bot sees of a venue when deciding."""
 
     spec: MarketSpec
-    bids: tuple[Level, ...]  # de mayor a menor
-    asks: tuple[Level, ...]  # de menor a mayor
+    bids: tuple[Level, ...]  # high to low
+    asks: tuple[Level, ...]  # low to high
     quote_available: Decimal  # BTC
     base_available: Decimal  # BTCB2
-    blocked: str | None = None  # motivo para no operar en este venue ahora
-    # ratio de inventario (RF-26): totales (disponible + en órdenes) y mid del book
+    blocked: str | None = None  # reason not to trade this venue now
+    # inventory ratio (RF-26): totals (available + in orders) and book mid
     quote_total: Decimal = ZERO
     base_total: Decimal = ZERO
     mid: Decimal | None = None
-    # fee taker para la neta (RF-19, D-63); None = la del spec. Cantidad e
-    # inventario siguen con la del spec
+    # taker fee for the net (RF-19, D-63); None = the spec's. Quantity and inventory
+    # keep the spec's
     net_fee: Decimal | None = None
-    # cuánto se movió el mid en la ventana de `move_window_ms`; None = sin medir (D-71)
+    # how much the mid moved in `move_window_ms`; None = not measured (D-71)
     move_pct: Decimal | None = None
 
 
@@ -140,8 +137,8 @@ class Fire:
     buy_price: Decimal
     sell_price: Decimal
     qty: Decimal
-    net: Decimal  # BTC, pesimista
-    net_pct: Decimal  # sobre el nocional de compra
+    net: Decimal  # BTC, pessimistic
+    net_pct: Decimal  # of the buy notional
 
     @property
     def notional(self) -> Decimal:
@@ -150,17 +147,16 @@ class Fire:
 
 @dataclass(frozen=True, slots=True)
 class Skip:
-    reason: str  # código: below_threshold, no_depth, no_balance, cooldown, ...
+    reason: str  # code: below_threshold, no_depth, no_balance, cooldown, ...
     detail: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class _Miss:
     skip: Skip
-    net_pct: Decimal | None  # para elegir qué motivo se cuenta
+    net_pct: Decimal | None  # to choose which reason to report
 
 
-# -- decisión -------------------------------------------------------------------
 
 
 def _spent(state: BotState, now: int) -> Decimal:
@@ -172,8 +168,7 @@ def _recent(state: BotState, now: int) -> tuple[int, ...]:
 
 
 def price_move_pct(mids: Sequence[Decimal]) -> Decimal | None:
-    """Movimiento de una ventana de mids: (máx - mín) / mín × 100; None sin
-    mids (D-71)."""
+    """Move over a window of mids: (max - min) / min × 100; None without mids (D-71)."""
     if not mids:
         return None
     low, high = min(mids), max(mids)
@@ -181,8 +176,8 @@ def price_move_pct(mids: Sequence[Decimal]) -> Decimal | None:
 
 
 def _volatile(views: Mapping[VenueId, VenueView], limits: BotLimits) -> Skip | None:
-    """El primer venue, por orden, cuyo mid se movió más de `max_move_pct` en la
-    ventana: tras un salto, otros bots llegan antes (D-71)."""
+    """The first venue, in order, whose mid moved more than `max_move_pct` in the
+    window: after a jump, other bots get there first (D-71)."""
     cap = limits.max_move_pct
     if cap is None:
         return None
@@ -254,42 +249,42 @@ def _route(
     refs_a = [lv.price for lv in a.asks if lv.price <= a.asks[0].price * (1 + walk_a)]
     refs_b = [lv.price for lv in b.bids if lv.price >= b.bids[0].price * (1 - walk_b)]
     asks, bids = _Side(a.asks, up=True), _Side(b.bids, up=False)
-    # el primero, a los mejores precios, solo: sin cruce no se prepara nada más
+    # the first one, at the best prices, alone: without a cross nothing else is prepared
     first = _Pairs(a, b, buy, sell, limits, budget, refs_a[:1], refs_b[:1], asks, bids).pair(0, 0)
     if isinstance(first, _Miss) and first.skip.reason == "below_threshold":
-        return first  # los niveles más hondos solo dan peor neta
+        return first  # deeper levels only give a worse net
     r = _Pairs(a, b, buy, sell, limits, budget, refs_a, refs_b, asks, bids)
     if r.ordered:
         return r.search(first)
-    # book sin ordenar: sin monotonía no se poda, se prueban todos los pares
+    # unsorted book: no monotonicity to prune with, so every pair is tried
     results = [first, *(r.pair(i, j) for i in range(r.n) for j in range(r.m) if i or j)]
     fires = [x for x in results if isinstance(x, Fire)]
     if fires:
         return max(fires, key=lambda f: f.net)
-    # con profundidad que no rinde, el motivo es el umbral, no el mínimo del venue
+    # with depth that does not pay, the reason is the threshold, not the venue minimum
     short = [x for x in results if isinstance(x, _Miss) and x.skip.reason == "below_threshold"]
     return max(short, key=lambda m: m.net_pct or ZERO) if short else first
 
 
 class _Side:
-    """Un lado del book con su profundidad acumulada (D-70): la cantidad hasta
-    un precio sale de `bisect` en O(log L), no de sumar el lado entero."""
+    """One side of the book with its cumulative depth (D-70): the quantity up to a
+    price comes from `bisect` in O(log L), not from summing the whole side."""
 
     __slots__ = ("_cum", "_keys", "_levels", "_up", "ordered")
 
     def __init__(self, levels: tuple[Level, ...], up: bool) -> None:
-        self._levels, self._up = levels, up  # up: asks, de menor a mayor
+        self._levels, self._up = levels, up  # up: asks, low to high
         prices = [lv.price for lv in levels]
         self.ordered = all((p <= q) if up else (p >= q) for p, q in pairwise(prices))
         self._keys = prices if up else [-p for p in prices]
         cum, acc = [ZERO], ZERO
-        for lv in levels:  # mismo orden de suma que antes: mismo Decimal
+        for lv in levels:  # same summing order as before: same Decimal
             acc += lv.qty
             cum.append(acc)
         self._cum = cum
 
     def depth(self, price: Decimal) -> Decimal:
-        """Lo que hay hasta `price`: asks a ese precio o menos, bids a ese o más."""
+        """What there is up to `price`: asks at or below it, bids at or above it."""
         if not self.ordered:
             ok = (lambda p: p <= price) if self._up else (lambda p: p >= price)
             return sum((lv.qty for lv in self._levels if ok(lv.price)), ZERO)
@@ -298,8 +293,8 @@ class _Side:
 
 
 def _first(n: int, below: Callable[[int], bool]) -> int:
-    """Primer índice en [0, n) con `below` cierto, si `below` es monótono
-    (falso… cierto); n si ninguno."""
+    """First index in [0, n) with `below` true, if `below` is monotonic
+    (false… true); n if none."""
     lo, hi = 0, n
     while lo < hi:
         mid = (lo + hi) // 2
@@ -311,9 +306,9 @@ def _first(n: int, below: Callable[[int], bool]) -> int:
 
 
 class _Pairs:
-    """Los pares de referencias de una ruta (RF-20), con lo que no depende del
-    par calculado una vez: precios límite, netas por unidad, profundidad y
-    topes por fila (precio de compra `i`) y por columna (de venta `j`)."""
+    """The reference pairs of a route (RF-20), with what does not depend on the pair
+    computed once: limit prices, net per unit, depth and caps per row (buy price
+    `i`) and per column (sell price `j`)."""
 
     def __init__(
         self,
@@ -337,7 +332,7 @@ class _Pairs:
         self.ordered = asks.ordered and bids.ordered
         self.buy_price = [a.spec.quantize_price(r * (1 + slip), "buy") for r in refs_a]
         self.sell_price = [b.spec.quantize_price(r * (1 - slip), "sell") for r in refs_b]
-        self.buy_cost = [p * (1 + net_a) for p in self.buy_price]  # BTC por unidad
+        self.buy_cost = [p * (1 + net_a) for p in self.buy_price]  # BTC per unit
         self.sell_gain = [p * (1 - net_b) for p in self.sell_price]
         self.depth_a = [asks.depth(p) for p in self.buy_price]
         self.depth_b = [bids.depth(p) for p in self.sell_price]
@@ -356,7 +351,7 @@ class _Pairs:
         return self.net_pct(i, j) < self.limits.min_net_pct
 
     def pair(self, i: int, j: int) -> Fire | _Miss:
-        """Una ruta con un par de precios de referencia (RF-20)."""
+        """A route with one pair of reference prices (RF-20)."""
         a, b, buy, sell, limits = self.a, self.b, self.buy, self.sell, self.limits
         buy_price, sell_price = self.buy_price[i], self.sell_price[j]
         unit = self.unit(i, j)
@@ -373,7 +368,7 @@ class _Pairs:
         }
         binding = min(terms, key=lambda k: terms[k])
         qty = b.spec.quantize_qty(a.spec.quantize_qty(terms[binding]))
-        if a.spec.quantize_qty(qty) != qty:  # lotes que no encajan entre sí
+        if a.spec.quantize_qty(qty) != qty:  # lots that do not fit each other
             return _Miss(Skip("lot_mismatch", f"{qty} no es múltiplo del lote de {buy}"), net_pct)
         if qty <= 0 or qty < max(a.spec.min_qty, b.spec.min_qty):
             detail = f"{buy}→{sell}: {terms[binding]:f} {BASE_LABEL} no llega al lote"
@@ -384,15 +379,15 @@ class _Pairs:
         return Fire(buy, sell, buy_price, sell_price, qty, unit * qty, net_pct)
 
     def _cap(self, i: int, jc: int) -> Decimal:
-        """Cota de la cantidad de la fila `i` en las columnas [0, jc)."""
+        """Upper bound of the quantity of row `i` over columns [0, jc)."""
         return min(
             self.depth_a[i], self.depth_b[jc - 1], self.balance[i], self.limits.max_qty,
             self.day[i],
         )  # fmt: skip
 
     def _can_fire(self, i: int, cap: Decimal) -> bool:
-        """¿Puede disparar algún par de la fila? Con la cantidad máxima (la
-        cantidad crece con la cota y el redondeo al lote es monótono)."""
+        """Can any pair in the row fire? Checked with the maximum quantity (quantity
+        grows with the bound and lot rounding is monotonic)."""
         a, b = self.a.spec, self.b.spec
         top = b.quantize_qty(a.quantize_qty(cap))
         if top <= 0 or top < max(a.min_qty, b.min_qty):
@@ -402,22 +397,20 @@ class _Pairs:
         )
 
     def search(self, first: Fire | _Miss) -> Fire | _Miss:
-        """El mismo resultado que probar todos los pares, sin probarlos todos
-        (D-70). La neta % baja al subir el precio de compra (`i`) y al bajar el
-        de venta (`j`); con eso:
+        """Same result as trying every pair, without trying them all (D-70). The net %
+        falls as the buy price (`i`) rises and the sell price (`j`) falls, so:
 
-        - una fila desde su primer par bajo el umbral, y todas las filas desde
-          la primera que empieza bajo el umbral, solo dan motivos `below_threshold`
-          de neta menor o igual (y posteriores: en un empate gana el primero);
-        - una fila cuya cantidad máxima no llega al lote ni a los mínimos no
-          dispara;
-        - la neta de un par no pasa de `unit(i, j) × cota de la fila`: las filas
-          se recorren de mayor a menor cota y se dejan cuando la cota no llega al
-          mejor disparo.
+        - a row from its first pair below the threshold, and all rows from the first
+          that starts below it, only give `below_threshold` reasons with a lower or
+          equal net (and later ones: on a tie the first wins);
+        - a row whose maximum quantity reaches neither the lot nor the minimums does
+          not fire;
+        - a pair's net cannot exceed `unit(i, j) × row bound`: rows go from highest to
+          lowest bound and stop when the bound cannot reach the best shot.
         """
         i_cut = _first(self.n, lambda i: self.below(i, 0))
         short: list[tuple[int, int]] = [(i_cut, 0)] if i_cut < self.n else []
-        rows: list[tuple[Decimal, int, int, Decimal]] = []  # (cota, i, jc, cantidad)
+        rows: list[tuple[Decimal, int, int, Decimal]] = []  # (bound, i, jc, quantity)
         for i in range(i_cut):
             jc = _first(self.m, lambda j, i=i: self.below(i, j))
             if jc < self.m:
@@ -426,7 +419,7 @@ class _Pairs:
             if self._can_fire(i, cap):
                 unit = self.unit(i, 0)
                 rows.append((unit * cap if unit > 0 else ZERO, i, jc, cap))
-        rows.sort(key=lambda row: row[0], reverse=True)  # estable: en empate, por i
+        rows.sort(key=lambda row: row[0], reverse=True)  # stable: on a tie, by i
 
         best: Fire | None = None
         best_at = (0, 0)
@@ -437,7 +430,7 @@ class _Pairs:
                 if best is not None:
                     unit = self.unit(i, j)
                     if (unit * cap if unit > 0 else ZERO) < best.net:
-                        break  # las columnas siguientes, con menos neta por unidad
+                        break  # the next columns have less net per unit
                 got = self.pair(i, j)
                 if isinstance(got, Fire) and (
                     best is None or got.net > best.net or (got.net == best.net and (i, j) < best_at)
@@ -447,14 +440,14 @@ class _Pairs:
             return best
         if not short:
             return first
-        # el de mayor neta; en un empate, el primero en el orden de los pares
+        # the highest net; on a tie, the first in pair order
         return self.pair(*max(sorted(short), key=lambda ij: self.net_pct(*ij)))
 
 
 def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarget) -> str | None:
-    """Por qué la doble empeora el ratio de algún venue (RF-26), o None. Compra
-    en `a` y venta en `b`, con la fee taker de cada uno; valorado al mid del
-    venue o, sin mid, al precio límite de su pierna."""
+    """Why the double worsens some venue's ratio (RF-26), or None. Buys on `a` and
+    sells on `b`, with each one's taker fee; valued at the venue mid or, without
+    one, at its leg's limit price."""
     qty = fire.qty
     legs = (
         (fire.buy_venue, a, qty, -qty * fire.buy_price * (1 + a.spec.taker_fee), fire.buy_price),
@@ -465,7 +458,7 @@ def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarg
         before = base_pct(v.quote_total, v.base_total, price)
         after = base_pct(v.quote_total + d_quote, v.base_total + d_base, price)
         if before is None or after is None:
-            continue  # venue sin nada que valorar
+            continue  # venue with nothing to value
         if target.worsens(before, after):
             return (
                 f"{vid}: {BASE_LABEL} {before:.1f} % → {after:.1f} %, fuera de "
@@ -474,11 +467,10 @@ def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarg
     return None
 
 
-# -- estados --------------------------------------------------------------------
 
 
 def arm(state: BotState) -> BotState:
-    """Armar a mano: también sale de `halted` (RF-21) y olvida los fallos."""
+    """Arm by hand: also leaves `halted` (RF-21) and forgets the failures."""
     return replace(state, status="armed", reason=None, failures=0)
 
 
@@ -487,7 +479,7 @@ def disarm(state: BotState) -> BotState:
 
 
 def fired(state: BotState, fire: Fire, now: int) -> BotState:
-    """Cuenta el disparo al enviarlo, no al llenarse: los topes son de lo enviado."""
+    """Count the shot when sent, not when filled: the caps are on what was sent."""
     return replace(
         state,
         status="firing",
@@ -499,9 +491,9 @@ def fired(state: BotState, fire: Fire, now: int) -> BotState:
 
 
 def finished(state: BotState, limits: BotLimits, now: int, *, error: str | None) -> BotState:
-    """La doble del disparo terminó. Con `error` (colgada, incierta, rechazo del
-    venue, cancelación fallida): `halted` (RF-21). Sin él, a enfriar, salvo que
-    ya no quede tope diario (RF-22)."""
+    """The shot's double ended. With `error` (hanging, uncertain, venue rejection,
+    failed cancel): `halted` (RF-21). Without it, cool down, unless no daily cap
+    is left (RF-22)."""
     if error is not None:
         return replace(state, status="halted", reason=error)
     if _spent(state, now) >= limits.max_daily_btc:
@@ -510,17 +502,17 @@ def finished(state: BotState, limits: BotLimits, now: int, *, error: str | None)
 
 
 def capped(state: BotState, limits: BotLimits) -> BotState:
-    """Tope diario agotado (RF-22): `halted`, que solo se rearma a mano. Lo usa
-    `finished` y también `BotService` cuando `decide` da `Skip("day_cap")`: el
-    tope ya gastado al evaluar (tras rearmar o reiniciar el mismo día) o menos de
-    un lote de presupuesto (T-46, D-54)."""
+    """Daily cap used up (RF-22): `halted`, only re-armed by hand. Used by `finished`
+    and by `BotService` when `decide` gives `Skip("day_cap")`: cap already spent at
+    evaluation (after re-arming or restarting the same day) or less than one lot of
+    budget left (T-46, D-54)."""
     reason = f"day_cap: {limits.max_daily_btc} BTC de compra hoy"
     return replace(state, status="halted", reason=reason, failures=0)
 
 
 def rejected(state: BotState, limits: BotLimits, reason: str) -> BotState:
-    """La doble no se llegó a enviar (RiskCheck la rechazó): no hay nada abierto,
-    así que vuelve a `armed`; con `max_consecutive_failures` seguidos, `halted`."""
+    """The double was never sent (RiskCheck rejected it): nothing is open, so back to
+    `armed`; after `max_consecutive_failures` in a row, `halted`."""
     failures = state.failures + 1
     if failures >= limits.max_consecutive_failures:
         msg = f"max_consecutive_failures: {failures} disparos rechazados seguidos ({reason})"
@@ -529,7 +521,7 @@ def rejected(state: BotState, limits: BotLimits, reason: str) -> BotState:
 
 
 def tick(state: BotState, limits: BotLimits, now: int) -> BotState:
-    """Paso del tiempo: fin del enfriamiento y olvido de disparos de hace > 1 h."""
+    """Time passing: end of the cooldown and forgetting shots older than 1 h."""
     state = replace(state, fired_at=_recent(state, now))
     if (
         state.status == "cooldown"

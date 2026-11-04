@@ -1,16 +1,15 @@
-"""Punto de entrada: `xbt daemon [--live] [--record] [--replay FICHERO]
-[--config RUTA] [--env RUTA] [--data-dir RUTA] [--socket RUTA]`,
-`xbt report --replay FICHERO [--config RUTA]` y `xbt [attach] [--data-dir RUTA]
-[--socket RUTA]`.
+"""Entry point: `xbt daemon [--live] [--record] [--replay FILE] [--config PATH]
+[--env PATH] [--data-dir PATH] [--socket PATH]`, `xbt report --replay FILE
+[--config PATH]` and `xbt [attach] [--data-dir PATH] [--socket PATH]`.
 
-`daemon` es el servidor: el único proceso que habla con los venues, tiene las
-keys, el lock y el journal, sin pantalla y en primer plano (RF-30). Sin
-subcomando (o con `attach`), la TUI: el cliente de ese daemon por su socket,
-que lo enseña y opera todo a través de él sin leer config ni keys (RF-31,
-D-66). Sin flags, config y `.env` en `~/.config/xbt` y journal y socket en
-`~/.local/state/xbt` (XDG, RNF-20). Un solo daemon por directorio de datos
-(RNF-17). `--record` graba el mercado, `--replay` sustituye los venues por una
-grabación y `report` da el resultado del bot sobre ella (RF-33 a RF-35, D-80)."""
+`daemon` is the server: the only process that talks to the venues, holds the keys,
+the lock and the journal, with no screen and in the foreground (RF-30). With no
+subcommand (or `attach`), the TUI: that daemon's client over its socket, showing
+and operating everything through it without reading config or keys (RF-31, D-66).
+With no flags, config and `.env` live in `~/.config/xbt` and journal and socket in
+`~/.local/state/xbt` (XDG, RNF-20). One daemon per data directory (RNF-17).
+`--record` records the market, `--replay` swaps the venues for a recording and
+`report` gives the bot's result on it (RF-33 to RF-35, D-80)."""
 
 from __future__ import annotations
 
@@ -80,6 +79,7 @@ def limiter(rl: RateLimitConfig) -> RateLimiter:
 
 
 CLIENT_LOG = "client.log"
+DESCRIPTION = "xbt-terminal: daemon, pantalla e informe sobre una grabación."
 
 
 def build_venues(settings: Settings) -> dict[VenueId, MarketData]:
@@ -111,7 +111,7 @@ def build_venues(settings: Settings) -> dict[VenueId, MarketData]:
 def replay_venues(
     recording: Path, info: RecordingInfo, clock: Callable[[], int] = now_ms
 ) -> dict[VenueId, MarketData]:
-    """Los venues que salen de una grabación, con un solo origen de tiempos."""
+    """The venues coming out of a recording, with a single time origin."""
     timeline = Timeline(info, clock, venues=len(info.specs))
     return {vid: ReplayVenue(vid, recording, info, timeline, clock) for vid in info.specs}
 
@@ -122,13 +122,12 @@ def trading_venues(
     hub: MarketHub,
     clock: Callable[[], int] = now_ms,
 ) -> dict[VenueId, Venue]:
-    """Venues con los que se opera: los que tienen keys. Dry-run: envueltos en
-    `DryRunVenue`, con saldos reales y órdenes simuladas (D-16) y el MarketSpec
-    del hub (D-18). Live: los reales. Reproducción: `SimVenue` sobre la grabación
-    (RF-34)."""
+    """Venues to trade on: those with keys. Dry-run: wrapped in `DryRunVenue`, with real
+    balances and simulated orders (D-16) and the hub's MarketSpec (D-18). Live: the
+    real ones. Replay: `SimVenue` over the recording (RF-34)."""
     if settings.replay:
         cfg = settings.config.replay
-        assert cfg is not None  # load_settings no deja llegar aquí sin ella
+        assert cfg is not None  # load_settings does not get here without it
         return {
             vid: SimVenue(v, cfg, clock=clock)
             for vid, v in venues.items()
@@ -149,8 +148,8 @@ def trading_venues(
 
 
 def deposit_service(settings: Settings, venues: dict[VenueId, MarketData]) -> DepositService | None:
-    """Direcciones de depósito (RF-28) con los adaptadores reales de los venues
-    con keys, en cualquier modo: solo se leen. Sin keys, None."""
+    """Deposit addresses (RF-28) with the real adapters of venues with keys, in any
+    mode: they are only read. Without keys, None."""
     readers = {
         vid: v
         for vid, v in venues.items()
@@ -162,8 +161,8 @@ def deposit_service(settings: Settings, venues: dict[VenueId, MarketData]) -> De
 def rebalance_service(
     settings: Settings, venues: dict[VenueId, MarketData]
 ) -> RebalanceService | None:
-    """Comisiones de retiro para el plan de reequilibrio (RF-29), como los
-    depósitos: adaptadores reales de los venues con keys. Sin keys, None."""
+    """Withdrawal fees for the rebalance plan (RF-29), like deposits: real adapters of
+    venues with keys. Without keys, None."""
     readers = {
         vid: v
         for vid, v in venues.items()
@@ -175,8 +174,8 @@ def rebalance_service(
 def results_service(
     directory: Path, settings: Settings, venues: Mapping[VenueId, MarketData]
 ) -> ResultsService:
-    """Resultados del journal de `directory` (RF-25), con el precio del token de
-    fee de cada venue que lo tenga para valorar sus fees (D-65)."""
+    """Results of the journal in `directory` (RF-25), with the fee token price of each
+    venue that has one, to value its fees (D-65)."""
     pricers = {}
     for vid, v in settings.config.venues.items():
         venue = venues.get(vid)
@@ -186,7 +185,7 @@ def results_service(
 
 
 def fee_tokens(venues: Mapping[VenueId, VenueConfig]) -> dict[VenueId, FeeToken]:
-    """Venues que pagan la fee en token, para el bot (RF-24, D-63)."""
+    """Venues paying fees in a token, for the bot (RF-24, D-63)."""
     return {
         vid: FeeToken(v.fee_token, v.fee_token_min, v.fee_discount_pct)
         for vid, v in venues.items()
@@ -200,11 +199,10 @@ def build_engine(
     venues: dict[VenueId, MarketData] | None = None,
     clock: Callable[[], int] = now_ms,
 ) -> Engine:
-    """Órdenes y cuenta comparten venues y journal, y las órdenes validan con lo
-    que ya tiene la cuenta (D-18). En dry-run la cuenta lee los `DryRunVenue`
-    (saldos reales, órdenes simuladas); en solo lectura no hay nada. Lo usan la
-    terminal y el daemon (D-61). `clock`: el del motor entero; el informe le pasa
-    el tiempo virtual (D-80)."""
+    """Orders and account share venues and journal, and orders validate with what the
+    account already has (D-18). In dry-run the account reads the `DryRunVenue`s (real
+    balances, simulated orders); read-only has nothing. Used by the terminal and the
+    daemon (D-61). `clock`: the whole engine's; the report passes virtual time (D-80)."""
     cfg = settings.config
     venues = venues if venues is not None else build_venues(settings)
     orders: OrderService | None = None
@@ -218,7 +216,7 @@ def build_engine(
             logs, settings.mode, settings.redactor,
             clock=lambda: datetime.fromtimestamp(clock() / 1000, UTC),
         )  # fmt: skip
-        # uno para todos: la barra cuenta los de la sesión
+        # one for all: the bar counts the session's
         faults = Faults(journal, clock=clock)
         hub = MarketHub(
             venues, faults=faults, journal=journal, book_check_s=cfg.risk.book_check_s,
@@ -229,12 +227,12 @@ def build_engine(
         account = AccountService(
             trading, journal=journal, balances_every_s=every, faults=faults, clock=clock
         )
-        live = settings.mode == "live"  # el desfase de reloj solo bloquea en live (D-30)
+        live = settings.mode == "live"  # clock skew only blocks in live (D-30)
         orders = OrderService(
             hub, trading, journal, cfg.risk, account=account, faults=faults, live=live,
             clock=clock,
         )  # fmt: skip
-        if cfg.bot is not None:  # fase 2: el bot opera con las mismas piezas (D-36)
+        if cfg.bot is not None:  # phase 2: the bot trades with the same pieces (D-36)
             bot = BotService(
                 hub, orders, account, journal, cfg.bot, live=live, faults=faults,
                 target=cfg.inventory, fee_tokens=fee_tokens(cfg.venues), clock=clock,
@@ -243,7 +241,7 @@ def build_engine(
         hub, mode=settings.mode, orders=orders, account=account, bot=bot,
         max_clock_skew_s=cfg.risk.max_clock_skew_s, journal=journal,
         value_every_s=cfg.polling.value_every_s, clock=clock,
-        # lo que el cliente pide por el socket (D-66)
+        # what the client asks for over the socket (D-66)
         results=results_service(logs, settings, venues),
         deposits=deposit_service(settings, venues),
         rebalance=rebalance_service(settings, venues),
@@ -251,7 +249,7 @@ def build_engine(
 
 
 def client_view(settings: Settings) -> ClientView:
-    """Lo que la pantalla del cliente necesita de la config; viaja en `hello`."""
+    """What the client screen needs from the config; travels in `hello`."""
     cfg = settings.config
     return ClientView(
         book_levels=cfg.ui.book_levels,
@@ -263,8 +261,8 @@ def client_view(settings: Settings) -> ClientView:
 
 
 def build_client_app(socket: Path, hello: Hello) -> XbtApp:
-    """El cliente: todo lo del daemon por el socket (RF-31, D-66). Ni config,
-    ni keys, ni venues, ni journal, ni lock."""
+    """The client: everything from the daemon over the socket (RF-31, D-66). No config,
+    keys, venues, journal or lock."""
     view = hello.view or DEFAULT_VIEW
     remote = RemoteEngine(socket, has_bot=hello.has_bot)
     hub = remote.market
@@ -284,11 +282,11 @@ def build_client_app(socket: Path, hello: Hello) -> XbtApp:
         engine=Engine(hub, mode=hello.mode),  # type: ignore[arg-type]  # solo avisos
         services=services,
         run_hub=False,
-        clipboard=system_copy,  # OSC 52 no llega en GNOME Terminal (D-52)
+        clipboard=system_copy,  # OSC 52 does not reach GNOME Terminal (D-52)
     )
 
 
-DEFAULT_VIEW = ClientView(15, "1m", {}, None, None)  # un daemon que no manda su config
+DEFAULT_VIEW = ClientView(15, "1m", {}, None, None)  # a daemon that does not send its config
 
 
 def client(data: Path, socket: Path) -> None:
@@ -297,9 +295,9 @@ def client(data: Path, socket: Path) -> None:
     except DaemonGoneError as exc:
         raise SystemExit(f"No se puede conectar: {exc}.") from None
     private_dir(data)
-    # el cliente no tiene keys que redactar
+    # the client has no keys to redact
     diag = setup_diagnostics(data, Redactor([]), "INFO", name=CLIENT_LOG)
-    logging.getLogger(__name__).info("cliente de %s (%s)", socket, hello.mode)
+    logging.getLogger(__name__).info("client of %s (%s)", socket, hello.mode)
     try:
         build_client_app(socket, hello).run()
     finally:
@@ -308,8 +306,8 @@ def client(data: Path, socket: Path) -> None:
 
 
 def replay_report(settings: Settings, recording: Path) -> ReplayReport:
-    """El informe de RF-35: el motor entero sobre la grabación, en tiempo virtual
-    y con un journal que se tira al acabar."""
+    """The RF-35 report: the whole engine on the recording, in virtual time and with a
+    journal thrown away at the end."""
     info = scan_recording(recording)
     bot = settings.config.bot
     if bot is None:
@@ -335,8 +333,8 @@ async def serve(
     record: bool = False,
     venues: dict[VenueId, MarketData] | None = None,
 ) -> None:
-    """El daemon: SIGTERM y SIGINT lo paran en orden; una línea por stderr al
-    quedar listo, para quien lo supervise (D-61)."""
+    """The daemon: SIGTERM and SIGINT stop it in order; one stderr line when ready, for
+    whoever supervises it (D-61)."""
     engine = build_engine(settings, logs=data, venues=venues)
     recorder = None
     if record:
@@ -363,7 +361,7 @@ async def serve(
 
 
 def replay_problem(args: argparse.Namespace) -> str | None:
-    """Qué no se puede combinar con `--replay` (RF-34), o None."""
+    """What cannot be combined with `--replay` (RF-34), or None."""
     if args.replay is None:
         return None
     if args.live:
@@ -376,7 +374,7 @@ def replay_problem(args: argparse.Namespace) -> str | None:
 
 
 def report(args: argparse.Namespace, config: Path, env: Path) -> None:
-    """`xbt report`: el informe de RF-35 por stdout."""
+    """`xbt report`: the RF-35 report on stdout."""
     if args.replay is None:
         raise SystemExit("xbt report necesita --replay FICHERO.")
     try:
@@ -387,7 +385,7 @@ def report(args: argparse.Namespace, config: Path, env: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="xbt", description=__doc__)
+    parser = argparse.ArgumentParser(prog="xbt", description=DESCRIPTION)
     parser.add_argument(
         "command", nargs="?", choices=("daemon", "attach", "report"),
         help="daemon: el servidor, sin pantalla y en primer plano (para con SIGTERM); "
@@ -443,7 +441,7 @@ def main() -> None:
     except AlreadyRunningError as exc:
         raise SystemExit(str(exc)) from None
     diag = setup_diagnostics(paths.data, settings.redactor, settings.config.log.level)
-    logging.getLogger(__name__).info("arranque en %s, datos en %s", settings.mode, paths.data)
+    logging.getLogger(__name__).info("starting in %s, data in %s", settings.mode, paths.data)
     try:
         asyncio.run(serve(settings, paths.data, socket, record=args.record, venues=venues))
     finally:

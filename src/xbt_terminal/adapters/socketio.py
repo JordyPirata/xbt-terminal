@@ -1,16 +1,16 @@
-"""Códec mínimo de Engine.IO 4 / Socket.IO 5 sobre texto (D-09).
+"""Minimal Engine.IO 4 / Socket.IO 5 text codec (D-09).
 
-Solo lo que usa el WS público de Neoxa: open, ping/pong, close, y dentro de los
-mensajes connect, disconnect, connect_error y event. Sin binarios ni acks propios.
+Only what Neoxa's public WS uses: open, ping/pong, close, and within messages
+connect, disconnect, connect_error and event. No binaries or own acks.
 
     0{json}                   open (pingInterval, pingTimeout)
-    2 / 3                     ping del servidor / pong del cliente
-    40/ns,{json}              connect del namespace
-    42/ns,[id]["evento",d]    evento (el id de ack se ignora)
+    2 / 3                     server ping / client pong
+    40/ns,{json}              namespace connect
+    42/ns,[id]["event",d]     event (the ack id is ignored)
 
-Los números del JSON se leen como Decimal (RNF-07): Neoxa manda floats.
+JSON numbers are read as Decimal (RNF-07): Neoxa sends floats.
 
-Spec: RF-01 · design.md §4 · Tarea: T-08
+Spec: RF-01 · design.md §4 · Task: T-08
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ _SIO_KINDS = {"0": "connect", "1": "disconnect", "2": "event", "4": "connect_err
 
 
 class ProtocolError(ValueError):
-    """Frame que no es Engine.IO/Socket.IO válido."""
+    """Frame that is not valid Engine.IO/Socket.IO."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,10 +1,10 @@
-"""Comisiones de retiro para el plan de reequilibrio (RF-29).
+"""Withdrawal fees for the rebalance plan (RF-29).
 
-Solo lee: pide al venue la comisión de BTC y de BTCB2 cada vez que se carga,
-sin caché ni disco (cambian, D-47); el fallo de un venue o activo queda como
-texto en su clave y el plan lo marca no viable (D-53).
+Read only: asks the venue for the BTC and BTCB2 fee on each load, with no cache or
+disk (they change, D-47); a venue or asset failure stays as text under its key and
+the plan marks it not viable (D-53).
 
-Spec: RF-29, CA-14 · design.md §6.12 · Tarea: T-45
+Spec: RF-29, CA-14 · design.md §6.12 · Task: T-45
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class RebalanceService:
         self.venues: tuple[VenueId, ...] = tuple(self._venues)
 
     async def load(self) -> dict[tuple[VenueId, str], FeeInfo]:
-        """Comisión o error por (venue, activo); las peticiones van en paralelo."""
+        """Fee or error by (venue, asset); requests go in parallel."""
         keys = [(vid, asset) for vid in self.venues for asset in ASSETS]
         got = await asyncio.gather(*(self._fee(vid, asset) for vid, asset in keys))
         return dict(zip(keys, got, strict=True))

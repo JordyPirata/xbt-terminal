@@ -1,9 +1,9 @@
-"""Direcciones de depósito para su ventana (RF-28).
+"""Deposit addresses for their window (RF-28).
 
-Solo lee: pide al venue la dirección de BTC y de BTCB2 cada vez que se carga,
-sin caché ni disco, y el fallo de un venue o activo queda en su fila (D-50).
+Read only: asks the venue for the BTC and BTCB2 address on each load, with no cache
+or disk, and a venue or asset failure stays in its row (D-50).
 
-Spec: RF-28, CA-13 · design.md §6.11 · Tarea: T-42
+Spec: RF-28, CA-13 · design.md §6.11 · Task: T-42
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class DepositService:
         self.venues: tuple[VenueId, ...] = tuple(self._venues)
 
     async def load(self) -> list[DepositRow]:
-        """Una fila por venue y activo, en orden; las peticiones van en paralelo."""
+        """One row per venue and asset, in order; requests go in parallel."""
         pairs = [(vid, asset) for vid in self.venues for asset in ASSETS]
         return list(await asyncio.gather(*(self._row(vid, asset) for vid, asset in pairs)))
 

@@ -1,15 +1,15 @@
-"""Book L2: snapshot + deltas, top-N con acumulado, mid.
+"""L2 book: snapshot + deltas, top-N with cumulative size, mid.
 
-Un snapshot reemplaza el book entero. Los deltas se aplican en orden de `seq`;
-si llega uno que salta números, el book se marca inválido y deja de dar precios
-(`mid` None → RiskCheck rechaza por `stale_data`) hasta el siguiente snapshot,
-que MarketHub pide al ver `needs_snapshot`. Los venues sin `seq` aplican todo.
+A snapshot replaces the whole book. Deltas apply in `seq` order; one that skips
+numbers marks the book invalid and it stops giving prices (`mid` None → RiskCheck
+rejects with `stale_data`) until the next snapshot, which MarketHub requests on
+seeing `needs_snapshot`. Venues without `seq` apply everything.
 
-`ts` es la hora del exchange; `received_at`, la local de recepción que pasa quien
-aplica (MarketHub). La frescura se mide con la local (RNF-16, D-30): con el reloj
-del venue desfasado, `ts` diría que un book viejo es nuevo o al revés.
+`ts` is the exchange time; `received_at` is the local arrival time passed by the
+caller (MarketHub). Freshness uses the local one (RNF-16, D-30): with a skewed
+venue clock, `ts` would call an old book new or the other way round.
 
-Spec: RF-02, RNF-16, RNF-23 · design.md §6.1 · D-70 · Tareas: T-10, T-29, T-72
+Spec: RF-02, RNF-16, RNF-23 · design.md §6.1 · D-70 · Tasks: T-10, T-29, T-72
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ class L2Book:
         self._bids: dict[Decimal, Level] = {}
         self._asks: dict[Decimal, Level] = {}
         self.seq: int | None = None
-        self.ts: int | None = None  # hora del exchange del último evento aplicado
-        self.received_at: int | None = None  # hora local a la que llegó
+        self.ts: int | None = None  # exchange time of the last applied event
+        self.received_at: int | None = None  # local arrival time
         self.valid = False
 
     @property
@@ -44,8 +44,8 @@ class L2Book:
         return not self.valid
 
     def apply(self, event: BookSnapshot | BookDelta, received_at: int | None = None) -> bool:
-        """Aplica el evento. False si el book queda (o sigue) inválido. Sin
-        `received_at`, se toma la hora del evento."""
+        """Apply the event. False if the book is (or stays) invalid. Without
+        `received_at`, the event time is used."""
         at = event.ts if received_at is None else received_at
         if event.venue != self.venue:
             raise ValueError(f"evento de {event.venue} aplicado al book de {self.venue}")
@@ -61,7 +61,7 @@ class L2Book:
             return False
         if event.seq is not None and self.seq is not None:
             if event.seq <= self.seq:
-                return True  # viejo o duplicado
+                return True  # old or duplicate
             if event.seq != self.seq + 1:
                 self.valid = False
                 return False
@@ -85,7 +85,7 @@ class L2Book:
 
     @property
     def mid(self) -> Decimal | None:
-        """None si falta un lado o el book está cruzado."""
+        """None if a side is missing or the book is crossed."""
         bid, ask = self.best_bid, self.best_ask
         if bid is None or ask is None or bid >= ask:
             return None
@@ -103,22 +103,22 @@ class L2Book:
         return len(self._bids), len(self._asks)
 
     def top(self, n: int) -> tuple[tuple[BookRow, ...], tuple[BookRow, ...]]:
-        """N mejores niveles por lado (bids de mayor a menor, asks de menor a mayor)."""
+        """Best N levels per side (bids high to low, asks low to high)."""
         if not self.valid:
             return (), ()
         bids, asks = self._best(n)
         return _rows(bids), _rows(asks)
 
     def _best(self, n: int) -> tuple[list[Level], list[Level]]:
-        """Los N mejores por lado sin ordenar el book entero (D-70): `heapq` da
-        lo mismo que `sorted(...)[:n]`, y los precios no se repiten (son claves)."""
+        """Best N per side without sorting the whole book (D-70): `heapq` gives the
+        same as `sorted(...)[:n]`, and prices do not repeat (they are keys)."""
         bids = heapq.nlargest(n, self._bids.values(), key=_price)
         asks = heapq.nsmallest(n, self._asks.values(), key=_price)
         return bids, asks
 
     def snapshot(self, n: int) -> BookSnapshot | None:
-        """Los N mejores niveles por lado como foto, para reenviar el book por el
-        socket del daemon (D-66); None si el book no es válido."""
+        """Best N levels per side as a snapshot, to forward the book over the
+        daemon socket (D-66); None if the book is invalid."""
         if not self.valid or self.ts is None:
             return None
         bids, asks = self._best(n)

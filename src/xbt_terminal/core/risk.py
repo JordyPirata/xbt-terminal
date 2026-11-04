@@ -1,19 +1,18 @@
-"""Validaciones locales antes de enviar una orden.
+"""Local validations before sending an order.
 
-`check()` es una función pura: recibe la petición, una foto del venue
-(`RiskContext`) y los límites, y devuelve *todas* las violaciones; lista vacía
-significa que se puede enviar. Ante datos que faltan o no cuadran (sin mid,
-book viejo o cruzado) se rechaza: fallar cerrado.
+`check()` is pure: it takes the request, a venue snapshot (`RiskContext`) and the
+limits, and returns *all* violations; an empty list means it can be sent. Missing or
+inconsistent data (no mid, stale or crossed book) is rejected: fail closed.
 
-Tamaño por orden (D-19): el nocional no puede pasar de `max_order_pct` % del
-inventario total de los dos venues en BTC (`RiskContext.inventory_value`, lo
-calcula quien llama con `core/inventory.py`). Sin inventario calculable, rechazo.
+Size per order (D-19): the notional cannot exceed `max_order_pct` % of the total
+inventory of both venues in BTC (`RiskContext.inventory_value`, computed by the
+caller with `core/inventory.py`). Without a computable inventory, reject.
 
-Exposición por venue (PA-06 → D-07): valor custodiado tras la orden,
-`quote total + BTCB2 total × mid` (quote = BTC, RNF-10). Comprar por debajo del mid lo sube y vender
-por debajo lo baja; las fees se ignoran, lo que sobrestima el valor (conservador).
+Venue exposure (PA-06 → D-07): custodied value after the order, `quote total +
+BTCB2 total × mid` (quote = BTC, RNF-10). Buying below the mid raises it and selling
+below lowers it; fees are ignored, which overstates the value (conservative).
 
-Spec: RF-10, CA-04 · design.md §6.3 · Tareas: T-06, T-22
+Spec: RF-10, CA-04 · design.md §6.3 · Tasks: T-06, T-22
 """
 
 from __future__ import annotations
@@ -29,33 +28,33 @@ HUNDRED = Decimal(100)
 
 @dataclass(frozen=True, slots=True)
 class RiskLimits:
-    """Sección `[risk]` de config.toml."""
+    """`[risk]` section of config.toml."""
 
-    max_order_pct: Decimal  # % del inventario total por orden (D-19)
+    max_order_pct: Decimal  # % of total inventory per order (D-19)
     max_mid_deviation_pct: Decimal
     max_venue_exposure: Decimal
     stale_after_s: int
     hanging_leg_after_s: int
-    max_clock_skew_s: int = 5  # con el venue; por encima, sin live (RNF-16, D-30)
-    book_check_s: int = 5  # contraste del book con el REST (RNF-24, D-76)
+    max_clock_skew_s: int = 5  # with the venue; above it, no live (RNF-16, D-30)
+    book_check_s: int = 5  # book check against REST (RNF-24, D-76)
 
 
 @dataclass(frozen=True, slots=True)
 class RiskContext:
-    """Foto de un venue en el momento de validar."""
+    """Venue snapshot at validation time."""
 
     market: MarketSpec
     best_bid: Decimal | None
     best_ask: Decimal | None
-    book_ts: int | None  # ms epoch, hora local a la que llegó el book (RNF-16)
-    now: int  # ms epoch
-    open_orders: tuple[Order, ...]  # propias; se filtran por venue y estado
+    book_ts: int | None  # epoch ms, local arrival time of the book (RNF-16)
+    now: int  # epoch ms
+    open_orders: tuple[Order, ...]  # own orders; filtered by venue and status
     balances: Mapping[str, Balance]
-    inventory_value: Decimal | None  # total de los dos venues en BTC; None = no calculable
+    inventory_value: Decimal | None  # total of both venues in BTC; None = not computable
 
     @property
     def mid(self) -> Decimal | None:
-        """None si falta un lado o el book está cruzado: no hay precio fiable."""
+        """None if a side is missing or the book is crossed: no reliable price."""
         if self.best_bid is None or self.best_ask is None or self.best_bid >= self.best_ask:
             return None
         return (self.best_bid + self.best_ask) / 2
@@ -71,7 +70,7 @@ class Violation:
 
 
 def check(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
-    """Todas las violaciones de `req`, en el orden de las reglas; vacía = se puede enviar."""
+    """All violations of `req`, in rule order; empty = it can be sent."""
     if req.venue != ctx.market.venue:
         raise ValueError(f"orden para {req.venue} validada con el contexto de {ctx.market.venue}")
     return [
@@ -86,7 +85,7 @@ def check(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Viola
 
 
 def _stale(ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
-    """Datos de mercado: sin mid fiable o book sin actualizar."""
+    """Market data: no reliable mid or stale book."""
     if ctx.mid is None:
         return [Violation("stale_data", "sin mid fiable (book vacío, incompleto o cruzado)")]
     if ctx.book_ts is None or ctx.now - ctx.book_ts > limits.stale_after_s * 1000:
@@ -96,7 +95,7 @@ def _stale(ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
 
 
 def _size(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
-    """Tamaño: el nocional no pasa del `max_order_pct` % del inventario total (D-19)."""
+    """Size: the notional stays within `max_order_pct` % of total inventory (D-19)."""
     pct = limits.max_order_pct
     if ctx.inventory_value is None:
         message = f"no se puede calcular el inventario total para el tope del {pct} %"
@@ -113,7 +112,7 @@ def _size(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Viola
 
 
 def _grid(req: OrderRequest, market: MarketSpec) -> list[Violation]:
-    """Rejilla del mercado: tick, lote y mínimos."""
+    """Market grid: tick, lot and minimums."""
     notional = req.qty * req.price
     out = []
     if req.price % market.tick_size != 0:
@@ -130,7 +129,7 @@ def _grid(req: OrderRequest, market: MarketSpec) -> list[Violation]:
 
 
 def _mid_deviation(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
-    """Precio contra el mid; sin mid ya lo rechaza `_stale`."""
+    """Price against the mid; with no mid, `_stale` already rejects."""
     mid = ctx.mid
     if mid is None:
         return []
@@ -142,7 +141,7 @@ def _mid_deviation(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> l
 
 
 def _self_cross(req: OrderRequest, ctx: RiskContext) -> list[Violation]:
-    """Cruce con órdenes propias abiertas en el mismo venue."""
+    """Crossing own open orders on the same venue."""
     mine = [o for o in ctx.open_orders if o.venue == ctx.market.venue and not o.is_done]
     if req.side == "buy":
         asks = [o.price for o in mine if o.side == "sell"]
@@ -158,7 +157,7 @@ def _self_cross(req: OrderRequest, ctx: RiskContext) -> list[Violation]:
 
 
 def _balance(req: OrderRequest, ctx: RiskContext) -> list[Violation]:
-    """Saldo disponible: la compra incluye la fee taker."""
+    """Available balance: a buy includes the taker fee."""
     market = ctx.market
     if req.side == "buy":
         asset = market.quote
@@ -169,13 +168,13 @@ def _balance(req: OrderRequest, ctx: RiskContext) -> list[Violation]:
     have = ctx.balance(asset).available
     if need <= have:
         return []
-    # 8 decimales: nocional × (1 + fee) puede salir con 19 ("0.03513485024903604")
+    # 8 decimals: notional × (1 + fee) can come out with 19 ("0.03513485024903604")
     message = f"hace falta {need:.8f} {asset}, disponible {have:.8f}"
     return [Violation("insufficient_balance", message)]
 
 
 def _exposure(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
-    """Exposición del venue tras la orden (D-07); sin mid ya lo rechaza `_stale`."""
+    """Venue exposure after the order (D-07); with no mid, `_stale` already rejects."""
     mid = ctx.mid
     if mid is None:
         return []

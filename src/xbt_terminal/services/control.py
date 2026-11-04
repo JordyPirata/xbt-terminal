@@ -1,25 +1,24 @@
-"""Socket de control del daemon: lo que ve y hace el cliente (`xbt`, D-66).
+"""Daemon control socket: what the client (`xbt`, D-66) sees and does.
 
-Un socket Unix `0600` en el directorio de datos (que es `0700`): solo el mismo
-usuario llega, y se entra por SSH (D-61). JSON por líneas (`wire`). Al
-conectar, `hello` y la foto (`state`); después, `state` cada vez que algo
-cambia (agrupado) y al menos cada `every_s`, y `notice` y `fault` según pasan.
-El mercado también viaja (D-66): `market_init` por venue al conectar y cuando
-el venue se vuelve a cargar; después `trade` y `conn` según pasan y `book`
-agrupado cada `book_every_s`, con `book_depth` niveles por lado.
-Del cliente (D-66): `ping`, `bot_on`, `bot_off` y las órdenes. `prepare`,
-`prepare_double` y `plan_cancel` validan en el daemon y devuelven la propuesta
-con un `token`; `confirm`, `confirm_double` y `execute_cancel` solo llevan el
-token, que vale una vez y caduca a los `proposal_ttl_s`. Las peticiones con
-`id` se contestan con `reply {id, kind, value}` o `reply {id, error}`, cada
-una en su tarea. Cada cliente tiene su cola; si se llena (no lee), se le
-cierra: un cliente lento nunca frena al motor. Todo lo que sale pasa por el
-`Redactor` del journal.
+A `0600` Unix socket in the data directory (which is `0700`): only the same user
+reaches it, and entry is over SSH (D-61). JSON lines (`wire`). On connecting, `hello`
+and the snapshot (`state`); then `state` whenever something changes (coalesced) and
+at least every `every_s`, and `notice` and `fault` as they happen. The market travels
+too (D-66): `market_init` per venue on connecting and when the venue reloads; then
+`trade` and `conn` as they happen and `book` coalesced every `book_every_s`, with
+`book_depth` levels per side.
+From the client (D-66): `ping`, `bot_on`, `bot_off` and orders. `prepare`,
+`prepare_double` and `plan_cancel` validate in the daemon and return the proposal
+with a `token`; `confirm`, `confirm_double` and `execute_cancel` only carry the
+token, valid once and expiring after `proposal_ttl_s`. Requests with `id` are answered
+with `reply {id, kind, value}` or `reply {id, error}`, each in its own task. Each
+client has its queue; if it fills (not reading), it is closed: a slow client never
+holds the engine back. Everything going out passes through the journal's `Redactor`.
 
-El daemon tiene el lock (RNF-17), así que un socket que ya exista es de uno
-que murió y se reemplaza.
+The daemon holds the lock (RNF-17), so an existing socket belongs to a dead one and
+is replaced.
 
-Spec: RF-31, RNF-14, CA-07 · design.md §6.13 · Tareas: T-52, T-62, T-63 · D-61, D-66
+Spec: RF-31, RNF-14, CA-07 · design.md §6.13 · Tasks: T-52, T-62, T-63 · D-61, D-66
 """
 
 from __future__ import annotations
@@ -46,11 +45,11 @@ log = logging.getLogger(__name__)
 
 SOCKET_NAME = "xbt.sock"
 MarketEvent = BookSnapshot | BookDelta | Trade | ConnState
-MAX_SOCKET_PATH = 107  # bytes: sun_path de Linux (108) menos el NUL final
+MAX_SOCKET_PATH = 107  # bytes: Linux sun_path (108) minus the final NUL
 
 
 def socket_problem(path: Path) -> str | None:
-    """Qué impide abrir el socket en `path`, o None: una ruta larga no cabe."""
+    """What prevents opening the socket at `path`, or None: a long path does not fit."""
     size = len(os.fsencode(path))
     if size <= MAX_SOCKET_PATH:
         return None
@@ -60,10 +59,10 @@ def socket_problem(path: Path) -> str | None:
     )
 
 
-COALESCE_S = 0.02  # varios cambios seguidos, una sola foto
-BOOK_EVERY_S = 0.1  # el book, como mucho diez veces por segundo y venue
+COALESCE_S = 0.02  # several changes in a row, a single snapshot
+BOOK_EVERY_S = 0.1  # the book, at most ten times per second per venue
 BOOK_DEPTH = 50
-PROPOSAL_TTL_S = 60.0  # lo que puede estar abierto el diálogo de confirmación
+PROPOSAL_TTL_S = 60.0  # how long the confirmation dialog may stay open
 CANCELS: dict[str, type[CancelOrder | CancelVenue | CancelAll]] = {
     c.__name__: c for c in (CancelOrder, CancelVenue, CancelAll)
 }
@@ -71,7 +70,7 @@ T = TypeVar("T")
 
 
 class RefusedError(Exception):
-    """Una petición que el daemon no atiende; el texto va al cliente."""
+    """A request the daemon does not serve; the text goes to the client."""
 
 
 class _Client:
@@ -93,7 +92,7 @@ class _Client:
                 self.writer.write(await self.queue.get())
                 await self.writer.drain()
         except (ConnectionError, OSError):
-            pass  # se fue: el lector lo quita
+            pass  # gone: the reader removes it
 
     def close(self) -> None:
         self.task.cancel()
@@ -119,12 +118,12 @@ class ControlServer:
         self._queue_max = queue_max
         self._book_every_s = book_every_s
         self._book_depth = book_depth
-        self._books: set[VenueId] = set()  # venues con el book cambiado sin mandar
+        self._books: set[VenueId] = set()  # venues with an unsent book change
         self._book_ticker: asyncio.Task[None] | None = None
         self._proposal_ttl_s = proposal_ttl_s
         self._view = view
-        self._proposals: dict[str, tuple[Any, float]] = {}  # token → (propuesta, caduca)
-        self._asking: set[asyncio.Task[None]] = set()  # peticiones en curso
+        self._proposals: dict[str, tuple[Any, float]] = {}  # token → (proposal, expiry)
+        self._asking: set[asyncio.Task[None]] = set()  # requests in progress
         self._clients: set[_Client] = set()
         self._server: asyncio.Server | None = None
         self._ticker: asyncio.Task[None] | None = None
@@ -146,7 +145,7 @@ class ControlServer:
         self._subscribe()
         self._ticker = asyncio.create_task(self._tick())
         self._book_ticker = asyncio.create_task(self._tick_books())
-        log.info("socket de control en %s", self.path)
+        log.info("control socket at %s", self.path)
 
     async def aclose(self) -> None:
         if self._server is None:
@@ -164,10 +163,10 @@ class ControlServer:
         await server.wait_closed()
         self.path.unlink(missing_ok=True)
 
-    # -- del motor a los clientes -------------------------------------------------
+    # -- from the engine to the clients -------------------------------------------------
 
     def _subscribe(self) -> None:
-        if self._subscribed:  # los servicios no tienen baja: una vez por servidor
+        if self._subscribed:  # services have no unsubscribe: once per server
             return
         self._subscribed = True
         engine = self._engine
@@ -183,14 +182,14 @@ class ControlServer:
         engine.hub.subscribe_events(self._on_market)
 
     def _on_hub(self, venue: VenueId, what: str) -> None:
-        if what == "market":  # cargado (o recargado): foto entera de ese venue
+        if what == "market":  # loaded (or reloaded): full snapshot of that venue
             self._guarded(lambda: self._broadcast(self._market_init(venue)))
 
     def _on_market(self, venue: VenueId, event: MarketEvent) -> None:
         self._guarded(lambda: self._forward(venue, event))
 
     def _guarded(self, work: Callable[[], None]) -> None:
-        """Lo llama el hub: un bug al reenviar no puede tumbar su venue (RNF-14)."""
+        """Called by the hub: a forwarding bug cannot take its venue down (RNF-14)."""
         try:
             work()
         except Exception as exc:
@@ -217,7 +216,7 @@ class ControlServer:
                 self._broadcast({"type": "book", "venue": venue, "book": book})
 
     def _on_account(self, venue: VenueId, what: str) -> None:
-        if what == "fill":  # el cliente rehace sus resultados (RF-25)
+        if what == "fill":  # the client rebuilds its results (RF-25)
             self._broadcast({"type": "fill", "venue": venue})
         if what in ("balances", "orders", "fill", "conn"):
             self._dirty.set()
@@ -244,7 +243,7 @@ class ControlServer:
     def _state(self) -> dict[str, Any] | None:
         try:
             return {"type": "state", "state": snapshot(self._engine)}
-        except Exception as exc:  # un bug aquí no puede tumbar el daemon (RNF-14)
+        except Exception as exc:  # a bug here cannot take the daemon down (RNF-14)
             self._engine.report_fault("control", exc)
             return None
 
@@ -264,7 +263,7 @@ class ControlServer:
 
     def _send(self, client: _Client, line: bytes) -> None:
         if not client.offer(line):
-            log.warning("socket de control: un cliente no lee; se le desconecta")
+            log.warning("control socket: a client is not reading; disconnecting it")
             self._drop(client)
 
     def _drop(self, client: _Client) -> None:
@@ -272,10 +271,10 @@ class ControlServer:
             self._clients.discard(client)
             client.close()
 
-    # -- de los clientes al motor -------------------------------------------------
+    # -- from the clients to the engine -------------------------------------------------
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        # la foto inicial (hello, state, un market_init por venue) no cuenta en la cola
+        # the initial snapshot (hello, state, one market_init per venue) does not count in the queue
         client = _Client(writer, self._queue_max + 2 + len(self._engine.hub.state))
         self._clients.add(client)
         hello = {
@@ -286,22 +285,22 @@ class ControlServer:
         state = self._state()
         if state is not None:
             self._send(client, self._line(state))
-        for venue in self._engine.hub.state:  # sin await entre medias: nada se cuela
+        for venue in self._engine.hub.state:  # no await in between: nothing slips in
             self._send(client, self._line(self._market_init(venue)))
         try:
             while client in self._clients:
                 line = await reader.readline()
                 if not line:
                     break
-                # cada petición en su tarea: un envío lento no frena las demás
+                # each request in its task: a slow send does not hold the others
                 task = asyncio.create_task(self._reply(client, line))
-                self._asking.add(task)  # referencia fuerte: si no, el GC se la lleva
+                self._asking.add(task)  # strong reference: otherwise the GC takes it
                 task.add_done_callback(self._asking.discard)
         except (ConnectionError, OSError, ValueError):
-            pass  # cortado, o una línea sin fin de más de 64 KiB
+            pass  # cut, or an endless line over 64 KiB
         finally:
             self._drop(client)
-            # las que estén en vuelo terminan (un envío no se corta a medias, D-29)
+            # those in flight finish (a send is not cut halfway, D-29)
 
     async def _reply(self, client: _Client, line: bytes) -> None:
         answer = await self._answer(line)
@@ -332,7 +331,7 @@ class ControlServer:
             return {**head, "error": str(exc)}
         except (KeyError, TypeError, ValueError) as exc:
             return {**head, "error": f"petición mal formada: {exc}"}
-        except Exception as exc:  # un bug no tumba el daemon (RNF-14)
+        except Exception as exc:  # a bug does not take the daemon down (RNF-14)
             self._engine.report_fault("control", exc)
             return {**head, "error": f"fallo del daemon: {exc}"}
         finally:
@@ -348,15 +347,15 @@ class ControlServer:
             return "no hay [bot] en la config"
         if cmd == "bot_on":
             error = bot.arm()
-            log.info("bot on desde un cliente%s", f": {error}" if error else "")
+            log.info("bot on from a client%s", f": {error}" if error else "")
         else:
             bot.disarm()
             error = None
-            log.info("bot off desde un cliente")
+            log.info("bot off from a client")
         self._dirty.set()
         return error
 
-    # -- órdenes: propuesta con referencia, confirmación con la referencia --------
+    # -- orders: proposal with a reference, confirmation with the reference --------
 
     @property
     def _commands(self) -> dict[str, Callable[[dict[str, Any]], Awaitable[tuple[Any, str | None]]]]:
@@ -380,7 +379,7 @@ class ControlServer:
         return token
 
     def _take(self, args: dict[str, Any], kind: type[T]) -> T:
-        """La propuesta del token, una sola vez: se quita antes de ningún await."""
+        """The token's proposal, once only: removed before any await."""
         entry = self._proposals.pop(str(args.get("token")), None)
         if entry is None or entry[1] <= asyncio.get_running_loop().time():
             raise RefusedError("propuesta caducada o ya usada: vuelve a pedir la orden")
@@ -420,7 +419,7 @@ class ControlServer:
     async def _execute_cancel(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         return await self._orders.execute_cancel(self._take(args, CancelPlan)), None
 
-    # -- lo demás que el cliente no puede hacer solo (D-66) -----------------------
+    # -- the rest the client cannot do alone (D-66) -----------------------
 
     async def _results(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         results = self._engine.results
@@ -428,7 +427,7 @@ class ControlServer:
             raise RefusedError("el daemon no tiene resultados (sin journal)")
         rng = decode(Range, args["range"])
         await results.refresh_prices()
-        # leer los journals de todo el rango es disco: fuera del loop
+        # reading the journals of the whole range is disk: off the loop
         return await asyncio.to_thread(results.load, rng), None
 
     async def _deposits(self, args: dict[str, Any]) -> tuple[Any, str | None]:

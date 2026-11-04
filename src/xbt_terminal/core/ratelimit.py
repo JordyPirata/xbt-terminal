@@ -1,21 +1,21 @@
-"""Limitador async de ventanas deslizantes con prioridad.
+"""Async sliding window limiter with priority.
 
-Un limitador por venue, compartido por *todas* sus peticiones REST: así el
-polling y las órdenes de Neoxa gastan el mismo presupuesto (RNF-03).
+One limiter per venue, shared by *all* its REST requests: that way Neoxa's polling
+and orders spend the same budget (RNF-03).
 
-Cada petición declara su tipo, que fija qué ventanas consume y su prioridad:
+Each request declares its kind, which sets the windows it uses and its priority:
 
-    tipo      ventanas            prioridad
-    cancel    general + cancel    0 (la más alta)
+    kind      windows             priority
+    cancel    general + cancel    0 (highest)
     order     general + order     1
-    private   general             2  (polling de órdenes, trades, balances)
-    market    general             3  (book, velas, respaldo REST)
+    private   general             2  (polling of orders, trades, balances)
+    market    general             3  (book, candles, REST fallback)
 
-Cuando se libera hueco se atiende primero la espera de más prioridad, y dentro
-de la misma prioridad por orden de llegada. Una orden bloqueada solo por su
-ventana propia (8 órdenes/10 s) no frena al polling, que no usa esa ventana.
+When room frees up, the highest priority wait goes first, and within a priority
+in order of arrival. An order held only by its own window (8 orders/10 s) does not
+slow polling, which does not use that window.
 
-Spec: RNF-03 · design.md §5 · Tarea: T-07
+Spec: RNF-03 · design.md §5 · Task: T-07
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class _Window:
     stamps: deque[float] = field(default_factory=deque)
 
     def wait(self, now: float) -> float:
-        """Segundos hasta que haya hueco; 0 si ya lo hay."""
+        """Seconds until there is room; 0 if there already is."""
         while self.stamps and now - self.stamps[0] >= self.span:
             self.stamps.popleft()
         if len(self.stamps) < self.limit:
@@ -65,7 +65,7 @@ class RateLimiter:
         self._timer: asyncio.TimerHandle | None = None
 
     async def acquire(self, kind: str) -> None:
-        """Espera hasta poder hacer una petición del tipo dado y la contabiliza."""
+        """Wait until a request of this kind can go, and count it."""
         if kind not in PRIORITY:
             raise ValueError(f"tipo de petición desconocido: {kind!r}")
         future: asyncio.Future[None] = asyncio.get_running_loop().create_future()
@@ -74,7 +74,7 @@ class RateLimiter:
         await future
 
     def dispatch(self) -> None:
-        """Atiende las esperas que ya caben y programa la siguiente revisión."""
+        """Serve the waits that fit and schedule the next check."""
         now = self._clock()
         waiting: list[tuple[int, int, str, asyncio.Future[None]]] = []
         next_wake: float | None = None
@@ -82,7 +82,7 @@ class RateLimiter:
         while self._queue:
             item = heapq.heappop(self._queue)
             _, _, kind, future = item
-            if future.done():  # la tarea que esperaba se canceló
+            if future.done():  # the waiting task was cancelled
                 continue
             windows = self._windows_for(kind)
             wait = max(w.wait(now) for w in windows)

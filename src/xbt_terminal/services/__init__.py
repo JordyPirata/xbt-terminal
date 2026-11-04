@@ -1,4 +1,4 @@
-"""Servicios con estado vivo: orquestan adaptadores y alimentan la UI.
+"""Services with live state: they orchestrate adapters and feed the UI.
 
 Spec: design.md §2
 """

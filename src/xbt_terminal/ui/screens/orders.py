@@ -1,6 +1,6 @@
-"""Órdenes abiertas, con cancelación por fila.
+"""Open orders, with cancelling per row.
 
-Spec: RF-08 · Tareas: T-19, T-83
+Spec: RF-08 · Tasks: T-19, T-83
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ CancelCommand = CancelOrder | CancelVenue | CancelAll
 
 
 class OrdersScreen(ModalScreen[None]):
-    """Órdenes abiertas (RF-08), de un venue o de los dos. Se actualiza sola."""
+    """Open orders (RF-08), of a venue or both. Updates by itself."""
 
     DEFAULT_CSS = """
     OrdersScreen { align: center middle; }
@@ -30,7 +30,7 @@ class OrdersScreen(ModalScreen[None]):
     }
     OrdersScreen DataTable { height: 1fr; }
     """
-    BINDINGS = [  # noqa: RUF012  (así lo declara Textual)
+    BINDINGS = [  # noqa: RUF012  (Textual declares it so)
         Binding("escape", "close", "cerrar"),
         Binding("c", "cancel_selected", "cancelar la seleccionada"),
         Binding("x", "cancel_all", "cancelar todas"),

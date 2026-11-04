@@ -1,30 +1,30 @@
-"""AccountService: estado del canal privado, órdenes abiertas, fills y balances.
+"""AccountService: private channel state, open orders, fills and balances.
 
-Por cada venue con keys (design.md §6.5):
-- Consume `private_stream()`: los `ConnState` van a la barra de estado, las
-  órdenes abiertas se guardan (las terminadas se quitan) y cada `Fill` se
-  escribe en el journal y pide los balances de ese venue en el acto, igual que
-  cualquier cambio de una orden propia (mueve saldo entre disponible y bloqueado).
-- Pide `balances()` al arrancar y cada `balances_every_s` (≤ 10 s, RF-05),
-  contado de inicio a inicio de cada lectura. Si
-  falla, se conservan los anteriores y se anota el error.
+For each venue with keys (design.md §6.5):
+- Consumes `private_stream()`: `ConnState`s go to the status bar, open orders are
+  kept (finished ones removed) and each `Fill` is written to the journal and asks
+  for that venue's balances at once, like any change of an own order (it moves
+  balance between available and locked).
+- Asks `balances()` at startup and every `balances_every_s` (≤ 10 s, RF-05), counted
+  from start to start of each read. On failure the previous ones stay and the error
+  is noted.
 
-Un stream que se corta se vuelve a abrir tras `retry_s`, salvo `ReadOnlyError`
-(sin keys), que no es pasajero. Los cambios se avisan como `(venue, qué)` con
-`qué` ∈ conn | orders | fill | balances, y cada evento privado tal cual a quien
-lo pida con `subscribe_events` (las piernas de las órdenes dobles, T-18). En
-dry-run los venues son `DryRunVenue` y todo es simulado.
+A dropped stream reopens after `retry_s`, except `ReadOnlyError` (no keys), which
+does not pass. Changes are notified as `(venue, what)` with `what` ∈ conn | orders |
+fill | balances, and each private event as is to those asking with
+`subscribe_events` (the legs of double orders, T-18). In dry-run venues are
+`DryRunVenue` and everything is simulated.
 
-Al arrancar, en live, los trades que el venue ya tenía (`PastFill`) se comparan
-con el journal de los últimos días (D-68): una fee corregida mientras la
-terminal estaba parada va como `fill_fee`, y un fill de una orden nuestra que
-no se apuntó, como `fill` recuperado. Lo demás se ignora.
+At startup, in live, trades already on the venue (`PastFill`) are compared with the
+journal of the last days (D-68): a fee corrected while the terminal was stopped goes
+as `fill_fee`, and an unwritten fill of an order of ours as a recovered `fill`. The
+rest is ignored.
 
-Cada bucle (stream y saldos de cada venue) corre aparte bajo `supervised`
-(RNF-14, D-28): un bug se reporta a `faults` y se reintenta, sin parar a los demás.
+Each loop (stream and balances of each venue) runs apart under `supervised` (RNF-14,
+D-28): a bug is reported to `faults` and retried, without stopping the others.
 
 Spec: RF-05, RF-08, RF-09, RF-11, RF-14, RNF-14 · design.md §6.5
-Tareas: T-17, T-18, T-19, T-27, T-68
+Tasks: T-17, T-18, T-19, T-27, T-68
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ log = logging.getLogger(__name__)
 Listener = Callable[[VenueId, str], None]
 EventListener = Callable[[VenueId, PrivateEvent], None]
 FILLS_KEPT = 100
-CATCHUP_DAYS = 7  # cuánto journal se mira para ponerse al día al arrancar (D-68)
+CATCHUP_DAYS = 7  # how much journal is read to catch up at startup (D-68)
 
 
 @dataclass
@@ -60,7 +60,7 @@ class VenueAccount:
     id: VenueId
     conn: ConnState | None = None
     conn_at: int | None = None
-    orders: dict[str, Order] = field(default_factory=dict)  # solo abiertas
+    orders: dict[str, Order] = field(default_factory=dict)  # open only
     balances: dict[str, Balance] | None = None
     balances_at: int | None = None
     recent_fills: deque[Fill] = field(default_factory=lambda: deque(maxlen=FILLS_KEPT))
@@ -90,11 +90,11 @@ class AccountService:
         self._clock = clock
         self._listeners: list[Listener] = []
         self._event_listeners: list[EventListener] = []
-        self._client_ids: dict[str, str] = {}  # order_id → client_id, también de las terminadas
+        self._client_ids: dict[str, str] = {}  # order_id → client_id, finished ones too
         self._refresh = {vid: asyncio.Event() for vid in self._venues}
-        self._logged: dict[tuple[VenueId, str], str] = {}  # último error anotado
+        self._logged: dict[tuple[VenueId, str], str] = {}  # last error noted
         self.state: dict[VenueId, VenueAccount] = {vid: VenueAccount(vid) for vid in self._venues}
-        self._known: JournalIndex | None = None  # se lee al primer `PastFill` (D-68)
+        self._known: JournalIndex | None = None  # read at the first `PastFill` (D-68)
 
     def subscribe(self, listener: Listener) -> None:
         self._listeners.append(listener)
@@ -134,14 +134,14 @@ class AccountService:
             st.conn, st.conn_at = event, self._clock()
             self._notify(vid, "conn")
         elif isinstance(event, Order):
-            self._logged.pop((vid, "private"), None)  # llegan órdenes: la racha acabó
+            self._logged.pop((vid, "private"), None)  # orders are arriving: the streak is over
             if event.client_id:
                 self._client_ids[event.order_id] = event.client_id
             if event.is_done:
                 st.orders.pop(event.order_id, None)
             else:
                 st.orders[event.order_id] = event
-            self._refresh[vid].set()  # abrir o cancelar mueve saldo a/desde bloqueado
+            self._refresh[vid].set()  # opening or cancelling moves balance to/from locked
             self._notify(vid, "orders")
         elif isinstance(event, Fill):
             st.recent_fills.append(event)
@@ -150,7 +150,7 @@ class AccountService:
             self._notify(vid, "fill")
         elif isinstance(event, PastFill):
             self._catch_up(event.fill)
-        elif isinstance(event, FeeUpdate):  # solo cambia la fee: ni saldos ni piernas
+        elif isinstance(event, FeeUpdate):  # only the fee changes: neither balances nor legs
             for i, f in enumerate(st.recent_fills):
                 if f.trade_id == event.trade_id:
                     st.recent_fills[i] = replace(f, fee=event.fee, fee_asset=event.fee_asset)
@@ -158,8 +158,8 @@ class AccountService:
             self._notify(vid, "fill")
 
     def _journal_error(self, vid: VenueId, where: str, error: str) -> None:
-        """Un `error` por racha (RF-11): el mismo fallo cada 3 s no inunda el journal
-        ni el log de diagnóstico (RNF-19)."""
+        """One `error` per streak (RF-11): the same failure every 3 s does not flood the
+        journal or the diagnostic log (RNF-19)."""
         if self._logged.get((vid, where)) == error:
             return
         self._logged[(vid, where)] = error
@@ -191,7 +191,7 @@ class AccountService:
         )
 
     def _journal_fee(self, u: FeeUpdate, client_id: str | None = None) -> None:
-        """La fee corregida va aparte: la línea del fill no se toca (RF-11, D-64)."""
+        """The corrected fee goes apart: the fill's line is not touched (RF-11, D-64)."""
         if self._journal is None:
             return
         if self._known is not None:
@@ -208,21 +208,21 @@ class AccountService:
             },
         )
 
-    # -- ponerse al día al arrancar (D-68) ----------------------------------------
+    # -- catching up at startup (D-68) ----------------------------------------
 
     def _catch_up(self, f: Fill) -> None:
-        """Un trade que ya estaba: se apunta lo que el journal no sabe. Solo en
-        live: en dry-run los trades reales no son de la sesión simulada."""
+        """A trade already there: write what the journal does not know. Live only: in
+        dry-run real trades are not of the simulated session."""
         if self._journal is None or self._journal.mode != "live":
             return
         what, client_id = decide(f, self._index())
         if what == "fee":
             u = FeeUpdate(f.venue, f.trade_id, f.order_id, f.fee, f.fee_asset, f.ts)
-            log.info("%s: fee de %s corregida mientras no se miraba", f.venue, f.trade_id)
+            log.info("%s: fee of %s corrected while not watching", f.venue, f.trade_id)
             self._journal_fee(u, client_id)
             self._notify(f.venue, "fill")
         elif what == "fill":
-            log.warning("%s: fill %s de una orden nuestra sin apuntar", f.venue, f.trade_id)
+            log.warning("%s: unwritten fill %s of an order of ours", f.venue, f.trade_id)
             self._journal_fill(f, client_id, {"recovered": True, "trade_ts": f.ts})
             self._refresh[f.venue].set()
             self._notify(f.venue, "fill")
@@ -233,7 +233,7 @@ class AccountService:
         return self._known
 
     def _journal_rows(self) -> list[dict[str, object]]:
-        """Las filas de los journals de los últimos `CATCHUP_DAYS` días."""
+        """Rows of the journals of the last `CATCHUP_DAYS` days."""
         assert self._journal is not None
         first = datetime.fromtimestamp(self._clock() / 1000 - CATCHUP_DAYS * 86_400, UTC)
         lines: list[str] = []
@@ -241,8 +241,8 @@ class AccountService:
             if path.stem.removeprefix("journal-") >= first.strftime("%Y%m%d"):
                 try:
                     lines += path.read_text(encoding="utf-8").splitlines()
-                except OSError as exc:  # sin poder leer, no se recupera nada: no rompe
-                    log.warning("no se pudo leer %s para ponerse al día: %s", path, exc)
+                except OSError as exc:  # unable to read, nothing is recovered: it does not break
+                    log.warning("could not read %s to catch up: %s", path, exc)
         return read_rows(lines)[0]
 
     async def _stream(self, vid: VenueId, venue: Venue) -> None:
@@ -280,8 +280,8 @@ class AccountService:
                 st.error = describe(exc)
                 self._journal_error(vid, "balances", st.error)
             self._notify(vid, "balances")
-            # cada lectura empieza `balances_every_s` después de la anterior, no
-            # después de que termine: si no, el intervalo real pasa de 10 s (CA-01)
+            # each read starts `balances_every_s` after the previous one started, not after
+            # it ended: otherwise the real interval passes 10 s (CA-01)
             wait = max(0.0, started + self._balances_every_s - loop.time())
             try:
                 await asyncio.wait_for(refresh.wait(), wait)

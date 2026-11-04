@@ -1,6 +1,6 @@
-"""Resultados de las dobles y valor de la cuenta en el tiempo.
+"""Double results and account value over time.
 
-Spec: RF-25, RF-32, CA-17 · Tareas: T-40, T-69, T-70, T-71, T-83
+Spec: RF-25, RF-32, CA-17 · Tasks: T-40, T-69, T-70, T-71, T-83
 """
 
 from __future__ import annotations
@@ -23,14 +23,13 @@ from ..panels import VENUE_NAME, ResultsChart, ValueChart
 RANGE_NAMES: dict[Range, str] = {"dia": "hoy (UTC)", "7d": "7 días", "todo": "todo"}
 STATUS_NAMES = {"closed": "cerrada", "hanging": "COLGADA", "no_fills": "sin fills"}
 TAB_NAMES = {"doubles": "Dobles", "value": "Valor de la cuenta"}
-RESULTS_EVERY_S = 60.0  # abierta, se vuelve a pedir el informe (RF-32, D-69)
+RESULTS_EVERY_S = 60.0  # while open, the report is asked again (RF-32, D-69)
 
 
 class ResultsScreen(ModalScreen[None]):
-    """Resultado realizado de las órdenes dobles (RF-25): gráficas, resumen y
-    tabla. Se recalcula al abrirla, al cambiar de rango, con cada fill y cada
-    `RESULTS_EVERY_S` mientras está abierta. En otra pestaña, el valor de la
-    cuenta en el tiempo (RF-32)."""
+    """Realized result of double orders (RF-25): charts, summary and table. Recomputed on
+    opening, on changing range, with each fill and every `RESULTS_EVERY_S` while open.
+    On another tab, the account value over time (RF-32)."""
 
     DEFAULT_CSS = """
     ResultsScreen { align: center middle; }
@@ -48,7 +47,7 @@ class ResultsScreen(ModalScreen[None]):
     ResultsScreen #value-summary { height: auto; }
     ResultsScreen DataTable { height: 1fr; }
     """
-    BINDINGS = [  # noqa: RUF012  (así lo declara Textual)
+    BINDINGS = [  # noqa: RUF012  (Textual declares it so)
         Binding("escape", "close", "cerrar"),
         Binding("r", "close", show=False),
         Binding("1", "range('dia')", "hoy"),
@@ -65,7 +64,7 @@ class ResultsScreen(ModalScreen[None]):
         self.range: Range = rng
         self._on_error = on_error
         self.report: Report | None = None
-        self.zoom = False  # valor de la cuenta: solo el último tramo (D-69)
+        self.zoom = False  # account value: only the last stretch (D-69)
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -95,7 +94,7 @@ class ResultsScreen(ModalScreen[None]):
         self._draw_title()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
-        self._draw_title()  # también con el ratón
+        self._draw_title()  # with the mouse too
 
     def on_mount(self) -> None:
         self.query_one(DataTable).add_columns(
@@ -105,12 +104,12 @@ class ResultsScreen(ModalScreen[None]):
         self.reload()
         self.refresh_report()
         self.query_one(DataTable).focus()
-        # el daemon sigue apuntando muestras y fills: abierta no se congela (D-69)
+        # the daemon keeps writing samples and fills: open does not freeze (D-69)
         self.set_interval(RESULTS_EVERY_S, self.refresh_report)
 
     def refresh_report(self) -> None:
-        """Pide lo que falte (precio del token, D-65; con daemon, el informe, D-66)
-        en segundo plano y redibuja."""
+        """Ask for what is missing (token price, D-65; with a daemon, the report, D-66) in the
+        background and redraw."""
 
         async def work() -> None:
             if error := await self._source.refresh(self.range):
@@ -126,7 +125,7 @@ class ResultsScreen(ModalScreen[None]):
             self._on_error(f"resultados: no se pudo leer el journal ({exc})")
             return
         if report == self.report:
-            return  # sin cambios: ni se redibuja ni se mueve la selección
+            return  # no changes: no redraw and no selection move
         self.report = report
         self._draw()
 
@@ -142,25 +141,25 @@ class ResultsScreen(ModalScreen[None]):
         self.query_one("#results-bars", ResultsChart).show(self.report.doubles)
         self.query_one("#results-summary", Static).update(self.summary_text())
         table = self.query_one(DataTable)
-        selected = None  # la fila seleccionada sigue en su doble al redibujar
+        selected = None  # the selected row stays on its double on redraw
         if table.row_count:
             selected = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
         table.clear()
         priced = {a for a, _ in self.report.summary.prices}
-        for d in reversed(self.report.doubles):  # la más reciente arriba
+        for d in reversed(self.report.doubles):  # most recent on top
             table.add_row(*self._cells(d, priced), key=d.id)
         if selected is not None and selected in table.rows:
             table.move_cursor(row=table.get_row_index(selected), animate=False)
 
     @staticmethod
     def _cells(d: DoubleResult, priced: Collection[str] = ()) -> tuple[str, ...]:
-        """`priced`: tokens cuya fee ya va en sats (D-65)."""
+        """`priced`: tokens whose fee is already in sats (D-65)."""
         started = datetime.fromtimestamp(d.started / 1000, UTC).strftime("%m-%d %H:%M:%S")
         avg = lambda v: "—" if v is None else f"{v:.8f}"  # noqa: E731
         fees = fmt_sats(d.fees + d.token_fees, signed=False)
         valued = [f"{q:f} {a}" for a, q in d.other_fees if a in priced]
         loose = [f"{q:f} {a}" for a, q in d.other_fees if a not in priced]
-        if valued:  # ya en sats (D-65): la cantidad, para saber de dónde salen
+        if valued:  # already in sats (D-65): the quantity, to know where they come from
             fees += f" ({', '.join(valued)})"
         if loose:
             fees += " + " + ", ".join(loose)
@@ -182,10 +181,10 @@ class ResultsScreen(ModalScreen[None]):
                 f"media {fmt_sats(s.mean)} · mejor {fmt_sats(s.best)} "
                 f"· peor {fmt_sats(s.worst)} sats",
             ]
-        if s.prices:  # RF-25, D-65: fees en token restadas a su precio de ahora
+        if s.prices:  # RF-25, D-65: token fees subtracted at today's price
             used = ", ".join(f"{a} a {p:.8f} BTC" for a, p in s.prices)
             parts.append(f"fees en token restadas con {used} (precio de ahora)")
-        if s.other_fees:  # sin precio: no se valoran en BTC
+        if s.other_fees:  # no price: not valued in BTC
             other = ", ".join(f"{q:f} {a}" for a, q in s.other_fees)
             parts.append(f"+ {other} en fees, sin descontar del total")
         extra = [
@@ -218,8 +217,8 @@ class ResultsScreen(ModalScreen[None]):
         )
 
     def value_text(self) -> str:
-        """Resumen de la serie (RF-32) y lo que no es: depósitos y retiros sin
-        ajustar, huecos sin daemon."""
+        """Series summary (RF-32) and what it is not: deposits and withdrawals unadjusted,
+        gaps without daemon."""
         values = self.report.values if self.report is not None else ()
         s = summarize(values)
         if s is None:
@@ -244,7 +243,7 @@ class ResultsScreen(ModalScreen[None]):
         ])  # fmt: skip
 
     def _stretch_text(self) -> list[str]:
-        """Con `z`: de cuándo es el tramo y cuánto cambió en sats."""
+        """With `z`: when the stretch is from and how much it changed in sats."""
         if not self.zoom:
             return []
         s = summarize(self._shown_values())

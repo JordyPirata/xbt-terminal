@@ -1,16 +1,16 @@
-"""Cliente del socket del daemon, para la pantalla `xbt` (D-66).
+"""Client of the daemon socket, for the `xbt` screen (D-66).
 
-`RemoteEngine` mantiene la conexión (y la rehace si el daemon se va) y guarda
-la última foto. `RemoteAccount` y `RemoteBot` dan de ella la misma cara que la
-app usa de `AccountService` y `BotService`, así que los paneles no cambian.
-`RemoteMarket` da la cara de `MarketHub` con el mercado que reenvía el daemon
-y `RemoteOrders` la de `OrderService`: se prepara en el daemon, que devuelve
-la propuesta y una referencia, y se confirma con la referencia (D-66). El
-cliente no habla con los venues.
-Lo único que se manda al daemon es `bot_on` y `bot_off` (D-61); una respuesta
-con error, los avisos y los fallos del daemon salen como `Notice`.
+`RemoteEngine` keeps the connection (and rebuilds it if the daemon leaves) and holds
+the last snapshot. `RemoteAccount` and `RemoteBot` give from it the same face the app
+uses of `AccountService` and `BotService`, so panels do not change. `RemoteMarket`
+gives `MarketHub`'s face with the market the daemon forwards and `RemoteOrders`
+`OrderService`'s: preparing happens in the daemon, which returns the proposal and a
+reference, and confirming uses the reference (D-66). The client does not talk to the
+venues.
+All that is sent to the daemon is `bot_on` and `bot_off` (D-61); an error reply, the
+daemon's notices and its faults come out as `Notice`.
 
-Spec: RF-31 · design.md §6.13 · Tareas: T-53, T-62, T-63, T-64 · D-61, D-66
+Spec: RF-31 · design.md §6.13 · Tasks: T-53, T-62, T-63, T-64 · D-61, D-66
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ REPLIES: dict[str, type] = {
         CancelPlan, CancelRefused, CancelResult,
     )
 }  # fmt: skip
-LIMIT = 2**22  # una foto con muchas dobles cabe de sobra
+LIMIT = 2**22  # a snapshot with many doubles fits easily
 
 
 class DaemonGoneError(Exception):
@@ -72,14 +72,14 @@ class DaemonGoneError(Exception):
 
 
 class DaemonRefusedError(Exception):
-    """El daemon contestó a una petición con un error (el texto es para el usuario)."""
+    """The daemon answered a request with an error (the text is for the user)."""
 
 
 @dataclass(frozen=True, slots=True)
 class Hello:
     mode: str
     has_bot: bool
-    view: ClientView | None = None  # la config que necesita la pantalla (D-66)
+    view: ClientView | None = None  # the config the screen needs (D-66)
 
 
 async def _open(path: Path) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
@@ -90,12 +90,12 @@ async def _open(path: Path) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]
             f"no hay daemon escuchando en {path}: arráncalo con `xbt daemon` "
             "(o indica su socket con --socket)"
         ) from exc
-    except OSError as exc:  # p. ej. una ruta de más de 107 bytes, o sin permiso
+    except OSError as exc:  # e.g. a path over 107 bytes, or no permission
         raise DaemonGoneError(f"no se puede abrir el socket {path}: {exc}") from exc
 
 
 async def probe(path: Path, timeout: float = 5.0) -> Hello:
-    """Antes de abrir la pantalla: el modo del daemon y si tiene bot."""
+    """Before opening the screen: the daemon's mode and whether it has a bot."""
     reader, writer = await _open(path)
     try:
         async with asyncio.timeout(timeout):
@@ -118,13 +118,13 @@ def _fresh(vid: VenueId) -> VenueMarket:
 
 
 class RemoteMarket:
-    """El mercado del daemon con la cara de `MarketHub` que usa la app: `state`,
-    `subscribe`, `roll` y `clock`. Los trades que llegan ya pasaron el filtro
-    del hub del daemon, así que se aplican todos."""
+    """The daemon's market with the `MarketHub` face the app uses: `state`, `subscribe`,
+    `roll` and `clock`. Trades arriving already passed the daemon hub's filter, so all
+    are applied."""
 
     def __init__(self, clock: Callable[[], int] = now_ms) -> None:
         self._clock = clock
-        self.faults = Faults()  # vacío: los fallos de mercado son del daemon
+        self.faults = Faults()  # empty: market faults are the daemon's
         self.state: dict[VenueId, VenueMarket] = {vid: _fresh(vid) for vid in VENUES}
         self._listeners: list[Callable[[VenueId, str], None]] = []
 
@@ -132,7 +132,7 @@ class RemoteMarket:
         self._listeners.append(listener)
 
     def subscribe_events(self, listener: Callable[..., None]) -> None:
-        pass  # nadie reenvía desde el cliente
+        pass  # nobody forwards from the client
 
     def _notify(self, venue: VenueId, what: str) -> None:
         for listener in self._listeners:
@@ -143,7 +143,7 @@ class RemoteMarket:
         return self._clock
 
     def clock_skew_ms(self, vid: VenueId) -> int | None:
-        return None  # el desfase lo vigila el daemon (RNF-16)
+        return None  # the daemon watches the skew (RNF-16)
 
     def roll(self, now: int | None = None) -> None:
         now = self._clock() if now is None else now
@@ -154,12 +154,12 @@ class RemoteMarket:
                 self._notify(vid, "candles")
 
     async def run(self) -> None:
-        pass  # lo alimenta `RemoteEngine`
+        pass  # fed by `RemoteEngine`
 
     async def aclose(self) -> None:
         pass
 
-    # -- del socket ------------------------------------------------------------
+    # -- from the socket ------------------------------------------------------------
 
     def _init(self, vid: VenueId, view: MarketView) -> None:
         st = _fresh(vid)
@@ -197,18 +197,18 @@ class RemoteMarket:
 
 
 class RemoteAccount:
-    """Cuentas del daemon con la cara de `AccountService`."""
+    """The daemon's accounts with the `AccountService` face."""
 
     def __init__(self) -> None:
         self.state: dict[VenueId, VenueAccount] = {}
-        self.faults = Faults()  # vacío: los fallos son del daemon y llegan como avisos
+        self.faults = Faults()  # empty: faults are the daemon's and arrive as notices
         self._listeners: list[Callable[[VenueId, str], None]] = []
 
     def subscribe(self, listener: Callable[[VenueId, str], None]) -> None:
         self._listeners.append(listener)
 
     def subscribe_events(self, listener: Callable[..., None]) -> None:
-        pass  # los fills los sigue el daemon
+        pass  # the daemon follows the fills
 
     def _update(self, accounts: dict[VenueId, VenueAccount]) -> None:
         self.state = accounts
@@ -225,8 +225,8 @@ EMPTY_REPORT = Report((), Summary(0, ZERO, None, None, None, 0, 0, 0, 0), ())
 
 
 class RemoteResults:
-    """Los resultados del daemon (RF-25): los calcula él con su journal y el
-    precio del token. `refresh` los pide; `load` da el último de cada rango."""
+    """The daemon's results (RF-25): it computes them with its journal and the token
+    price. `refresh` asks; `load` gives the last one of each range."""
 
     def __init__(self, link: RemoteEngine) -> None:
         self._link = link
@@ -237,7 +237,7 @@ class RemoteResults:
         return self._reports.get(rng, EMPTY_REPORT)
 
     async def refresh(self, rng: Range) -> str | None:
-        """Pide el informe del rango; devuelve el error, si lo hubo."""
+        """Ask for the range's report; return the error, if any."""
         try:
             _, raw, _ = await self._link.request("results", {"range": rng})
         except (DaemonGoneError, DaemonRefusedError) as exc:
@@ -249,7 +249,7 @@ class RemoteResults:
 
 
 class RemoteDeposits:
-    """Las direcciones de depósito que pide el daemon (RF-28)."""
+    """The deposit addresses the daemon asks for (RF-28)."""
 
     def __init__(self, link: RemoteEngine) -> None:
         self._link = link
@@ -262,14 +262,14 @@ class RemoteDeposits:
     async def load(self) -> list[DepositRow]:
         try:
             _, raw, _ = await self._link.request("deposits", {})
-        # cada fila lo dice, como un fallo del venue
+        # each row says so, like a venue failure
         except (DaemonGoneError, DaemonRefusedError) as exc:
             return [DepositRow(vid, a, None, str(exc)) for vid in self.venues for a in ASSETS]
         return list(decode(Rows, raw).rows)
 
 
 class RemoteRebalance:
-    """Las comisiones de retiro que pide el daemon (RF-29)."""
+    """The withdrawal fees the daemon asks for (RF-29)."""
 
     def __init__(self, link: RemoteEngine) -> None:
         self._link = link
@@ -288,7 +288,7 @@ class RemoteRebalance:
 
 
 class RemoteBot:
-    """El bot del daemon con la cara de `BotService`."""
+    """The daemon's bot with the `BotService` face."""
 
     def __init__(self, link: RemoteEngine) -> None:
         self._link = link
@@ -312,7 +312,7 @@ class RemoteBot:
         return self._text
 
     def arm(self) -> str | None:
-        """Se manda `bot_on`; si el daemon lo rechaza, llega como aviso."""
+        """Sends `bot_on`; if the daemon refuses, it arrives as a notice."""
         self._link.send("bot_on")
         return None
 
@@ -332,17 +332,17 @@ class RemoteBot:
 
 
 class RemoteOrders:
-    """Las órdenes del daemon con la cara de `OrderService` que usa la app. La
-    propuesta se guarda con su referencia hasta confirmarla; un rechazo del daemon
-    al confirmar (propuesta caducada…) vuelve como el resultado de error que la app
-    ya sabe enseñar. Sin daemon, `DaemonGoneError`."""
+    """The daemon's orders with the `OrderService` face the app uses. The proposal is kept
+    with its reference until confirmed; a daemon rejection on confirming (expired
+    proposal…) comes back as the error result the app already knows how to show.
+    Without a daemon, `DaemonGoneError`."""
 
     def __init__(self, link: RemoteEngine) -> None:
         self._link = link
-        self._tokens: dict[int, tuple[object, str]] = {}  # id(propuesta) → (propuesta, token)
+        self._tokens: dict[int, tuple[object, str]] = {}  # id(proposal) → (proposal, token)
         self._listeners: list[Callable[[str], None]] = []
 
-    # -- lo que lee la app ---------------------------------------------------------
+    # -- what the app reads ---------------------------------------------------------
 
     @property
     def doubles(self) -> dict[str, DoubleState]:
@@ -369,7 +369,7 @@ class RemoteOrders:
                 for listener in self._listeners:
                     listener(did)
 
-    # -- peticiones ------------------------------------------------------------------
+    # -- requests ------------------------------------------------------------------
 
     async def _ask(self, cmd: str, args: dict[str, Any]) -> Any:
         kind, raw, token = await self._link.request(cmd, args)
@@ -439,7 +439,7 @@ class RemoteEngine:
         self._waiting: dict[int, asyncio.Future[tuple[str, Any, str | None]]] = {}
         self._listeners: list[Callable[[Notice], None]] = []
         self._link_listeners: list[Callable[[bool], None]] = []
-        # qué hacer con cada tipo de mensaje del daemon (`_handle`)
+        # what to do with each daemon message type (`_handle`)
         self._handlers: dict[Any, Callable[[dict[str, Any]], None]] = {
             "hello": self._on_hello,
             "state": self._on_state,
@@ -454,7 +454,7 @@ class RemoteEngine:
             "error": self._on_error,
         }
 
-    # -- lo que lee la app -------------------------------------------------------
+    # -- what the app reads -------------------------------------------------------
 
     @property
     def doubles(self) -> dict[str, DoubleState]:
@@ -474,7 +474,7 @@ class RemoteEngine:
 
     @property
     def faults(self) -> int:
-        """Fallos de la sesión del daemon."""
+        """Faults of the daemon session."""
         return self.snapshot.faults if self.snapshot is not None else 0
 
     @property
@@ -485,7 +485,7 @@ class RemoteEngine:
         self._listeners.append(listener)
 
     def subscribe_link(self, listener: Callable[[bool], None]) -> None:
-        """Se conectó (True) o se perdió el daemon (False)."""
+        """Connected (True) or lost the daemon (False)."""
         self._link_listeners.append(listener)
 
     def _say(self, text: str, *, error: bool = False) -> None:
@@ -493,7 +493,7 @@ class RemoteEngine:
         for listener in self._listeners:
             listener(notice)
 
-    # -- conexión ------------------------------------------------------------------
+    # -- connection ------------------------------------------------------------------
 
     def send(self, cmd: str) -> None:
         if self._writer is None or not self.connected:
@@ -502,8 +502,8 @@ class RemoteEngine:
         self._writer.write(dumps({"cmd": cmd}))
 
     async def request(self, cmd: str, args: dict[str, Any]) -> tuple[str, Any, str | None]:
-        """Manda una petición y espera su respuesta: `(kind, valor sin decodificar,
-        token)`. Error del daemon → `DaemonRefusedError`; sin daemon → `DaemonGoneError`."""
+        """Send a request and wait for its reply: `(kind, undecoded value, token)`. Daemon
+        error → `DaemonRefusedError`; no daemon → `DaemonGoneError`."""
         if self._writer is None or not self.connected:
             raise DaemonGoneError("sin conexión con el daemon: no se mandó nada")
         rid = next(self._ids)
@@ -518,7 +518,7 @@ class RemoteEngine:
             self._waiting.pop(rid, None)
 
     def _answered(self, msg: dict[str, Any]) -> bool:
-        """Respuesta a una petición de `request`: True si era una."""
+        """Reply to a `request` request: True if it was one."""
         future = self._waiting.get(msg.get("id"))  # type: ignore[arg-type]
         if future is None:
             return False
@@ -536,7 +536,7 @@ class RemoteEngine:
         self._waiting.clear()
 
     async def run(self) -> None:
-        """Conecta, lee y, si el daemon se va, reintenta hasta que se cancela."""
+        """Connect, read and, if the daemon leaves, retry until cancelled."""
         while True:
             try:
                 reader, self._writer = await _open(self.path)
@@ -546,7 +546,7 @@ class RemoteEngine:
             try:
                 await self._read(reader)
             except (ConnectionError, OSError, ValueError) as exc:
-                log.warning("conexión con el daemon cortada: %s", exc)
+                log.warning("connection with the daemon lost: %s", exc)
             finally:
                 self._writer.close()
                 self._writer = None
@@ -561,14 +561,14 @@ class RemoteEngine:
             msg = loads(line)
             try:
                 self._handle(msg)
-            except (KeyError, TypeError, ValueError) as exc:  # uno raro no corta el resto
-                log.warning("mensaje del daemon que no se entiende (%s): %s", msg.get("type"), exc)
+            except (KeyError, TypeError, ValueError) as exc:  # an odd one does not cut the rest
+                log.warning("unintelligible daemon message (%s): %s", msg.get("type"), exc)
 
     def _handle(self, msg: dict[str, Any]) -> None:
         kind = msg.get("type")
         if kind in ("reply", "error") and self._answered(msg):
             return
-        handler = self._handlers.get(kind)  # un tipo nuevo del daemon no rompe nada
+        handler = self._handlers.get(kind)  # a new daemon message type breaks nothing
         if handler is not None:
             handler(msg)
 
@@ -601,7 +601,7 @@ class RemoteEngine:
         self._say(f"daemon: {msg['message']}", error=True)
 
     def _on_reply(self, msg: dict[str, Any]) -> None:
-        """Una respuesta que nadie esperaba: solo cuenta si trae un error."""
+        """A reply nobody awaited: it only counts if it brings an error."""
         if msg.get("error"):
             self._say(str(msg["error"]), error=True)
 

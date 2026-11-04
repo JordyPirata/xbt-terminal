@@ -1,8 +1,8 @@
-"""Propuestas y resultados de órdenes: lo que el daemon calcula y el cliente
-enseña (diálogo de confirmación, mensajes). Datos puros, sin I/O: viajan por
-el socket (D-66) y la UI los usa sin importar los servicios.
+"""Order proposals and outcomes: what the daemon computes and the client shows
+(confirmation dialog, messages). Pure data, no I/O: it travels over the socket
+(D-66) and the UI uses it without importing the services.
 
-Spec: RF-06, RF-07, RF-08, RF-31 · design.md §6.2-6.4, §6.13 · Tareas: T-16,
+Spec: RF-06, RF-07, RF-08, RF-31 · design.md §6.2-6.4, §6.13 · Tasks: T-16,
 T-18, T-19, T-65 · D-66
 """
 
@@ -25,13 +25,13 @@ def _decimals(step: Decimal) -> int:
 
 @dataclass(frozen=True, slots=True)
 class Pending:
-    """Orden validada, a falta de que el operador la confirme."""
+    """Validated order, pending the operator's confirmation."""
 
     req: OrderRequest
     spec: MarketSpec
     notional: Decimal
-    fee: Decimal  # taker como cota superior: si la orden queda en el book, paga maker
-    basis: str | None = None  # de dónde sale la cantidad si se pidió en % (RF-17)
+    fee: Decimal  # taker as an upper bound: an order that rests pays maker
+    basis: str | None = None  # where the quantity comes from when asked in % (RF-17)
 
     @property
     def summary(self) -> str:
@@ -69,7 +69,7 @@ SIDE_LABEL: dict[Side, str] = {"buy": "compra", "sell": "venta"}
 
 @dataclass(frozen=True, slots=True)
 class PendingDouble:
-    """Orden doble validada, a falta de la confirmación del operador."""
+    """Validated double order, pending the operator's confirmation."""
 
     id: str
     buy: Pending
@@ -81,7 +81,7 @@ class PendingDouble:
 
     @property
     def net(self) -> Decimal:
-        """Con fee taker en las dos piernas: la cota pesimista."""
+        """With taker fee on both legs: the pessimistic bound."""
         return self.sell.notional * (1 - self.sell.spec.taker_fee) - self.buy.notional * (
             1 + self.buy.spec.taker_fee
         )
@@ -129,7 +129,7 @@ class DoubleSent:
 
 @dataclass(frozen=True, slots=True)
 class CancelPlan:
-    """Lo que se va a cancelar, para el diálogo de confirmación."""
+    """What will be cancelled, for the confirmation dialog."""
 
     scope: str  # order | venue | all
     orders: dict[VenueId, tuple[Order, ...]]
@@ -163,7 +163,7 @@ class CancelRefused:
 
 @dataclass(frozen=True, slots=True)
 class CancelResult:
-    remaining: dict[VenueId, int]  # de las que se querían cancelar, las que siguen abiertas
+    remaining: dict[VenueId, int]  # of those meant to be cancelled, the ones still open
     errors: dict[VenueId, str]
 
     @property
@@ -189,12 +189,12 @@ class CancelResult:
 class Failed:
     req: OrderRequest
     error: str
-    local: bool = False  # no salió de la terminal (el journal falló), no es del venue
+    local: bool = False  # it never left the terminal (the journal failed); not the venue's doing
 
 
 @dataclass(frozen=True, slots=True)
 class Uncertain:
-    """No se sabe si la orden llegó al venue: se reconcilia (RNF-12)."""
+    """Unknown whether the order reached the venue: to be reconciled (RNF-12)."""
 
     req: OrderRequest
     error: str
