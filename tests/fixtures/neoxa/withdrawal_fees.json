@@ -1,0 +1,1 @@
+{"success":true,"fees":[{"token":"BTC","chain":"bitcoin","withdrawalFee":"0.0001","minWithdrawal":"0.0005","autoLimit":"0.5"},{"token":"BTCB2","chain":"btcb2","withdrawalFee":"0.0001","minWithdrawal":"0.01","autoLimit":200},{"token":"DOGE","chain":"dogecoin","withdrawalFee":2,"minWithdrawal":10}]}

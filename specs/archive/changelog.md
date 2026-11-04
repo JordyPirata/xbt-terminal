@@ -169,3 +169,9 @@ Es historia: la spec vigente es la de `requirements.md`.
 > `--replay` los reproduce en dry-run sin keys, con un competidor simulado, y
 > `xbt report` da el resultado fijo del bot sobre una grabación. Es la puerta de
 > entrada de D-79 para cualquier estrategia nueva.
+
+> **Cambio v0.31 → v0.32 (D-82): contrato de venue (RF-36, CA-21).** Segundo paso
+> de la fase 3 (T-88): la interfaz de `adapters/base.py` pasa a ser un contrato
+> público, en `docs/contrato-venue.md`, con una batería común en `tests/contract/`
+> por la que tiene que pasar cualquier venue. Declara `FeedUpkeep`, que los servicios
+> ya usaban sin declarar.

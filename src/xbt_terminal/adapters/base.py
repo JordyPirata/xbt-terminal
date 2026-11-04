@@ -3,7 +3,9 @@
 `MarketData` is the public part (T-08, T-09); `Venue` adds the private one (T-17).
 The UI and services only know these protocols, never a concrete adapter (RNF-09).
 
-Spec: RNF-09, RNF-12 · design.md §4 · Tasks: T-08, T-09, T-25
+Public contract: docs/contrato-venue.md, checked by tests/contract/.
+
+Spec: RF-36, RNF-09, RNF-12 · design.md §4 · Tasks: T-08, T-09, T-25, T-88
 """
 
 from __future__ import annotations
@@ -90,6 +92,17 @@ class Venue(MarketData, Protocol):
     keeps_client_id: bool  # does the venue return each order's client_id?
 
     async def recent_orders(self, since: int) -> list[Order]: ...
+
+
+@runtime_checkable
+class FeedUpkeep(Protocol):
+    """What the services use from a real venue's adapter, when it is there (D-82).
+    Apart from `Venue` because `DryRunVenue` and `ReplayVenue` are venues without it."""
+
+    clock_skew_ms: int | None  # venue minus local, from the last response (RNF-16)
+
+    async def resync(self) -> None: ...  # the local book does not match REST (RNF-24)
+    async def aclose(self) -> None: ...
 
 
 @runtime_checkable

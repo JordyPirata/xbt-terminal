@@ -1160,3 +1160,19 @@ ni los textos que ve el usuario.
 - Actualizar las referencias a tests renombrados en `HANDOFF.md`.
 - Tests: la suite pasa sin cambiar ninguna lógica; `spec_trace` da lo mismo que
   antes; `test_english.py` falla con un comentario en español de prueba.
+
+### T-88 Contrato de adaptador · `done` · RF-36, RNF-09, CA-21 · dep T-32 · D-79, D-82
+- Spec: el contrato de venue como RF, con su CA.
+- `docs/`: la interfaz de `adapters/base.py` (`MarketData`, `Venue` y los
+  opcionales `Depositor`, `WithdrawalFees`, `TokenPricer`) documentada como
+  contrato público.
+- Batería de tests de contrato parametrizada por venue, con los fixtures
+  grabados en real de cada uno.
+- Tests: la batería pasa con NonKYC y Neoxa y falla con un adaptador falso que
+  rompe el contrato.
+- Hecho: spec v0.32 (RF-36, CA-21, D-82), `docs/contrato-venue.md`, `FeedUpkeep` en
+  `adapters/base.py` y la batería de `tests/contract/`: 31 cláusulas, las tres últimas
+  opcionales según el venue. Pasa con NonKYC, Neoxa y un adaptador falso; cada cláusula
+  tiene una variante rota que la hace fallar. Además, 5 mutaciones a mano del código
+  de los adaptadores reales: la batería las cazó todas.
+

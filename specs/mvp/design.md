@@ -112,7 +112,9 @@ class Venue(Protocol):
   (D-26): timeout u otro fallo de red *después* de conectar, HTTP 5xx, respuesta
   2xx que no es JSON, o respuesta que no se puede leer como orden. Un fallo al
   conectar (`ConnectError`, `ConnectTimeout`, `PoolTimeout`) o un 4xx/error del
-  venue sigue siendo `VenueError`: la orden no existe.
+  venue sigue siendo `VenueError`: la orden no existe. El fallo al conectar sale tal
+  cual, como `httpx.HTTPError` (D-82).
+- El contrato público, con cada cláusula, está en `docs/contrato-venue.md` (RF-36).
 - `recent_orders(since)`: órdenes del par que pueden ser la de un envío incierto.
   NonKYC: las activas más las de sus trades propios desde `since` (`/getorder`).
   Neoxa: las activas más las 100 últimas del historial. `keeps_client_id` es True
@@ -873,6 +875,7 @@ Comandos y venues sin distinguir mayúsculas; los ids de orden sí las distingue
 | --- | --- | --- |
 | Unit | `core/*` | pytest, sin red |
 | Adaptador | parseo de respuestas reales grabadas en `tests/fixtures/` | pytest + respx |
+| Contrato de venue | la misma batería para cada venue y variantes rotas de un adaptador falso (RF-36, CA-21) | `tests/contract/` |
 | Resiliencia | caída y vuelta de WS | servidor `websockets` local en el test |
 | UI | layout, render de paneles, que no aparezcan secretos | `textual` `App.run_test()` |
 | Aceptación | CA-01…07 contra los venues reales con tamaños mínimos; CA-10 (bot en real) | manual, checklist en `tasks.md` T-20 (T-38, ya cerrada, en `specs/archive/tasks-done.md`) |

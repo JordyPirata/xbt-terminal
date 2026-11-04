@@ -6,11 +6,15 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-04)
 
+- **T-88 hecha (spec v0.32, D-82):** contrato público en `docs/contrato-venue.md`,
+  batería en `tests/contract/` (31 cláusulas), con NonKYC, Neoxa y un adaptador falso
+  con una variante rota por cláusula. `FeedUpkeep` declara `resync`, `clock_skew_ms` y
+  `aclose`, que los servicios usaban por `getattr`. Sin cambio de comportamiento.
 - **T-91 hecha (D-81):** comentarios, docstrings, logs y nombres de test en inglés
   en `src/`, `tests/` y `tools/`; lo vigila `tests/unit/test_english.py`. El AST de
   `src/` solo cambia en mensajes de log y en `DESCRIPTION` de `--help`, que sigue en
   español (antes salía del docstring del módulo).
-- **T-87 fusionada en `main`** (`dd7208b`), sin subir: falta `git push origin main`.
+- **`main` por delante de `origin`** (T-87 y T-91): falta `git push origin main`.
 - **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
   `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
   con venues simulados (`services/replay.py`) y `[replay]` en la config;
@@ -130,10 +134,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ### Siguiente
 
-00. **T-91 hecha** en la rama `t-91-english-code`, sin fusionar: falta el visto
-    bueno del usuario.
-    Después **T-88** (contrato de adaptador), que empieza por su versión de la spec; luego
-    T-89 y T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
+00. **T-88 hecha** en la rama `t-88-adapter-contract`, sin fusionar: falta el visto
+    bueno del usuario. Después **T-89** (interfaz de estrategia), que empieza por su
+    versión de la spec; luego T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
     seguridad en `CONTRIBUTING.md`.
 1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
    salen y en qué venue (en Neoxa se espera ~1 cada 3 a 4 min por carreras,

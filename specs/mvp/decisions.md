@@ -91,6 +91,7 @@ dicen en su propia nota.
 | D-79 | 2026-10-31 | Fase 3: comunidad pequeña, pares contra BTC, venues y estrategias por contrato (requirements v0.30) |
 | D-80 | 2026-11-04 | Banco de pruebas: grabación aparte del journal, venues simulados y tiempo virtual (requirements v0.31, T-87) |
 | D-81 | 2026-11-04 | El código va todo en inglés; en español, lo que ve el usuario, los docs y la spec (T-91) |
+| D-82 | 2026-11-04 | Contrato de venue: documento público, batería común y una variante rota por cláusula (requirements v0.32, T-88) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -2033,3 +2034,35 @@ comentarios que sobran.
 **Toca:** `CLAUDE.md`, `CONTRIBUTING.md`, T-91. Sustituye a la regla anterior de
 `CLAUDE.md` (docstrings y comentarios en español).
 
+## D-82 · 2026-11-04 · Contrato de venue: documento público, batería común y una variante rota por cláusula (requirements v0.32, T-88)
+**Contexto:** D-79 deja entrar venues nuevos si cumplen la interfaz de RNF-09 y
+pasan una batería de contrato. La interfaz solo estaba en `adapters/base.py` y
+design.md §4, y cada venue tenía sus propios tests. Al repasar lo que usan los
+servicios salieron tres cosas sin declarar, por `getattr`: `resync` (RNF-24),
+`clock_skew_ms` (RNF-16) y `aclose`. Un venue sin ellas pasaría `isinstance(v, Venue)`
+y operaría en live sin medir el desfase ni recuperar un book malo.
+**Decisión:**
+- El contrato es `docs/contrato-venue.md` (RF-36). Lista cada cláusula con el
+  nombre de su comprobación, y un test exige que coincidan con la batería.
+- `tests/contract/` tiene la batería (`battery.py`), que no sabe de HTTP: habla con
+  un `Harness` por venue (`venues.py`), que monta los fixtures y simula los fallos.
+  Añadir un venue es escribir su `Harness`, sin tocar las comprobaciones.
+- **Probar la batería:** pasar con dos adaptadores buenos no demuestra que detecte
+  nada. Un adaptador falso correcto (`fake.py`) y, por cada cláusula, una variante
+  que rompe solo esa: su comprobación tiene que fallar. Un test exige que ninguna
+  comprobación se quede sin variante.
+- `FeedUpkeep` declara `resync`, `clock_skew_ms` y `aclose` en `base.py`, aparte de
+  `Venue`, porque `DryRunVenue` y `ReplayVenue` son `Venue` y no los tienen. Los
+  servicios siguen con `getattr`: sin cambio de comportamiento. Es obligatorio para
+  un adaptador de venue real, no para esos envoltorios.
+- **Lo que el contrato refleja tal cual, aunque no sea bonito:** un fallo de red en
+  una petición sale como `httpx.HTTPError`, no como `VenueError`, y design.md §4
+  decía lo contrario para el fallo al conectar: se corrige allí. `book_snapshot` y
+  `recent_trades` no prometen recortar a `depth` ni a `limit`.
+- Añadir un venue también pide tocar `VenueId` (`core/models.py`), la config y el
+  arranque (`__main__.py`). Eso no es contrato; el documento lo avisa.
+- Los fixtures de órdenes propias de NonKYC salen de su OpenAPI y los de colocar y
+  cancelar de Neoxa de sus ejemplos: grabarlos pide operar. RF-36 admite esa
+  excepción si el fixture o su test lo dicen.
+**Toca:** RF-36, CA-21, RNF-09, design.md §4 y §10, `docs/contrato-venue.md`,
+`CONTRIBUTING.md`, T-88.

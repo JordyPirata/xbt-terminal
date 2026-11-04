@@ -216,15 +216,7 @@ exista, no se construye nada de ellas.
 
 ### T-87 Grabar y reproducir books · `done` · RF-33, RF-34, RF-35, CA-19, CA-20 · dep T-32 · D-79, D-80, PA-11
 
-### T-88 Contrato de adaptador · `todo` · RNF-09, RF nuevo · dep T-32 · D-79
-- Spec: el contrato de venue como RF, con su CA.
-- `docs/`: la interfaz de `adapters/base.py` (`MarketData`, `Venue` y los
-  opcionales `Depositor`, `WithdrawalFees`, `TokenPricer`) documentada como
-  contrato público.
-- Batería de tests de contrato parametrizada por venue, con los fixtures
-  grabados en real de cada uno.
-- Tests: la batería pasa con NonKYC y Neoxa y falla con un adaptador falso que
-  rompe el contrato.
+### T-88 Contrato de adaptador · `done` · RF-36, RNF-09, CA-21 · dep T-32 · D-79, D-82
 
 ### T-89 Interfaz de estrategia · `todo` · RF-18 … RF-22, RNF-22, RF nuevo · dep T-87 · D-79, PA-12
 - Spec: RF de la interfaz (entrada: books, saldos y reloj; salida: una

@@ -57,9 +57,9 @@ una versión nueva de la spec lo abra.
 ## Qué se puede proponer (fase 3, D-79)
 
 - **Pares contra BTC**, en cualquier venue que ya esté soportado.
-- **Venues nuevos:** el adaptador implementa la interfaz común (RNF-09) y pasa la
-  batería de tests de contrato con fixtures grabados en real del venue. Lo que
-  compruebes de su API, apúntalo en `docs/api/` y en `tests/fixtures/`.
+- **Venues nuevos:** el adaptador cumple `docs/contrato-venue.md` y pasa la batería
+  de `tests/contract/` con fixtures grabados en real del venue. Lo que compruebes de
+  su API, apúntalo en `docs/api/` y en `tests/fixtures/`.
 - **Estrategias:** una función pura en `core/` que propone una orden doble, o
   ninguna, con su motivo. Las validaciones (RF-10), los límites (RF-22) y el paro
   ante anomalías (RF-21) son del daemon y valen para todas: una estrategia no
