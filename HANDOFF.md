@@ -45,7 +45,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   en `src/`, `tests/` y `tools/`; lo vigila `tests/unit/test_english.py`. El AST de
   `src/` solo cambia en mensajes de log y en `DESCRIPTION` de `--help`, que sigue en
   español (antes salía del docstring del módulo).
-- **`main` por delante de `origin`** (T-87, T-91 y T-88): falta `git push origin main`.
+- **`main` y `origin` al día** (2026-11-07, hasta T-97). En el servidor siguen sin desplegar T-87, T-88, T-91, T-92, T-94 y T-97.
 - **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
   `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
   con venues simulados (`services/replay.py`) y `[replay]` en la config;
