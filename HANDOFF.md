@@ -4,6 +4,33 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
+## Estado (2026-11-07)
+
+- **M19 — Rendimiento, nuevo en `tasks.md`:** T-92 a T-96, salidas de un
+  `cProfile` de la muestra de replay. Prioritarias (★): T-92, T-93 (cooldown y
+  topes antes de montar las vistas) y T-94 (resultados sin releer todo el
+  journal). Ninguna cambia decisiones del bot; T-95 (agrupar evaluaciones)
+  empieza por su D-NN. **Siguiente: T-93.**
+- **T-92 hecha (sin commit):** `_views` usa `L2Book.best_levels` sin copiar y
+  `_check_decimals` cachea campos por clase; en la muestra, `_evaluate` de 0,93 s a
+  0,25 s. `tests/fixtures/replay/decisiones.txt` guarda las 542 decisiones de la
+  muestra: si un cambio legítimo del bot las altera, se regenera con
+  `uv run python -m tests.services.test_bot_decisions_replay`. No desplegada.
+- **Revisión del bot en live (2026-11-07, journal del servidor del 10-22 al 11-08,
+  la revisión que pedía D-75):** desde T-78 (10-29 20:49 UTC), 1545 disparos,
+  +0.00162 BTC en las cerradas y ninguna cerrada con pérdida. 18 `hanging_leg`
+  (1.2 %, antes de T-77 era el 3.2 %): 14 en la pierna de NonKYC que no llena y 4
+  "sin enviar" el 11-03 entre las 04:02 y las 04:22 UTC (Neoxa `order_unknown` y
+  después `filled`). Lo real supera a lo esperado en +0.98 pp: cada pierna llena
+  ~0.35 % mejor que su límite y la fee real es 0.105 % (AMM de Neoxa a 0 y NKYC).
+  De 240 h, el bot estuvo 40 h parado, unas 13 h esperando `bot on` tras una
+  colgada. El 49 % de los disparos salen ≤ 20 s después del anterior (el
+  cooldown de 15 s frena). `max_move_pct` no separa las colgadas. Config del
+  servidor cambiada y daemon reiniciado el 11-08 00:13 UTC con `min_net_pct =
+  "0.8"` (antes 0.4) y `max_daily_btc = "0.02"`; sin `bot_state` desde entonces.
+  Propuestas, pendientes de que el usuario decida: en la respuesta de esa sesión.
+  Scripts en el scratchpad de esa sesión (no en el repo).
+
 ## Estado (2026-11-04)
 
 - **T-88 hecha (spec v0.32, D-82):** contrato público en `docs/contrato-venue.md`,
