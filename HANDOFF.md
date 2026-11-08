@@ -6,12 +6,15 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-07)
 
-- **M19 — Rendimiento, nuevo en `tasks.md`:** T-92 a T-96, salidas de un
-  `cProfile` de la muestra de replay. Prioritarias (★): T-92, T-93 (cooldown y
-  topes antes de montar las vistas) y T-94 (resultados sin releer todo el
-  journal). Ninguna cambia decisiones del bot; T-95 (agrupar evaluaciones)
-  empieza por su D-NN. **Siguiente: T-93.**
-- **T-92 hecha (sin commit):** `_views` usa `L2Book.best_levels` sin copiar y
+- **M19 — Rendimiento, en `tasks.md`:** T-92 y T-94 hechas; T-93 descartada (en
+  `cooldown` el bot no evalúa); quedan T-95, T-96 y T-97. Ninguna cambia decisiones
+  del bot; T-95 (agrupar evaluaciones) empieza por su D-NN. **Siguiente: T-97**
+  (`compute` de resultados es cuadrático en los fills de Neoxa sin ids: ~0,6 s en
+  `todo` con un journal del tamaño del real).
+- **T-94 hecha (sin commit):** caché por fichero en `ResultsService` (tamaño, `mtime`,
+  offset) y recarga periódica en `asyncio.to_thread`. Ganancia pequeña (`todo` de
+  ~0,93 s a ~0,58 s): lo caro es `compute`, no leer.
+- **T-92 hecha:** `_views` usa `L2Book.best_levels` sin copiar y
   `_check_decimals` cachea campos por clase; en la muestra, `_evaluate` de 0,93 s a
   0,25 s. `tests/fixtures/replay/decisiones.txt` guarda las 542 decisiones de la
   muestra: si un cambio legítimo del bot las altera, se regenera con
