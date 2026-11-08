@@ -50,7 +50,7 @@ Deadlines (`fill_timeout_ms`, `settle_s`) use the asyncio loop clock; bot states
 `clock` (epoch ms), like everything else.
 
 Spec: RF-18 to RF-23, CA-08, CA-09 · design.md §6.9 · D-71, D-75 · Tasks: T-36, T-73,
-T-77
+T-77, T-92
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ from ..core.commands import DoubleOrder
 from ..core.double import NAMES, DoubleState, Leg
 from ..core.inventory import InventoryTarget
 from ..core.journal import Journal
-from ..core.models import BASE_LABEL, ZERO, Level, VenueId
+from ..core.models import BASE_LABEL, ZERO, VenueId
 from .account import AccountService, VenueAccount
 from .faults import Faults, supervised
 from .market import MarketHub
@@ -299,15 +299,15 @@ class BotService:
         for vid, st in self._hub.state.items():
             if st.spec is None:
                 continue
-            bids, asks = st.book.top(BOOK_LEVELS)
+            bids, asks = st.book.best_levels(BOOK_LEVELS)
             # the account state is read once per venue (D-70)
             acct = self._account.state.get(vid) if self._account is not None else None
             balances = (acct.balances if acct is not None else None) or {}
             quote, base = balances.get(st.spec.quote), balances.get(st.spec.base)
             views[vid] = VenueView(
                 spec=st.spec,
-                bids=tuple(Level(r.price, r.qty) for r in bids),
-                asks=tuple(Level(r.price, r.qty) for r in asks),
+                bids=bids,
+                asks=asks,
                 quote_available=quote.available if quote is not None else ZERO,
                 base_available=base.available if base is not None else ZERO,
                 blocked=self._blocked(vid, now, acct),

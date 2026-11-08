@@ -73,6 +73,31 @@ class TestTopWithCumulative:
         assert [r.amm for r in b.top(5)[1]] == [False, True]
 
 
+@pytest.mark.spec("RF-02", "RNF-23")
+class TestBestLevels:
+    """The book's own levels, without the cumulative: what the bot reads (T-92)."""
+
+    def test_same_order_and_levels_as_top(self, book):
+        book.apply(delta(11, asks=[lv("1003", "4", amm=True)]))
+        bids, asks = book.best_levels(2)
+        top_bids, top_asks = book.top(2)
+        assert [(lv.price, lv.qty, lv.amm) for lv in bids] == [
+            (r.price, r.qty, r.amm) for r in top_bids
+        ]
+        assert [(lv.price, lv.qty, lv.amm) for lv in asks] == [
+            (r.price, r.qty, r.amm) for r in top_asks
+        ]
+
+    def test_are_the_applied_levels_not_copies(self, book):
+        level = lv("1000.5", "7")
+        book.apply(delta(11, asks=[level]))
+        assert book.best_levels(1)[1][0] is level
+
+    def test_invalid_book_gives_nothing(self, book):
+        book.apply(delta(13))  # skips 11 and 12
+        assert book.best_levels(5) == ((), ())
+
+
 @pytest.mark.spec("RF-02")
 class TestDeltas:
     def test_updates_adds_and_deletes(self, book):

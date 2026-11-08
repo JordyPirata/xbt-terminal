@@ -9,6 +9,7 @@ from xbt_terminal.core.models import (
     MarketSpec,
     Order,
     OrderRequest,
+    WithdrawalFee,
 )
 
 
@@ -88,6 +89,21 @@ class TestDecimalOnly:
     def test_order_with_float_fails(self):
         with pytest.raises(TypeError):
             OrderRequest(venue="nk", side="buy", qty=0.01, price=D("850"), client_id="t-1")
+
+    def test_repeated_checks_still_reject(self):
+        """The Decimal fields are found once per class (T-92): later instances are
+        checked just the same."""
+        for _ in range(3):
+            Level(D("850"), D("1"))
+            with pytest.raises(TypeError, match=r"Level\.qty debe ser Decimal, no float"):
+                Level(D("850"), 1.0)
+
+    def test_optional_decimal_fields_are_not_checked(self):
+        """Only fields annotated as plain `Decimal`, as before T-92."""
+        fee = WithdrawalFee("nk", "BTC", "BTC", D("0.0001"), minimum=None)
+        assert fee.minimum is None
+        with pytest.raises(TypeError, match=r"WithdrawalFee\.fee"):
+            WithdrawalFee("nk", "BTC", "BTC", 0.0001)
 
     def test_tick_and_lot_must_be_positive(self):
         with pytest.raises(ValueError):

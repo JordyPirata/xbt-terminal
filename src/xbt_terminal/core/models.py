@@ -4,7 +4,7 @@ All amounts are `Decimal`, checked at construction: a `float` raises TypeError
 instead of slipping into a price. Timestamps are epoch milliseconds UTC (`int`),
 which both venues return and which group unambiguously.
 
-Spec: RNF-07 · design.md §3 · Task: T-02
+Spec: RNF-07 · design.md §3 · Tasks: T-02, T-92
 """
 
 from __future__ import annotations
@@ -42,15 +42,21 @@ def D(value: Decimal | str | int) -> Decimal:  # noqa: N802 — idioma para Deci
     return value if isinstance(value, Decimal) else Decimal(value)
 
 
+_DECIMAL_FIELDS: dict[type, tuple[str, ...]] = {}
+
+
 def _check_decimals(obj: object) -> None:
     """Every `Decimal` annotation of the dataclass must hold a real Decimal."""
-    for f in fields(obj):  # type: ignore[arg-type]
-        if f.type in ("Decimal", Decimal):
-            value = getattr(obj, f.name)
-            if not isinstance(value, Decimal):
-                raise TypeError(
-                    f"{type(obj).__name__}.{f.name} debe ser Decimal, no {type(value).__name__}"
-                )
+    cls = type(obj)
+    names = _DECIMAL_FIELDS.get(cls)
+    if names is None:
+        # `fields()` per instance was most of the bot's cost per book change (T-92)
+        names = tuple(f.name for f in fields(obj) if f.type in ("Decimal", Decimal))  # type: ignore[arg-type]
+        _DECIMAL_FIELDS[cls] = names
+    for name in names:
+        value = getattr(obj, name)
+        if not isinstance(value, Decimal):
+            raise TypeError(f"{cls.__name__}.{name} debe ser Decimal, no {type(value).__name__}")
 
 
 def _snap(value: Decimal, step: Decimal, rounding: str) -> Decimal:

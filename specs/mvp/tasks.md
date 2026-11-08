@@ -238,3 +238,57 @@ exista, no se construye nada de ellas.
   la cantidad nunca baja del lote ni del mínimo del otro venue.
 
 ### T-91 Limpieza de comentarios y código en inglés · `done` · RNF-21 · D-81
+
+## M19 — Rendimiento (perfil del 2026-11-07)
+
+Sale de un `cProfile` de `xbt report --replay tests/fixtures/replay/muestra.jsonl`
+(7 min de books reales): de 1,22 s de loop, `BotService._evaluate` se lleva
+0,93 s y `_views` 0,78 s; `decide` solo ~0,15 s. **T-92, T-93 y T-94 van
+primero**: T-92 y T-93 quitan la mayor parte del coste del bot sin cambiar
+ninguna decisión. Ninguna tarea de M19 cambia lo que el bot decide ni lo que se
+ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
+
+### T-92 ★ `_views` sin reconstruir el book · `done` · RNF-22, RNF-23 · dep T-72
+
+### T-93 ★ Los topes baratos antes de montar las vistas · `todo` · RF-19, RF-22, RNF-22 · dep T-92
+- `decide` comprueba `not_armed`, `cooldown`, `hour_cap` y `day_cap` después de
+  que `_evaluate` haya montado `_views` para todos los venues. Con el 49 % de
+  los disparos a ≤ 20 s del anterior (revisión del 2026-11-07), muchas
+  evaluaciones caen en el cooldown de 15 s y tiran ese trabajo.
+- Esas comprobaciones, que solo dependen de `state`, `limits` y `now`, salen a
+  una función pura en `core/bot.py` que `decide` sigue llamando primero y que
+  `_evaluate` llama antes de `_views`.
+- Las muestras de mid para `max_move_pct` (D-71, D-72) se siguen tomando con
+  cada book, también durante el cooldown: la ventana no puede quedar vacía.
+- Tests: mismo `Skip` (motivo y detalle) que hoy para cada tope; durante el
+  cooldown `_views` no se llama; tras el cooldown, `volatile` ve el salto
+  ocurrido durante él.
+
+### T-94 ★ Resultados sin releer todo el journal · `todo` · RF-25, RF-32, RNF-06 · dep T-60
+- `services/results.py` (`load`) lee y parsea todos los ficheros del rango cada
+  `RESULTS_EVERY_S` (60 s) y con cada fill, de forma síncrona en el hilo de la
+  UI; con el rango `todo`, el historial entero, que crece con cada día del bot.
+- Los ficheros de días cerrados no cambian: sus filas se guardan en memoria por
+  fichero (tamaño y `mtime` para saber si cambió) y solo se relee lo añadido al
+  del día. La lectura sale del hilo de la UI (worker).
+- El informe (`compute`) no cambia; `bad_lines` cuenta igual.
+- Tests: mismo `Report` con y sin caché para cada rango; una línea añadida al
+  fichero del día aparece en la siguiente carga; un fichero cerrado no se vuelve
+  a leer (contador de lecturas); un fichero reescrito (otro tamaño o `mtime`) sí.
+
+### T-95 Evaluaciones agrupadas en ráfagas de book · `todo` · RNF-23, RF-19 · dep T-93
+- Hoy cada delta despierta al bot y una ráfaga de N deltas da N evaluaciones
+  completas. Agrupar añade latencia al disparo: empieza por una D-NN que mida,
+  con la muestra de replay, evaluaciones ahorradas frente a latencia añadida, y
+  diga si compensa. Si no, la tarea se cierra sin código.
+
+### T-96 Restos menores del perfil · `todo` · RNF-23, RF-31 · dep T-92
+- `L2Book.best_bid`/`best_ask` hacen `max`/`min` sobre todo el book y `mid` los
+  llama los dos (unas 3 veces por venue y evaluación, más la UI): se guarda el
+  mejor precio por lado y solo se recalcula cuando se borra ese nivel.
+- `services/control.py` (`_tick_books`) calcula `book.snapshot()` cada 0,1 s
+  aunque no haya clientes conectados (en el servidor, casi siempre): sin
+  clientes, no se calcula.
+- Tests: `best_bid`/`best_ask`/`mid` iguales a los de hoy en una secuencia
+  aleatoria de snapshots y deltas con semilla fija; sin clientes no se llama a
+  `snapshot`, y al conectarse uno recibe el book en su `market_init`.

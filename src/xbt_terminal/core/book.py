@@ -9,7 +9,7 @@ seeing `needs_snapshot`. Venues without `seq` apply everything.
 caller (MarketHub). Freshness uses the local one (RNF-16, D-30): with a skewed
 venue clock, `ts` would call an old book new or the other way round.
 
-Spec: RF-02, RNF-16, RNF-23 · design.md §6.1 · D-70 · Tasks: T-10, T-29, T-72
+Spec: RF-02, RNF-16, RNF-23 · design.md §6.1 · D-70 · Tasks: T-10, T-29, T-72, T-92
 """
 
 from __future__ import annotations
@@ -108,6 +108,14 @@ class L2Book:
             return (), ()
         bids, asks = self._best(n)
         return _rows(bids), _rows(asks)
+
+    def best_levels(self, n: int) -> tuple[tuple[Level, ...], tuple[Level, ...]]:
+        """Best N levels per side as the book holds them, without the cumulative: the bot
+        reads one per book change, and copying them cost more than deciding (T-92)."""
+        if not self.valid:
+            return (), ()
+        bids, asks = self._best(n)
+        return tuple(bids), tuple(asks)
 
     def _best(self, n: int) -> tuple[list[Level], list[Level]]:
         """Best N per side without sorting the whole book (D-70): `heapq` gives the

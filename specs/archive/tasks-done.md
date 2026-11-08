@@ -1176,3 +1176,24 @@ ni los textos que ve el usuario.
   tiene una variante rota que la hace fallar. Además, 5 mutaciones a mano del código
   de los adaptadores reales: la batería las cazó todas.
 
+### T-92 ★ `_views` sin reconstruir el book · `done` · RNF-22, RNF-23 · dep T-72
+- Hoy, en cada evaluación y para cada venue, `book.top(50)` crea `BookRow` con
+  el acumulado (que el bot no usa), `services/bot.py` los vuelve a convertir en
+  `Level` y cada `Level` pasa por `_check_decimals`, que llama a
+  `dataclasses.fields()`: 117 000 `Level` y 128 000 `fields()` en la muestra,
+  ~0,4 s solo en esa comprobación.
+- `L2Book` da los mejores N `Level` tal cual (los de `_best`), y `_views` los usa
+  sin copiarlos.
+- `_check_decimals` guarda por clase qué campos son `Decimal` (sigue rechazando
+  un no-`Decimal` igual que hoy); abarata también `wire._decode_dataclass`.
+- Tests: con la muestra de replay, la secuencia de decisiones (`Fire`/`Skip` y
+  sus campos) es idéntica antes y después; el oráculo de T-72 sigue pasando;
+  `Level(price=1.0, ...)` sigue dando `TypeError`; los tests de latencia de
+  RNF-23 siguen pasando.
+- Hecho: `L2Book.best_levels(n)` da los `Level` del book tal cual y `_views` los usa
+  sin copiar (conservan `amm`, que el bot no lee); `_check_decimals` guarda por clase
+  sus campos `Decimal`. Referencia de 542 decisiones (2 `Fire`) grabada con el código
+  anterior en `tests/fixtures/replay/decisiones.txt`, que
+  `tests/services/test_bot_decisions_replay.py` compara línea a línea. Con `cProfile`
+  sobre la muestra: `_views` de 0,78 s a 0,11 s, `_evaluate` de 0,93 s a 0,25 s y el
+  loop de 1,22 s a 0,52 s; `_check_decimals` de 117 584 llamadas a 10 984.
