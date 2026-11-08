@@ -6,12 +6,13 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-07)
 
-- **M19 — Rendimiento, en `tasks.md`:** T-92 y T-94 hechas; T-93 descartada (en
-  `cooldown` el bot no evalúa); quedan T-95, T-96 y T-97. Ninguna cambia decisiones
-  del bot; T-95 (agrupar evaluaciones) empieza por su D-NN. **Siguiente: T-97**
-  (`compute` de resultados es cuadrático en los fills de Neoxa sin ids: ~0,6 s en
-  `todo` con un journal del tamaño del real).
-- **T-94 hecha (sin commit):** caché por fichero en `ResultsService` (tamaño, `mtime`,
+- **M19 — Rendimiento, en `tasks.md`:** T-92, T-94 y T-97 hechas; T-93 descartada
+  (en `cooldown` el bot no evalúa); quedan T-95 (agrupar evaluaciones, empieza por su
+  D-NN) y T-96 (restos menores). Ninguna cambia decisiones del bot.
+- **T-97 hecha:** índice de órdenes abiertas por (venue, lado) en
+  `core/results.py`; `compute` con 1500 dobles de 622 ms a 60 ms. Oráculo con el
+  `_owner` anterior en `tests/unit/test_results_owner.py`.
+- **T-94 hecha:** caché por fichero en `ResultsService` (tamaño, `mtime`,
   offset) y recarga periódica en `asyncio.to_thread`. Ganancia pequeña (`todo` de
   ~0,93 s a ~0,58 s): lo caro es `compute`, no leer.
 - **T-92 hecha:** `_views` usa `L2Book.best_levels` sin copiar y
