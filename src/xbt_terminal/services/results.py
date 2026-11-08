@@ -7,17 +7,26 @@ last that arrived and, without it, leaves those fees unvalued. For a range in da
 previous day is read too, so a double started before midnight has its sends and fills
 are assigned as when reading everything (D-44, D-45).
 
-Spec: RF-24, RF-25 · design.md §6.10 · Tasks: T-40, T-60
+Journal rows are kept per file (T-94): a file whose size and `mtime` did not change is
+not read again, and one that only grew is read from where the last read stopped. The
+journal is only appended to, so that is all that changes; any other change (smaller, or
+the same size and newer) reads it whole. Only whole lines are kept: a half-written last
+line is parsed on each load, as before, until it ends.
+
+Spec: RF-24, RF-25, RF-32 · design.md §6.10 · Tasks: T-40, T-60, T-94
 """
 
 from __future__ import annotations
 
 import asyncio
 import re
+import threading
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -29,6 +38,19 @@ _NAME = re.compile(r"^journal-(\d{8})\.jsonl$")
 PRICE_EVERY_MS = 60_000
 
 Pricer = Callable[[], Awaitable[Decimal]]
+
+
+@dataclass
+class _Cached:
+    """What was read of one journal: its whole lines, up to `offset` bytes, and what
+    follows the last of them."""
+
+    size: int = 0
+    mtime_ns: int = 0
+    offset: int = 0
+    rows: list[dict[str, Any]] = field(default_factory=list)
+    bad: int = 0
+    tail: bytes = b""  # a line still being written: read again on the next change
 
 
 class ResultsService:
@@ -45,6 +67,9 @@ class ResultsService:
         self.prices: dict[str, Decimal] = {}
         self.price_errors: dict[str, str] = {}
         self._priced_at: int | None = None
+        self._cache: dict[Path, _Cached] = {}
+        # the UI and the daemon load from worker threads, possibly two at a time
+        self._lock = threading.Lock()
 
     async def refresh_prices(self) -> None:
         """Ask each token's price if the last is a minute old or more. A failure is noted in
@@ -76,12 +101,48 @@ class ResultsService:
         first = None
         if since is not None:
             first = datetime.fromtimestamp((since - DAY_MS) / 1000, UTC).strftime("%Y%m%d")
-        lines: list[str] = []
-        for day, path in self._files():
-            if first is None or day >= first:
-                lines += path.read_text(encoding="utf-8").splitlines()
-        rows, bad = read_rows(lines)
+        rows: list[dict[str, Any]] = []
+        bad = 0
+        with self._lock:
+            files = self._files()
+            for gone in self._cache.keys() - {path for _, path in files}:
+                del self._cache[gone]
+            for day, path in files:
+                if first is None or day >= first:
+                    got = self._rows(path)
+                    rows += got.rows
+                    bad += got.bad
+                    if got.tail.strip():
+                        tail_rows, tail_bad = read_rows(_lines(got.tail))
+                        rows += tail_rows
+                        bad += tail_bad
         return compute(rows, since_ms=since, bad_lines=bad, prices=self.prices)
+
+    def _rows(self, path: Path) -> _Cached:
+        stat = path.stat()
+        got = self._cache.get(path)
+        if got is not None and (stat.st_size, stat.st_mtime_ns) == (got.size, got.mtime_ns):
+            return got
+        if got is None or stat.st_size <= got.size:
+            got = _Cached()  # new, or not just appended to: read whole
+        data = self._read_from(path, got.offset)
+        whole, newline, got.tail = data.rpartition(b"\n")
+        if newline:
+            rows, bad = read_rows(_lines(whole))
+            got.rows += rows
+            got.bad += bad
+            got.offset += len(whole) + 1
+        else:
+            got.tail = data
+        got.size, got.mtime_ns = stat.st_size, stat.st_mtime_ns
+        self._cache[path] = got
+        return got
+
+    @staticmethod
+    def _read_from(path: Path, offset: int) -> bytes:
+        with path.open("rb") as source:
+            source.seek(offset)
+            return source.read()
 
     def _files(self) -> list[tuple[str, Path]]:
         if not self.directory.is_dir():
@@ -92,3 +153,8 @@ class ResultsService:
             if match:
                 found.append((match.group(1), path))
         return sorted(found)
+
+
+def _lines(data: bytes) -> list[str]:
+    """As `read_text().splitlines()` did: universal newlines, so `\\r\\n` is one break."""
+    return data.decode("utf-8").splitlines()

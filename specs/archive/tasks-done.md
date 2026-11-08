@@ -1197,3 +1197,38 @@ ni los textos que ve el usuario.
   `tests/services/test_bot_decisions_replay.py` compara línea a línea. Con `cProfile`
   sobre la muestra: `_views` de 0,78 s a 0,11 s, `_evaluate` de 0,93 s a 0,25 s y el
   loop de 1,22 s a 0,52 s; `_check_decimals` de 117 584 llamadas a 10 984.
+
+### T-94 ★ Resultados sin releer todo el journal · `done` · RF-25, RF-32, RNF-06 · dep T-60
+- `services/results.py` (`load`) lee y parsea todos los ficheros del rango cada
+  `RESULTS_EVERY_S` (60 s) y con cada fill, de forma síncrona en el hilo de la
+  UI; con el rango `todo`, el historial entero, que crece con cada día del bot.
+- Los ficheros de días cerrados no cambian: sus filas se guardan en memoria por
+  fichero (tamaño y `mtime` para saber si cambió) y solo se relee lo añadido al
+  del día. La lectura sale del hilo de la UI (worker).
+- El informe (`compute`) no cambia; `bad_lines` cuenta igual.
+- Tests: mismo `Report` con y sin caché para cada rango; una línea añadida al
+  fichero del día aparece en la siguiente carga; un fichero cerrado no se vuelve
+  a leer (contador de lecturas); un fichero reescrito (otro tamaño o `mtime`) sí.
+- Hecho: `ResultsService` guarda por fichero sus líneas completas, con tamaño, `mtime`
+  y offset; un fichero que solo creció se lee desde el offset, y cualquier otro cambio
+  lo relee entero. La línea a medio escribir se parsea en cada carga, como antes. Un
+  lock protege la caché (la UI y el daemon cargan desde hilos). La recarga periódica
+  y la de cada fill van en `asyncio.to_thread`; abrir la ventana o cambiar de rango
+  sigue siendo síncrono. Medido con un journal sintético de 1545 dobles en 10 días:
+  `todo` de ~0,93 s a ~0,58 s, `7d` de ~0,53 s a ~0,50 s. El resto es `compute`, que es
+  cuadrático en los fills de Neoxa sin ids: va a T-97.
+
+### T-93 ★ Los topes baratos antes de montar las vistas · `descartada` · RF-19, RF-22, RNF-22 · dep T-92
+- `decide` comprueba `not_armed`, `cooldown`, `hour_cap` y `day_cap` después de
+  que `_evaluate` haya montado `_views` para todos los venues. Con el 49 % de
+  los disparos a ≤ 20 s del anterior (revisión del 2026-11-07), muchas
+  evaluaciones caen en el cooldown de 15 s y tiran ese trabajo.
+- Esas comprobaciones, que solo dependen de `state`, `limits` y `now`, salen a
+  una función pura en `core/bot.py` que `decide` sigue llamando primero y que
+  `_evaluate` llama antes de `_views`.
+- Las muestras de mid para `max_move_pct` (D-71, D-72) se siguen tomando con
+  cada book, también durante el cooldown: la ventana no puede quedar vacía.
+- Tests: mismo `Skip` (motivo y detalle) que hoy para cada tope; durante el
+  cooldown `_views` no se llama; tras el cooldown, `volatile` ve el salto
+  ocurrido durante él.
+- Descartada: en `cooldown` el bot no evalúa; ver `tasks.md`.

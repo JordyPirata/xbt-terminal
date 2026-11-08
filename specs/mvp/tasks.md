@@ -1,6 +1,6 @@
 # xbt-terminal — Tareas MVP
 
-Estados: `todo` · `doing` · `done` · `blocked (PA-NN)`.
+Estados: `todo` · `doing` · `done` · `blocked (PA-NN)` · `descartada` (con el motivo).
 Una tarea se cierra cuando sus tests pasan, `tools/spec_trace.py` lo refleja y no
 queda nada fuera de lo que la tarea dice.
 
@@ -243,40 +243,33 @@ exista, no se construye nada de ellas.
 
 Sale de un `cProfile` de `xbt report --replay tests/fixtures/replay/muestra.jsonl`
 (7 min de books reales): de 1,22 s de loop, `BotService._evaluate` se lleva
-0,93 s y `_views` 0,78 s; `decide` solo ~0,15 s. **T-92, T-93 y T-94 van
-primero**: T-92 y T-93 quitan la mayor parte del coste del bot sin cambiar
-ninguna decisión. Ninguna tarea de M19 cambia lo que el bot decide ni lo que se
-ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
+0,93 s y `_views` 0,78 s; `decide` solo ~0,15 s. **T-92 y T-94 iban primero**
+(T-93 se descartó). Ninguna tarea de M19 cambia lo que el bot decide ni lo que
+se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 
 ### T-92 ★ `_views` sin reconstruir el book · `done` · RNF-22, RNF-23 · dep T-72
 
-### T-93 ★ Los topes baratos antes de montar las vistas · `todo` · RF-19, RF-22, RNF-22 · dep T-92
-- `decide` comprueba `not_armed`, `cooldown`, `hour_cap` y `day_cap` después de
-  que `_evaluate` haya montado `_views` para todos los venues. Con el 49 % de
-  los disparos a ≤ 20 s del anterior (revisión del 2026-11-07), muchas
-  evaluaciones caen en el cooldown de 15 s y tiran ese trabajo.
-- Esas comprobaciones, que solo dependen de `state`, `limits` y `now`, salen a
-  una función pura en `core/bot.py` que `decide` sigue llamando primero y que
-  `_evaluate` llama antes de `_views`.
-- Las muestras de mid para `max_move_pct` (D-71, D-72) se siguen tomando con
-  cada book, también durante el cooldown: la ventana no puede quedar vacía.
-- Tests: mismo `Skip` (motivo y detalle) que hoy para cada tope; durante el
-  cooldown `_views` no se llama; tras el cooldown, `volatile` ve el salto
-  ocurrido durante él.
+### T-93 Los topes baratos antes de montar las vistas · `descartada` · RF-19, RF-22, RNF-22
+- Partía de un error: en `cooldown` el bot no evalúa (`_loop` solo llama a `_evaluate`
+  con `armed`). Solo ahorraría en `hour_cap`, y tras T-92 una evaluación cuesta ~0,4 ms.
+  Descartada el 2026-11-07; el ID no se reutiliza.
 
-### T-94 ★ Resultados sin releer todo el journal · `todo` · RF-25, RF-32, RNF-06 · dep T-60
-- `services/results.py` (`load`) lee y parsea todos los ficheros del rango cada
-  `RESULTS_EVERY_S` (60 s) y con cada fill, de forma síncrona en el hilo de la
-  UI; con el rango `todo`, el historial entero, que crece con cada día del bot.
-- Los ficheros de días cerrados no cambian: sus filas se guardan en memoria por
-  fichero (tamaño y `mtime` para saber si cambió) y solo se relee lo añadido al
-  del día. La lectura sale del hilo de la UI (worker).
-- El informe (`compute`) no cambia; `bad_lines` cuenta igual.
-- Tests: mismo `Report` con y sin caché para cada rango; una línea añadida al
-  fichero del día aparece en la siguiente carga; un fichero cerrado no se vuelve
-  a leer (contador de lecturas); un fichero reescrito (otro tamaño o `mtime`) sí.
+### T-94 ★ Resultados sin releer todo el journal · `done` · RF-25, RF-32, RNF-06 · dep T-60
 
-### T-95 Evaluaciones agrupadas en ráfagas de book · `todo` · RNF-23, RF-19 · dep T-93
+### T-97 Fills sin ids asignados sin recorrer todas las órdenes · `todo` · RF-25, RF-32 · dep T-94
+- Al cerrar T-94 se vio que el coste de resultados no es leer, sino `compute`: cada fill
+  de Neoxa, que llega sin ids (D-45), se busca en `_Builder._owner` comparándolo con
+  **todas** las órdenes del rango. Es cuadrático: con un journal sintético del tamaño
+  del real (1545 dobles en 10 días), `todo` tarda ~0,6 s con la caché de T-94 y ~1 s sin
+  ella, y crece con el cuadrado de los días.
+- Las órdenes candidatas se indexan por (venue, lado) y salen del índice al llenarse o
+  rechazarse, para que un fill solo mire las que aún pueden tomarlo; el resultado de
+  `_owner` (la única compatible o la única reciente) no cambia.
+- Tests: mismo `Report` que hoy sobre journals con fills con y sin ids, órdenes
+  rechazadas, parciales y varias candidatas a la vez (las de T-40 siguen pasando);
+  `todo` con 1500 dobles por debajo de un presupuesto medido en la suite.
+
+### T-95 Evaluaciones agrupadas en ráfagas de book · `todo` · RNF-23, RF-19 · dep T-92
 - Hoy cada delta despierta al bot y una ráfaga de N deltas da N evaluaciones
   completas. Agrupar añade latencia al disparo: empieza por una D-NN que mida,
   con la muestra de replay, evaluaciones ahorradas frente a latencia añadida, y

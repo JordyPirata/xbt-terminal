@@ -1,6 +1,7 @@
 """Reading the journals for the results window (T-40, RF-25, D-44)."""
 
 import json
+import os
 
 import pytest
 
@@ -127,3 +128,114 @@ class TestTokenPrice:
         clock.now += 60_000
         await svc.refresh_prices()
         assert svc.prices == {"NKYC": D("0.00013089")}
+
+
+def fresh(directory, rng):
+    """The report a service with nothing cached gives: what every load gave before T-94."""
+    return ResultsService(directory, clock=lambda: T0).load(rng)
+
+
+def append(directory, day, rows, extra=()):
+    lines = [json.dumps(r) for r in rows] + list(extra)
+    with (directory / f"journal-{day}.jsonl").open("a") as out:
+        out.write("".join(line + "\n" for line in lines))
+
+
+class Reads:
+    """Counts what the service reads of each journal: (file name, from byte)."""
+
+    def __init__(self, svc, monkeypatch):
+        self.calls: list[tuple[str, int]] = []
+        original = svc._read_from
+
+        def counting(path, offset):
+            self.calls.append((path.name, offset))
+            return original(path, offset)
+
+        monkeypatch.setattr(svc, "_read_from", counting)
+
+
+@pytest.mark.spec("RF-25", "RF-32")
+class TestCache:
+    """Closed days are read once; today's file, only what was appended (T-94)."""
+
+    @pytest.fixture
+    def journals(self, tmp_path):
+        write(tmp_path, "20261012", plain_double("d-viejo", T0 - 10 * DAY))
+        write(tmp_path, "20261020", plain_double("d-semana", T0 - 2 * DAY))
+        write(tmp_path, "20261022", plain_double("d-hoy", T0), extra=["{roto"])
+        return tmp_path
+
+    @pytest.mark.parametrize("rng", ["dia", "7d", "todo"])
+    def test_same_report_as_without_cache(self, journals, rng):
+        svc = ResultsService(journals, clock=lambda: T0)
+        for other in ("todo", "dia", "7d"):
+            svc.load(other)
+        assert svc.load(rng) == fresh(journals, rng)
+        append(journals, "20261022", plain_double("d-tarde", T0 + 3600_000))
+        assert svc.load(rng) == fresh(journals, rng)
+
+    def test_appended_line_appears_in_next_load(self, journals):
+        svc = ResultsService(journals, clock=lambda: T0)
+        assert [d.id for d in svc.load("dia").doubles] == ["d-hoy"]
+        append(journals, "20261022", plain_double("d-tarde", T0 + 3600_000))
+        assert [d.id for d in svc.load("dia").doubles] == ["d-hoy", "d-tarde"]
+
+    def test_unchanged_files_are_not_read_again(self, journals, monkeypatch):
+        svc = ResultsService(journals, clock=lambda: T0)
+        reads = Reads(svc, monkeypatch)
+        svc.load("todo")
+        assert len(reads.calls) == 3
+        reads.calls.clear()
+        svc.load("todo")
+        svc.load("7d")
+        assert reads.calls == []
+
+    def test_only_the_appended_bytes_are_read(self, journals, monkeypatch):
+        svc = ResultsService(journals, clock=lambda: T0)
+        svc.load("todo")
+        size = (journals / "journal-20261022.jsonl").stat().st_size
+        reads = Reads(svc, monkeypatch)
+        append(journals, "20261022", plain_double("d-tarde", T0 + 3600_000))
+        svc.load("todo")
+        assert reads.calls == [("journal-20261022.jsonl", size)]
+
+    def test_rewritten_file_is_read_whole(self, journals, monkeypatch):
+        svc = ResultsService(journals, clock=lambda: T0)
+        svc.load("todo")
+        reads = Reads(svc, monkeypatch)
+        write(journals, "20261020", plain_double("d-otro", T0 - 2 * DAY, qty="0.02"))
+        assert svc.load("todo") == fresh(journals, "todo")
+        assert reads.calls == [("journal-20261020.jsonl", 0)]
+
+    def test_same_size_but_newer_is_read_whole(self, journals, monkeypatch):
+        path = journals / "journal-20261020.jsonl"
+        svc = ResultsService(journals, clock=lambda: T0)
+        svc.load("todo")
+        text = path.read_text()
+        path.write_text(text.replace("d-semana", "d-semanb"))
+        stat = path.stat()
+        os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+        reads = Reads(svc, monkeypatch)
+        assert "d-semanb" in [d.id for d in svc.load("todo").doubles]
+        assert reads.calls == [("journal-20261020.jsonl", 0)]
+
+    def test_half_written_line_counts_until_completed(self, journals):
+        svc = ResultsService(journals, clock=lambda: T0)
+        svc.load("dia")
+        row = json.dumps(plain_double("d-tarde", T0 + 3600_000)[0])
+        path = journals / "journal-20261022.jsonl"
+        with path.open("a") as out:
+            out.write(row[:10])
+        assert svc.load("dia") == fresh(journals, "dia")
+        assert svc.load("dia").summary.bad_rows == 2
+        with path.open("a") as out:
+            out.write(row[10:] + "\n")
+        assert svc.load("dia") == fresh(journals, "dia")
+        assert svc.load("dia").summary.bad_rows == 1
+
+    def test_deleted_file_disappears(self, journals):
+        svc = ResultsService(journals, clock=lambda: T0)
+        svc.load("todo")
+        (journals / "journal-20261012.jsonl").unlink()
+        assert [d.id for d in svc.load("todo").doubles] == ["d-semana", "d-hoy"]

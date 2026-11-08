@@ -1,10 +1,11 @@
 """Double results and account value over time.
 
-Spec: RF-25, RF-32, CA-17 · Tasks: T-40, T-69, T-70, T-71, T-83
+Spec: RF-25, RF-32, CA-17 · Tasks: T-40, T-69, T-70, T-71, T-83, T-94
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Collection
 from datetime import UTC, datetime
 
@@ -114,7 +115,15 @@ class ResultsScreen(ModalScreen[None]):
         async def work() -> None:
             if error := await self._source.refresh(self.range):
                 self._on_error(f"resultados: {error}")
-            self.reload()
+            rng = self.range
+            # every minute and with each fill: the journal is read off the UI thread (T-94)
+            try:
+                report = await asyncio.to_thread(self._source.load, rng)
+            except OSError as exc:
+                self._on_error(f"resultados: no se pudo leer el journal ({exc})")
+                return
+            if rng == self.range:  # a range change while reading already drew its own
+                self._show(report)
 
         self.run_worker(work(), group="results-price", exclusive=True)
 
@@ -124,6 +133,9 @@ class ResultsScreen(ModalScreen[None]):
         except OSError as exc:
             self._on_error(f"resultados: no se pudo leer el journal ({exc})")
             return
+        self._show(report)
+
+    def _show(self, report: Report) -> None:
         if report == self.report:
             return  # no changes: no redraw and no selection move
         self.report = report

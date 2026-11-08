@@ -2,11 +2,13 @@
 fill and closing."""
 
 import json
+import threading
 
 import pytest
 
 from xbt_terminal.services.market import MarketHub
 from xbt_terminal.services.results import ResultsService
+from xbt_terminal.ui.screens import results as results_module
 from xbt_terminal.ui.screens.results import ResultsScreen
 
 from ..fakes import FakeFeed
@@ -153,3 +155,29 @@ async def test_on_open_asks_price_and_subtracts_fee(tmp_path):
         assert "sin descontar" not in s.summary_text()
         (d,) = s.report.doubles
         assert ResultsScreen._cells(d, {"NKYC"})[7] == "25 (0.0025 NKYC)"
+
+
+@pytest.mark.spec("RF-25", "RF-32")
+async def test_periodic_reload_reads_off_the_ui_thread(tmp_path, monkeypatch):
+    """Every `RESULTS_EVERY_S` and with each fill, the journal is read in a worker thread
+    (T-94); opening the window still draws at once."""
+    monkeypatch.setattr(results_module, "RESULTS_EVERY_S", 0.05)
+    write(tmp_path, "20261022", plain_double("d-1", T0))
+    app = make_app(tmp_path)
+    service = app.results
+    threads: list[str] = []
+    original = service.load
+
+    def load(rng):
+        threads.append(threading.current_thread().name)
+        return original(rng)
+
+    monkeypatch.setattr(service, "load", load)
+    async with app.run_test(size=(160, 45)) as pilot:
+        await pilot.press("r")
+        await until(pilot, lambda: isinstance(app.screen, ResultsScreen))
+        assert threads[0] == threading.main_thread().name
+        await until(pilot, lambda: len(threads) >= 3)
+        assert all(name != threading.main_thread().name for name in threads[1:])
+        write(tmp_path, "20261022", plain_double("d-2", T0 + 60_000))
+        await until(pilot, lambda: len(screen(app).report.doubles) == 2)
