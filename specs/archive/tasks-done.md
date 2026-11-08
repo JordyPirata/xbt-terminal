@@ -1232,3 +1232,26 @@ ni los textos que ve el usuario.
   cooldown `_views` no se llama; tras el cooldown, `volatile` ve el salto
   ocurrido durante él.
 - Descartada: en `cooldown` el bot no evalúa; ver `tasks.md`.
+
+### T-97 Fills sin ids asignados sin recorrer todas las órdenes · `done` · RF-25, RF-32 · dep T-94
+- Al cerrar T-94 se vio que el coste de resultados no es leer, sino `compute`: cada fill
+  de Neoxa, que llega sin ids (D-45), se busca en `_Builder._owner` comparándolo con
+  **todas** las órdenes del rango. Es cuadrático: con un journal sintético del tamaño
+  del real (1545 dobles en 10 días), `todo` tarda ~0,6 s con la caché de T-94 y ~1 s sin
+  ella, y crece con el cuadrado de los días.
+- Las órdenes candidatas se indexan por (venue, lado) y salen del índice al llenarse o
+  rechazarse, para que un fill solo mire las que aún pueden tomarlo; el resultado de
+  `_owner` (la única compatible o la única reciente) no cambia.
+- Tests: mismo `Report` que hoy sobre journals con fills con y sin ids, órdenes
+  rechazadas, parciales y varias candidatas a la vez (las de T-40 siguen pasando);
+  `todo` con 1500 dobles por debajo de un presupuesto medido en la suite.
+- Hecho: `_Builder.open` guarda por (venue, lado) las órdenes no rechazadas y no
+  llenas; un fill sin ids de cantidad positiva solo mira esas, y uno de cantidad cero o
+  negativa (que una orden llena aún podría tomar) sigue mirando todas. `takes` sigue
+  decidiendo. El orden de las candidatas no importa: solo se asigna si queda una.
+  Oráculo en `tests/unit/test_results_owner.py`: el `_owner` anterior contra el nuevo
+  en 40 journals aleatorios (reenvíos con el mismo id, rechazos, parciales, cantidades
+  cero, fills antes de su orden), con los tres caminos ejercitados al menos 20 veces.
+  `tests/perf/test_results_latency.py`: `compute` con 1500 dobles de 622 ms a 60 ms
+  (presupuesto 150 ms). Con lectura incluida y 1545 dobles en 10 días, `todo` de
+  ~0,58 s a ~0,07 s y `7d` de ~0,50 s a ~0,05 s.

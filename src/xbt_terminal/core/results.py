@@ -22,7 +22,7 @@ subtracted. A `fill_fee` (the venue corrected the fee, D-64) replaces the fill's
 The `Report` also carries the account value series (RF-32, D-69).
 
 Spec: RF-11, RF-24, RF-25, RF-32, CA-11 · design.md §6.10 · D-44, D-45, D-64,
-D-65, D-69 · Tasks: T-40, T-59, T-60, T-69
+D-65, D-69 · Tasks: T-40, T-59, T-60, T-69, T-97
 """
 
 from __future__ import annotations
@@ -200,6 +200,10 @@ class _Builder:
     def __init__(self, mode: str = "live") -> None:
         self.mode = mode
         self.orders: dict[str, _Order] = {}
+        # per (venue, side), the orders that can still take a fill of positive quantity:
+        # not rejected and not full. Without it each id-less fill was compared with
+        # every order of the range (T-97)
+        self.open: dict[tuple[str, str], dict[str, None]] = {}
         self.acks: dict[tuple[str, str], str] = {}
         self.doubles: dict[str, _Double] = {}
         self.fired: dict[str, Decimal | None] = {}
@@ -229,7 +233,10 @@ class _Builder:
         order = _Order(
             row["venue"], data["side"], _dec(data["qty"]), _dec(data["price"]), at, double
         )
+        self._close(cid)
         self.orders[cid] = order
+        if order.filled < order.qty:
+            self.open.setdefault((order.venue, order.side), {})[cid] = None
         if double is not None:
             d = self.doubles.setdefault(double, _Double(double, at))
             getattr(d, order.side).venue = order.venue
@@ -244,6 +251,7 @@ class _Builder:
         order = self.orders.get(row["client_id"])
         if order is not None:
             order.rejected = True
+            self._close(row["client_id"])
 
     def _on_bot_fire(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
         pct = data.get("net_pct")
@@ -266,6 +274,8 @@ class _Builder:
             self.unassigned += 1
             return
         order.filled += qty
+        if cid is not None and order.filled >= order.qty:
+            self._close(cid)
         if order.double is None:
             return
         d = self.doubles[order.double]
@@ -305,11 +315,18 @@ class _Builder:
         oid = data.get("order_id")
         if oid and (venue, str(oid)) in self.acks:
             return self.acks[(venue, str(oid))]
-        # no ids (Neoxa, D-45): the only compatible order, or the only recent one
-        fits = [c for c, o in self.orders.items() if o.takes(venue, side, qty, price, at)]
+        # no ids (Neoxa, D-45): the only compatible order, or the only recent one. A full
+        # order can still take a zero or negative quantity: those look at all of them
+        pool = self.open.get((venue, side), {}) if qty > 0 else self.orders
+        fits = [c for c in pool if self.orders[c].takes(venue, side, qty, price, at)]
         if len(fits) > 1:
             fits = [c for c in fits if at - self.orders[c].sent_at <= RECENT_MS]
         return fits[0] if len(fits) == 1 else None
+
+    def _close(self, cid: str) -> None:
+        order = self.orders.get(cid)
+        if order is not None:
+            self.open.get((order.venue, order.side), {}).pop(cid, None)
 
     def result(self, d: _Double, prices: Mapping[str, Decimal]) -> DoubleResult:
         buy, sell = d.buy, d.sell

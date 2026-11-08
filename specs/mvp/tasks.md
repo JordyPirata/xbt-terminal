@@ -256,18 +256,7 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 
 ### T-94 ★ Resultados sin releer todo el journal · `done` · RF-25, RF-32, RNF-06 · dep T-60
 
-### T-97 Fills sin ids asignados sin recorrer todas las órdenes · `todo` · RF-25, RF-32 · dep T-94
-- Al cerrar T-94 se vio que el coste de resultados no es leer, sino `compute`: cada fill
-  de Neoxa, que llega sin ids (D-45), se busca en `_Builder._owner` comparándolo con
-  **todas** las órdenes del rango. Es cuadrático: con un journal sintético del tamaño
-  del real (1545 dobles en 10 días), `todo` tarda ~0,6 s con la caché de T-94 y ~1 s sin
-  ella, y crece con el cuadrado de los días.
-- Las órdenes candidatas se indexan por (venue, lado) y salen del índice al llenarse o
-  rechazarse, para que un fill solo mire las que aún pueden tomarlo; el resultado de
-  `_owner` (la única compatible o la única reciente) no cambia.
-- Tests: mismo `Report` que hoy sobre journals con fills con y sin ids, órdenes
-  rechazadas, parciales y varias candidatas a la vez (las de T-40 siguen pasando);
-  `todo` con 1500 dobles por debajo de un presupuesto medido en la suite.
+### T-97 Fills sin ids asignados sin recorrer todas las órdenes · `done` · RF-25, RF-32 · dep T-94
 
 ### T-95 Evaluaciones agrupadas en ráfagas de book · `todo` · RNF-23, RF-19 · dep T-92
 - Hoy cada delta despierta al bot y una ráfaga de N deltas da N evaluaciones
