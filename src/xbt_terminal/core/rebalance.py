@@ -69,8 +69,12 @@ class Plan:
 
     @property
     def best(self) -> Transfer | None:
-        viable = [t for t in self.transfers if t.viable and t.cost_btc is not None]
-        return min(viable, key=lambda t: t.cost_btc or ZERO) if viable else None
+        viable = [
+            transfer
+            for transfer in self.transfers
+            if transfer.viable and transfer.cost_btc is not None
+        ]
+        return min(viable, key=lambda transfer: transfer.cost_btc or ZERO) if viable else None
 
 
 def holdings(
@@ -103,10 +107,12 @@ def plan(
     if len(holdings) != 2:
         return "hacen falta los saldos de los dos venues"
     (va, ha), (vb, hb) = sorted(holdings.items(), key=lambda kv: kv[1].pct or ZERO, reverse=True)
-    value = sum((h.btc + h.btcb2 * h.price for h in holdings.values()), ZERO)
-    base_value = sum((h.btcb2 * h.price for h in holdings.values()), ZERO)
+    value = sum(
+        (holding.btc + holding.btcb2 * holding.price for holding in holdings.values()), ZERO
+    )
+    base_value = sum((holding.btcb2 * holding.price for holding in holdings.values()), ZERO)
     return Plan(
-        before={venue_id: h.pct for venue_id, h in holdings.items()},
+        before={venue_id: holding.pct for venue_id, holding in holdings.items()},
         total_pct=base_value / value * HUNDRED if value > 0 else None,
         transfers=(
             _base_transfer(va, ha, vb, hb, fees.get((va, BASE), "sin datos")),
@@ -122,43 +128,67 @@ def _split(info: FeeInfo) -> tuple[Decimal, Decimal]:
     return (info.fee, ZERO) if info.on_top else (ZERO, info.fee)
 
 
-def _base_transfer(va: VenueId, a: Holding, vb: VenueId, b: Holding, info: FeeInfo) -> Transfer:
+def _base_transfer(
+    va: VenueId, origin: Holding, vb: VenueId, destination: Holding, info: FeeInfo
+) -> Transfer:
     """BTCB2 from A to B: (b_A - x - fo)·p_A·q_B = (b_B + x - fd)·p_B·q_A, with fo the
     on-top fee and fd the deducted one (one of them is 0)."""
     fo, fd = _split(info)
-    den = a.price * b.btc + b.price * a.btc
-    x = ((a.btcb2 - fo) * a.price * b.btc - (b.btcb2 - fd) * b.price * a.btc) / den if den else ZERO
-    amount = _down(x)
+    den = origin.price * destination.btc + destination.price * origin.btc
+    raw_amount = (
+        (
+            (origin.btcb2 - fo) * origin.price * destination.btc
+            - (destination.btcb2 - fd) * destination.price * origin.btc
+        )
+        / den
+        if den
+        else ZERO
+    )
+    amount = _down(raw_amount)
     debited, received = amount + fo, amount - fd
     after = {
-        va: base_pct(a.btc, a.btcb2 - debited, a.price),
-        vb: base_pct(b.btc, b.btcb2 + received, b.price),
+        va: base_pct(origin.btc, origin.btcb2 - debited, origin.price),
+        vb: base_pct(destination.btc, destination.btcb2 + received, destination.price),
     }
-    cost = info.fee * a.price if isinstance(info, WithdrawalFee) else None
+    cost = info.fee * origin.price if isinstance(info, WithdrawalFee) else None
     problem = (
         "sin BTC en ningún venue"
         if not den
-        else _problem(info, amount, debited, a.btcb2_free, BASE, va, a.pct == b.pct)
+        else _problem(
+            info, amount, debited, origin.btcb2_free, BASE, va, origin.pct == destination.pct
+        )
     )
     return _transfer(BASE, va, vb, amount, info, received, debited, cost, after, problem)
 
 
-def _quote_transfer(va: VenueId, a: Holding, vb: VenueId, b: Holding, info: FeeInfo) -> Transfer:
+def _quote_transfer(
+    va: VenueId, origin: Holding, vb: VenueId, destination: Holding, info: FeeInfo
+) -> Transfer:
     """BTC from B to A: b_A·p_A·(q_B - y - fo) = b_B·p_B·(q_A + y - fd)."""
     fo, fd = _split(info)
-    den = a.btcb2 * a.price + b.btcb2 * b.price
-    y = (a.btcb2 * a.price * (b.btc - fo) - b.btcb2 * b.price * (a.btc - fd)) / den if den else ZERO
-    amount = _down(y)
+    den = origin.btcb2 * origin.price + destination.btcb2 * destination.price
+    raw_amount = (
+        (
+            origin.btcb2 * origin.price * (destination.btc - fo)
+            - destination.btcb2 * destination.price * (origin.btc - fd)
+        )
+        / den
+        if den
+        else ZERO
+    )
+    amount = _down(raw_amount)
     debited, received = amount + fo, amount - fd
     after = {
-        va: base_pct(a.btc + received, a.btcb2, a.price),
-        vb: base_pct(b.btc - debited, b.btcb2, b.price),
+        va: base_pct(origin.btc + received, origin.btcb2, origin.price),
+        vb: base_pct(destination.btc - debited, destination.btcb2, destination.price),
     }
     cost = info.fee if isinstance(info, WithdrawalFee) else None
     problem = (
         f"sin {asset_label(BASE)} en ningún venue"
         if not den
-        else _problem(info, amount, debited, b.btc_free, QUOTE, vb, a.pct == b.pct)
+        else _problem(
+            info, amount, debited, destination.btc_free, QUOTE, vb, origin.pct == destination.pct
+        )
     )
     return _transfer(QUOTE, vb, va, amount, info, received, debited, cost, after, problem)
 

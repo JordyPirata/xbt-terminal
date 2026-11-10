@@ -198,7 +198,7 @@ class FakeVenue:
 
     async def private_stream(self) -> AsyncIterator[Any]:
         self.need_keys()
-        known = {o.order_id: o for o in self.active}
+        known = {open_item.order_id: open_item for open_item in self.active}
         yield self.state("up", "rest", "private")
         sent = 0
         while True:
@@ -207,7 +207,7 @@ class FakeVenue:
                 yield fill
             sent = len(self.fills)
             for oid, order in list(known.items()):
-                if oid not in {o.order_id for o in self.active}:
+                if oid not in {open_item.order_id for open_item in self.active}:
                     del known[oid]
                     yield replace(order, status="cancelled")
 

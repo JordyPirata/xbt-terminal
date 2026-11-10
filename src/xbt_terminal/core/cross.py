@@ -57,9 +57,12 @@ class CrossView:
     routes: tuple[Route | None, Route | None]  # a→b, b→a
 
     def route(self, buy: VenueId, sell: VenueId) -> Route | None:
-        for r in self.routes:
-            if r is not None and (r.buy_venue, r.sell_venue) == (buy, sell):
-                return r
+        for candidate_route in self.routes:
+            if candidate_route is not None and (
+                candidate_route.buy_venue,
+                candidate_route.sell_venue,
+            ) == (buy, sell):
+                return candidate_route
         return None
 
 
@@ -67,12 +70,12 @@ def sats(btc: Decimal) -> Decimal:
     return btc * SATS_PER_BTC
 
 
-def venue_stats(q: Quote) -> VenueStats | None:
+def venue_stats(quote: Quote) -> VenueStats | None:
     """None if a side is missing or the book is crossed: no reliable price."""
-    if q.best_bid is None or q.best_ask is None or q.best_bid >= q.best_ask:
+    if quote.best_bid is None or quote.best_ask is None or quote.best_bid >= quote.best_ask:
         return None
-    mid = (q.best_bid + q.best_ask) / 2
-    spread = q.best_ask - q.best_bid
+    mid = (quote.best_bid + quote.best_ask) / 2
+    spread = quote.best_ask - quote.best_bid
     return VenueStats(mid=mid, spread=spread, spread_pct=spread / mid * HUNDRED)
 
 
@@ -91,14 +94,14 @@ def _route(buy: Quote, sell: Quote) -> Route | None:
     )
 
 
-def cross(a: Quote, b: Quote) -> CrossView:
-    if a.venue == b.venue:
-        raise ValueError(f"panel cruzado con el mismo venue en los dos lados: {a.venue}")
-    sa, sb = venue_stats(a), venue_stats(b)
+def cross(left_quote: Quote, right_quote: Quote) -> CrossView:
+    if left_quote.venue == right_quote.venue:
+        raise ValueError(f"panel cruzado con el mismo venue en los dos lados: {left_quote.venue}")
+    sa, sb = venue_stats(left_quote), venue_stats(right_quote)
     mid_diff = sb.mid - sa.mid if sa and sb else None
     return CrossView(
-        stats={a.venue: sa, b.venue: sb},
+        stats={left_quote.venue: sa, right_quote.venue: sb},
         mid_diff=mid_diff,
         mid_diff_pct=mid_diff / sa.mid * HUNDRED if mid_diff is not None and sa else None,
-        routes=(_route(a, b), _route(b, a)),
+        routes=(_route(left_quote, right_quote), _route(right_quote, left_quote)),
     )

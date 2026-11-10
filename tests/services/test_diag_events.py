@@ -14,7 +14,7 @@ from .test_market_hub import Hub
 
 
 def messages(caplog, level=logging.DEBUG):
-    return [r.getMessage() for r in caplog.records if r.levelno >= level]
+    return [record.getMessage() for record in caplog.records if record.levelno >= level]
 
 
 @pytest.mark.spec("RNF-19")
@@ -41,11 +41,13 @@ async def test_rest_fallback(caplog):
 async def test_market_load(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
     feeds = {"nk": FakeFeed("nk", fail_market=1), "nx": FakeFeed("nx")}
-    async with Hub(**feeds) as h:
-        await h.until(lambda: h.hub.state["nk"].ready and h.hub.state["nx"].ready)
+    async with Hub(**feeds) as hub:
+        await hub.until(lambda: hub.hub.state["nk"].ready and hub.hub.state["nx"].ready)
     warnings = messages(caplog, logging.WARNING)
-    assert any("nk: could not load the market" in m and "sin red" in m for m in warnings)
-    assert sum("market loaded" in m for m in messages(caplog)) == 2
+    assert any(
+        "nk: could not load the market" in message and "sin red" in message for message in warnings
+    )
+    assert sum("market loaded" in message for message in messages(caplog)) == 2
 
 
 @pytest.mark.spec("RNF-19")
@@ -55,7 +57,7 @@ async def test_each_fault_with_traceback(caplog):
         raise KeyError("bug")
     except KeyError as error:
         Faults().report("market", error, venue="nx")
-    (record,) = [r for r in caplog.records if r.levelno == logging.ERROR]
+    (record,) = [entry for entry in caplog.records if entry.levelno == logging.ERROR]
     assert "fault in market (nx)" in record.getMessage() and record.exc_info is not None
 
 

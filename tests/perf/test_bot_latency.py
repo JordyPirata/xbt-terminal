@@ -36,8 +36,10 @@ def median_ms(work, runs: int = 30) -> float:
     return statistics.median(times) * 1000
 
 
-def side(start: Decimal, n: int, up: bool, quantity: str = "10") -> tuple[Level, ...]:
-    return tuple(Level(start + STEP * i if up else start - STEP * i, D(quantity)) for i in range(n))
+def side(start: Decimal, level_count: int, up: bool, quantity: str = "10") -> tuple[Level, ...]:
+    return tuple(
+        Level(start + STEP * i if up else start - STEP * i, D(quantity)) for i in range(level_count)
+    )
 
 
 def deep_views(nx_bid: str, quantity: str = "10") -> dict[str, VenueView]:

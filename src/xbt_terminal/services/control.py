@@ -64,7 +64,7 @@ BOOK_EVERY_S = 0.1  # the book, at most ten times per second per venue
 BOOK_DEPTH = 50
 PROPOSAL_TTL_S = 60.0  # how long the confirmation dialog may stay open
 CANCELS: dict[str, type[CancelOrder | CancelVenue | CancelAll]] = {
-    c.__name__: c for c in (CancelOrder, CancelVenue, CancelAll)
+    command_type.__name__: command_type for command_type in (CancelOrder, CancelVenue, CancelAll)
 }
 T = TypeVar("T")
 
@@ -373,7 +373,7 @@ class ControlServer:
 
     def _propose(self, value: Any) -> str:
         now = asyncio.get_running_loop().time()
-        self._proposals = {k: v for k, v in self._proposals.items() if v[1] > now}
+        self._proposals = {k: entry for k, entry in self._proposals.items() if entry[1] > now}
         token = secrets.token_hex(8)
         self._proposals[token] = (value, now + self._proposal_ttl_s)
         return token

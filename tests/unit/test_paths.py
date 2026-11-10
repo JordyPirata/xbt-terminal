@@ -58,7 +58,7 @@ def test_flags_rule_and_come_out_absolute(tmp_path, monkeypatch):
     assert paths.config == tmp_path / "mi.toml"
     assert paths.env == tmp_path / "secretos.env"
     assert paths.data == tmp_path / "datos"
-    assert all(p.is_absolute() for p in (paths.config, paths.env, paths.data))
+    assert all(path.is_absolute() for path in (paths.config, paths.env, paths.data))
 
 
 @pytest.mark.spec("RNF-18")
@@ -117,6 +117,6 @@ def test_open_env_warns_in_dry_run(tmp_path):
     path.chmod(0o644)
     settings = load_settings(EXAMPLE, path, live=False)
     assert settings.mode == "dry-run"
-    assert any("chmod 600" in w for w in settings.warnings)
+    assert any("chmod 600" in warning for warning in settings.warnings)
     path.chmod(0o600)
     assert load_settings(EXAMPLE, path, live=True).warnings == ()

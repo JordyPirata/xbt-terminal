@@ -72,7 +72,7 @@ class Rig:
 
     def events(self):
         files = sorted(self.logs.glob("journal-*.jsonl"))
-        return [json.loads(ln)["event"] for f in files for ln in f.read_text().splitlines()]
+        return [json.loads(ln)["event"] for file in files for ln in file.read_text().splitlines()]
 
 
 async def until(pilot, predicate, timeout=2.0):
@@ -86,7 +86,8 @@ async def ready(rig, pilot):
     await until(
         pilot,
         lambda: all(
-            rig.hub.state[v].ready and rig.hub.state[v].book.valid for v in "nk nx".split()
+            rig.hub.state[venue].ready and rig.hub.state[venue].book.valid
+            for venue in "nk nx".split()
         ),
     )
 
@@ -113,7 +114,7 @@ class TestDoubleOrder:
             await pilot.press("y")
             await until(pilot, lambda: "orden doble" in rig.app.last_message)
             assert "enviada" in rig.app.last_message
-            assert [len(await v.open_orders()) for v in rig.venues.values()] == [1, 1]
+            assert [len(await venue.open_orders()) for venue in rig.venues.values()] == [1, 1]
             assert rig.events().count("order_ack") == 2
 
     async def test_cancelling_the_dialog_sends_nothing(self, tmp_path):
@@ -167,8 +168,8 @@ class TestLegsPanel:
             balances = rig.app.query_one(BalancesPanel).region
             assert (region.y, region.height) == (balances.y, balances.height)
             assert balances.right == region.x and region.right == 160 and region.width == 64
-            assert all(c.region.height >= 8 for c in rig.app.query(ChartPanel))
-            assert all(b.region.height == 19 for b in rig.app.query(BookPanel))
+            assert all(chart.region.height >= 8 for chart in rig.app.query(ChartPanel))
+            assert all(book_panel.region.height == 19 for book_panel in rig.app.query(BookPanel))
 
     async def test_fill_shows_on_leg(self, tmp_path):
         rig = Rig(tmp_path)

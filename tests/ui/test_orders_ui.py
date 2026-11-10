@@ -54,7 +54,7 @@ class Rig:
 
     def events(self):
         files = sorted(self.logs.glob("journal-*.jsonl"))
-        return [json.loads(ln)["event"] for f in files for ln in f.read_text().splitlines()]
+        return [json.loads(ln)["event"] for file in files for ln in file.read_text().splitlines()]
 
 
 async def until(pilot, predicate, timeout=2.0):
@@ -89,7 +89,7 @@ class TestOrderWithConfirmation:
             await pilot.press("y")
             await until(pilot, lambda: rig.app.last_message.startswith("enviada"))
             assert "dry-nk-1" in rig.app.last_message
-            assert [o.order_id for o in await rig.venue.open_orders()] == ["dry-nk-1"]
+            assert [order.order_id for order in await rig.venue.open_orders()] == ["dry-nk-1"]
             assert rig.events() == ["order_sent", "order_ack"]
 
     @pytest.mark.spec("RF-17")

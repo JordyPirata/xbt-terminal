@@ -93,8 +93,8 @@ class RebalanceScreen(ModalScreen[None]):
         self._show("rebalance-state", self._state(result))
         table = self.query_one(DataTable)
         table.clear()
-        for t in result.transfers:
-            table.add_row(*self._cells(t))
+        for transfer in result.transfers:
+            table.add_row(*self._cells(transfer))
         self._show("rebalance-notes", self._notes(result, held))
         self.plan = result
 
@@ -104,30 +104,46 @@ class RebalanceScreen(ModalScreen[None]):
         self._show("rebalance-notes", f"⚠ no hay plan: {why}")
 
     @staticmethod
-    def _state(p: Plan) -> str:
+    def _state(rebalance_plan: Plan) -> str:
         venues = " · ".join(
-            f"{VENUE_NAME[v]} {fmt_share(percent)}" for v, percent in p.before.items()
+            f"{VENUE_NAME[venue]} {fmt_share(percent)}"
+            for venue, percent in rebalance_plan.before.items()
         )
-        return f"{BASE_LABEL} por venue ahora: {venues} · total {fmt_share(p.total_pct)}"
+        return (
+            f"{BASE_LABEL} por venue ahora: {venues} · total {fmt_share(rebalance_plan.total_pct)}"
+        )
 
     @staticmethod
-    def _route(t: Transfer) -> str:
-        return f"{asset_label(t.asset)} {VENUE_NAME[t.source]} → {VENUE_NAME[t.dest]}"
+    def _route(transfer: Transfer) -> str:
+        return (
+            f"{asset_label(transfer.asset)} {VENUE_NAME[transfer.source]} "
+            f"→ {VENUE_NAME[transfer.dest]}"
+        )
 
     @classmethod
-    def _cells(cls, t: Transfer) -> tuple[str | Text, ...]:
-        fee = "—" if t.fee is None else f"{t.fee:f}"
+    def _cells(cls, transfer: Transfer) -> tuple[str | Text, ...]:
+        fee = "—" if transfer.fee is None else f"{transfer.fee:f}"
         after = " · ".join(
-            f"{VENUE_NAME[v]} {fmt_share(percent)}" for v, percent in t.after.items()
+            f"{VENUE_NAME[venue]} {fmt_share(percent)}" for venue, percent in transfer.after.items()
         )
-        state = Text("viable", style="green") if t.viable else Text(f"⚠ {t.problem}", "yellow")
+        state = (
+            Text("viable", style="green")
+            if transfer.viable
+            else Text(f"⚠ {transfer.problem}", "yellow")
+        )
         return (
-            cls._route(t), f"{t.amount:f}", fee, f"{t.debited:f}", f"{t.received:f}",
-            fmt_sats_grouped(t.cost_btc), after, state,
-        )  # fmt: skip
+            cls._route(transfer),
+            f"{transfer.amount:f}",
+            fee,
+            f"{transfer.debited:f}",
+            f"{transfer.received:f}",
+            fmt_sats_grouped(transfer.cost_btc),
+            after,
+            state,
+        )
 
-    def _notes(self, p: Plan, held: Mapping[VenueId, Holding]) -> str:
-        best = p.best
+    def _notes(self, rebalance_plan: Plan, held: Mapping[VenueId, Holding]) -> str:
+        best = rebalance_plan.best
         if best is None:
             lines = ["ninguna alternativa es viable ahora"]
         else:
@@ -139,17 +155,21 @@ class RebalanceScreen(ModalScreen[None]):
             if self._limits is not None and best.cost_btc is not None:
                 lim = self._limits
                 price = held[best.source].price
-                n = break_even(best.cost_btc, lim.max_qty, price, lim.min_net_pct)
-                if n is not None:
+                units = break_even(best.cost_btc, lim.max_qty, price, lim.min_net_pct)
+                if units is not None:
                     lines.append(
-                        f"la pagan ≈ {n} dobles del bot de {lim.max_qty:f} {BASE_LABEL} "
+                        f"la pagan ≈ {units} dobles del bot de {lim.max_qty:f} {BASE_LABEL} "
                         f"a la neta mínima ({lim.min_net_pct} %)"
                     )
-        t = self._target
-        if t is not None and p.total_pct is not None and not t.in_band(p.total_pct):
+        target = self._target
+        if (
+            target is not None
+            and rebalance_plan.total_pct is not None
+            and not target.in_band(rebalance_plan.total_pct)
+        ):
             lines.append(
-                f"⚠ el total ({fmt_share(p.total_pct)}) está fuera de la banda "
-                f"{t.low}-{t.high} %: "
+                f"⚠ el total ({fmt_share(rebalance_plan.total_pct)}) está fuera de la banda "
+                f"{target.low}-{target.high} %: "
                 "una transferencia no lo cambia; se corrige comprando o vendiendo a mano"
             )
         lines.append(
@@ -164,8 +184,13 @@ class RebalanceScreen(ModalScreen[None]):
     def text(self) -> str:
         """Everything as plain text (tests and debugging)."""
         table = self.query_one(DataTable)
-        rows = [" | ".join(str(c) for c in table.get_row_at(i)) for i in range(table.row_count)]
-        parts = [str(self.query_one(f"#rebalance-{w}", Static).render()) for w in ("head", "state")]
+        rows = [
+            " | ".join(str(cell) for cell in table.get_row_at(i)) for i in range(table.row_count)
+        ]
+        parts = [
+            str(self.query_one(f"#rebalance-{section}", Static).render())
+            for section in ("head", "state")
+        ]
         parts += rows
         parts.append(str(self.query_one("#rebalance-notes", Static).render()))
         return "\n".join(parts)

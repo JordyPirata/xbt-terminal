@@ -27,19 +27,25 @@ class ScanBuilder(results_module._Builder):
         oid = data.get("order_id")
         if oid and (venue, str(oid)) in self.acks:
             return self.acks[(venue, str(oid))]
-        fits = [c for c, o in self.orders.items() if o.takes(venue, side, quantity, price, at)]
+        fits = [
+            client_id
+            for client_id, order in self.orders.items()
+            if order.takes(venue, side, quantity, price, at)
+        ]
         if len(fits) > 1:
-            fits = [c for c in fits if at - self.orders[c].sent_at <= RECENT_MS]
+            fits = [
+                client_id for client_id in fits if at - self.orders[client_id].sent_at <= RECENT_MS
+            ]
         return fits[0] if len(fits) == 1 else None
 
 
-def random_journal(seed: int, n: int = 120) -> list[dict]:
+def random_journal(seed: int, count: int = 120) -> list[dict]:
     """Orders and fills of every kind, close in time so several orders fit one fill:
     with and without ids, partial, over-filled, rejected, re-sent with the same id,
     fills before their order and zero quantities."""
     rnd = random.Random(seed)
     rows, cids, at = [], [], T0
-    for i in range(n):
+    for i in range(count):
         at += rnd.choice((100, 1000, 20_000, RECENT_MS + 1))
         kind = rnd.random()
         venue, side = rnd.choice(VENUES), rnd.choice(SIDES)
@@ -84,8 +90,14 @@ def test_random_journals_exercise_the_id_less_path(monkeypatch):
         def _owner(self, row, data, venue, side, quantity, price, at):
             if row.get("client_id") in self.orders or data.get("order_id"):
                 return super()._owner(row, data, venue, side, quantity, price, at)
-            fits = [c for c, o in self.orders.items() if o.takes(venue, side, quantity, price, at)]
-            recent = [c for c in fits if at - self.orders[c].sent_at <= RECENT_MS]
+            fits = [
+                client_id
+                for client_id, order in self.orders.items()
+                if order.takes(venue, side, quantity, price, at)
+            ]
+            recent = [
+                client_id for client_id in fits if at - self.orders[client_id].sent_at <= RECENT_MS
+            ]
             if len(fits) == 1:
                 reasons["one"] += 1
             elif len(fits) > 1 and len(recent) == 1:

@@ -29,12 +29,12 @@ class TestValueTab:
         app = make_app(tmp_path)
         async with app.run_test(size=(160, 45)) as pilot:
             await open_values(pilot, app)
-            s = screen(app)
-            assert s.query_one(TabbedContent).active == "value"
-            assert "Valor de la cuenta" in str(s.query_one("#results-title").render())
+            results_screen = screen(app)
+            assert results_screen.query_one(TabbedContent).active == "value"
+            assert "Valor de la cuenta" in str(results_screen.query_one("#results-title").render())
             await pilot.press("tab")
             await until(pilot, lambda: screen(app).tab == "doubles")
-            assert s.row_count() == 1  # the doubles one, untouched
+            assert results_screen.row_count() == 1  # the doubles one, untouched
 
     async def test_range_series_with_gap_and_summary(self, tmp_path):
         rows = [
@@ -49,11 +49,16 @@ class TestValueTab:
         app = make_app(tmp_path)
         async with app.run_test(size=(160, 45)) as pilot:
             await open_values(pilot, app)
-            s = screen(app)
-            assert [v.value for v in s.report.values] == [D("1.0"), D("1.2"), D("0.9"), D("1.1")]
-            chart = s.query_one("#value-total", ValueChart)
+            results_screen = screen(app)
+            assert [value.value for value in results_screen.report.values] == [
+                D("1.0"),
+                D("1.2"),
+                D("0.9"),
+                D("1.1"),
+            ]
+            chart = results_screen.query_one("#value-total", ValueChart)
             assert [len(seg) for seg in chart.segments()] == [2, 2]
-            text = s.value_text()
+            text = results_screen.value_text()
             assert "1.10000000 BTC" in text
             assert "+0.10000000 BTC (+10.00 %)" in text
             assert "máx 1.20000000" in text and "mín 0.90000000" in text

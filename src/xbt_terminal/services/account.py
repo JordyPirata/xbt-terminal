@@ -110,12 +110,24 @@ class AccountService:
 
     async def run(self) -> None:
         loops: list[tuple[str, VenueId, Callable[[], Awaitable[None]]]] = []
-        for venue_id, v in self._venues.items():
+        for venue_id, venue_adapter in self._venues.items():
             loops.append(
-                ("private", venue_id, lambda venue_id=venue_id, v=v: self._stream(venue_id, v))
+                (
+                    "private",
+                    venue_id,
+                    lambda venue_id=venue_id, venue_adapter=venue_adapter: self._stream(
+                        venue_id, venue_adapter
+                    ),
+                )
             )
             loops.append(
-                ("balances", venue_id, lambda venue_id=venue_id, v=v: self._balances(venue_id, v))
+                (
+                    "balances",
+                    venue_id,
+                    lambda venue_id=venue_id, venue_adapter=venue_adapter: self._balances(
+                        venue_id, venue_adapter
+                    ),
+                )
             )
         await asyncio.gather(
             *(
@@ -159,9 +171,11 @@ class AccountService:
         elif isinstance(event, PastFill):
             self._catch_up(event.fill)
         elif isinstance(event, FeeUpdate):  # only the fee changes: neither balances nor legs
-            for i, f in enumerate(state.recent_fills):
-                if f.trade_id == event.trade_id:
-                    state.recent_fills[i] = replace(f, fee=event.fee, fee_asset=event.fee_asset)
+            for i, recent_fill in enumerate(state.recent_fills):
+                if recent_fill.trade_id == event.trade_id:
+                    state.recent_fills[i] = replace(
+                        recent_fill, fee=event.fee, fee_asset=event.fee_asset
+                    )
             self._journal_fee(event)
             self._notify(venue_id, "fill")
 
@@ -176,64 +190,69 @@ class AccountService:
             self._journal.write("error", venue=venue_id, data={"where": where, "error": error})
 
     def _journal_fill(
-        self, f: Fill, client_id: str | None = None, extra: dict[str, object] | None = None
+        self, fill: Fill, client_id: str | None = None, extra: dict[str, object] | None = None
     ) -> None:
         if self._journal is None:
             return
         if self._known is not None:
-            self._known.fee(f.venue, f.trade_id, f.fee, f.fee_asset)
+            self._known.fee(fill.venue, fill.trade_id, fill.fee, fill.fee_asset)
         self._journal.write(
             "fill",
-            venue=f.venue,
-            client_id=client_id or (self._client_ids.get(f.order_id) if f.order_id else None),
+            venue=fill.venue,
+            client_id=client_id or (self._client_ids.get(fill.order_id) if fill.order_id else None),
             data={
-                "trade_id": f.trade_id,
-                "order_id": f.order_id,
-                "side": f.side,
-                "qty": f.qty,
-                "price": f.price,
-                "fee": f.fee,
-                "fee_asset": f.fee_asset,
+                "trade_id": fill.trade_id,
+                "order_id": fill.order_id,
+                "side": fill.side,
+                "qty": fill.qty,
+                "price": fill.price,
+                "fee": fill.fee,
+                "fee_asset": fill.fee_asset,
                 **(extra or {}),
             },
         )
 
-    def _journal_fee(self, u: FeeUpdate, client_id: str | None = None) -> None:
+    def _journal_fee(self, fee_update: FeeUpdate, client_id: str | None = None) -> None:
         """The corrected fee goes apart: the fill's line is not touched (RF-11, D-64)."""
         if self._journal is None:
             return
         if self._known is not None:
-            self._known.fee(u.venue, u.trade_id, u.fee, u.fee_asset)
+            self._known.fee(
+                fee_update.venue, fee_update.trade_id, fee_update.fee, fee_update.fee_asset
+            )
         self._journal.write(
             "fill_fee",
-            venue=u.venue,
-            client_id=client_id or (self._client_ids.get(u.order_id) if u.order_id else None),
+            venue=fee_update.venue,
+            client_id=client_id
+            or (self._client_ids.get(fee_update.order_id) if fee_update.order_id else None),
             data={
-                "trade_id": u.trade_id,
-                "order_id": u.order_id,
-                "fee": u.fee,
-                "fee_asset": u.fee_asset,
+                "trade_id": fee_update.trade_id,
+                "order_id": fee_update.order_id,
+                "fee": fee_update.fee,
+                "fee_asset": fee_update.fee_asset,
             },
         )
 
     # -- catching up at startup (D-68) ----------------------------------------
 
-    def _catch_up(self, f: Fill) -> None:
+    def _catch_up(self, fill: Fill) -> None:
         """A trade already there: write what the journal does not know. Live only: in
         dry-run real trades are not of the simulated session."""
         if self._journal is None or self._journal.mode != "live":
             return
-        what, client_id = decide(f, self._index())
+        what, client_id = decide(fill, self._index())
         if what == "fee":
-            u = FeeUpdate(f.venue, f.trade_id, f.order_id, f.fee, f.fee_asset, f.ts)
-            log.info("%s: fee of %s corrected while not watching", f.venue, f.trade_id)
-            self._journal_fee(u, client_id)
-            self._notify(f.venue, "fill")
+            fee_update = FeeUpdate(
+                fill.venue, fill.trade_id, fill.order_id, fill.fee, fill.fee_asset, fill.ts
+            )
+            log.info("%s: fee of %s corrected while not watching", fill.venue, fill.trade_id)
+            self._journal_fee(fee_update, client_id)
+            self._notify(fill.venue, "fill")
         elif what == "fill":
-            log.warning("%s: unwritten fill %s of an order of ours", f.venue, f.trade_id)
-            self._journal_fill(f, client_id, {"recovered": True, "trade_ts": f.ts})
-            self._refresh[f.venue].set()
-            self._notify(f.venue, "fill")
+            log.warning("%s: unwritten fill %s of an order of ours", fill.venue, fill.trade_id)
+            self._journal_fill(fill, client_id, {"recovered": True, "trade_ts": fill.ts})
+            self._refresh[fill.venue].set()
+            self._notify(fill.venue, "fill")
 
     def _index(self) -> JournalIndex:
         if self._known is None:

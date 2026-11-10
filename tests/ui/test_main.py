@@ -94,8 +94,14 @@ async def test_dry_run_simulated_account(tmp_path):
     DryRunVenues as orders, to follow the legs (D-15)."""
     _, engine = engine_for(tmp_path, env_path=env(tmp_path, nx=True))
     sim = engine.orders._venues
-    assert all(isinstance(v, DryRunVenue) for v in sim.values()) and set(sim) == {"nk", "nx"}
-    assert all(v._fixed is None and v.inner is engine.hub._venues[k] for k, v in sim.items())
+    assert all(isinstance(dry_venue, DryRunVenue) for dry_venue in sim.values()) and set(sim) == {
+        "nk",
+        "nx",
+    }
+    assert all(
+        dry_venue._fixed is None and dry_venue.inner is engine.hub._venues[k]
+        for k, dry_venue in sim.items()
+    )
     assert engine.account is not None and engine.account._venues == sim
     assert engine.orders._account is engine.account  # validates with the account (D-18)
     engine.hub.state["nk"].spec = "spec-del-hub"
@@ -398,7 +404,7 @@ def connected(monkeypatch, tmp_path):
         seen["app"] = app
         InstanceLock(seen["data"]).acquire()  # the client does not take the lock (RNF-17)
 
-    def no_venues(*a, **kw):
+    def no_venues(*args, **kw):
         raise AssertionError("el cliente no crea venues")
 
     monkeypatch.setattr("xbt_terminal.__main__.probe", fake_probe)

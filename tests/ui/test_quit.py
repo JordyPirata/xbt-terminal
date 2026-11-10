@@ -12,17 +12,17 @@ from ..services.test_orders import buy
 from .test_orders_ui import NOW, Rig, ready, until
 
 
-def with_open_orders(rig, mode, n):
+def with_open_orders(rig, mode, order_count):
     """The account sees `n` open orders on NonKYC; the app, in `mode`."""
     venue = FakePrivate()
-    venue.push(*(order(f"o-{i}") for i in range(n)))
+    venue.push(*(order(f"o-{i}") for i in range(order_count)))
     account = AccountService({"nk": venue}, retry_s=0.01, clock=lambda: NOW)
     rig.app.account = rig.app.engine.account = account  # the engine runs it (D-61)
     rig.app.mode = mode
 
 
-async def opened(rig, pilot, n):
-    await until(pilot, lambda: len(rig.app.account.state["nk"].orders) == n)
+async def opened(rig, pilot, order_count):
+    await until(pilot, lambda: len(rig.app.account.state["nk"].orders) == order_count)
 
 
 @pytest.mark.spec("RNF-15", "RF-11")
@@ -38,7 +38,7 @@ class TestInFlight:
             await until(pilot, lambda: rig.events() == ["order_sent"])
             assert "1 envío" in await quit_message(rig, pilot)
         assert rig.events() == ["order_sent", "order_ack"]
-        assert [o.order_id for o in await rig.venue.open_orders()] == ["dry-nk-1"]
+        assert [order.order_id for order in await rig.venue.open_orders()] == ["dry-nk-1"]
 
 
 async def quit_message(rig, pilot):

@@ -30,7 +30,9 @@ class FakeFees:
 class TestLoad:
     async def test_one_per_venue_and_asset(self):
         got = await RebalanceService({"nk": FakeFees("nk"), "nx": FakeFees("nx")}).load()
-        assert {k: v.fee for k, v in got.items()} == {k: D(v) for k, v in FEES.items()}
+        assert {k: fee_info.fee for k, fee_info in got.items()} == {
+            k: D(fee_info) for k, fee_info in FEES.items()
+        }
 
     async def test_error_stays_in_its_asset(self):
         nk = FakeFees("nk", fail={"BTC": VenueError("NonKYC: HTTP 500")})

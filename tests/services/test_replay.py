@@ -53,14 +53,14 @@ def config(tmp_path, *, competitor="0", bot=BOT):
     return path
 
 
-def snap(venue, bid, ask, t, quantity="1"):
+def snap(venue, bid, ask, timestamp, quantity="1"):
     return BookSnapshot(
-        venue, (Level(D(bid), D(quantity)),), (Level(D(ask), D(quantity)),), t, None
+        venue, (Level(D(bid), D(quantity)),), (Level(D(ask), D(quantity)),), timestamp, None
     )
 
 
-def line(t, venue, kind, event):
-    return dumps({"t": t, "venue": venue, "kind": kind, "data": event}).decode()
+def line(timestamp, venue, kind, event):
+    return dumps({"t": timestamp, "venue": venue, "kind": kind, "data": event}).decode()
 
 
 QUIET = {"nk": ("0.0100", "0.0102"), "nx": ("0.0099", "0.0100")}
@@ -76,9 +76,9 @@ def scenario(path):
         rows.append(line(T0, venue_id, "conn", ConnState(venue_id, "market", "ws", "up", None, T0)))
         rows.append(line(T0, venue_id, "book", snap(venue_id, *QUIET[venue_id], T0)))
 
-    def at(s, venue_id, bid, ask, qty="1"):
-        t = T0 + int(s * 1000)
-        rows.append(line(t, venue_id, "book", snap(venue_id, bid, ask, t, qty)))
+    def at(seconds, venue_id, bid, ask, qty="1"):
+        timestamp = T0 + int(seconds * 1000)
+        rows.append(line(timestamp, venue_id, "book", snap(venue_id, bid, ask, timestamp, qty)))
 
     cross, calm = ("0.0095", "0.0096"), QUIET["nx"]
     at(10, "nx", *cross)  # good
@@ -132,7 +132,7 @@ class TestReplayStream:
                         return
 
         async def both():
-            await asyncio.gather(*(drain(v) for v in feeds))
+            await asyncio.gather(*(drain(feed) for feed in feeds))
 
         try:
             loop.run_until_complete(both())
@@ -140,9 +140,9 @@ class TestReplayStream:
             loop.close()
         for venue_id in feeds:
             want = [
-                (r.t, r.event)
-                for r in read_recording(recording)
-                if r.venue == venue_id and r.event != spec(venue_id)
+                (recorded.t, recorded.event)
+                for recorded in read_recording(recording)
+                if recorded.venue == venue_id and recorded.event != spec(venue_id)
             ]
             assert got[venue_id][:-1] == want
             assert got[venue_id][-1][1].status == "down"
@@ -302,7 +302,7 @@ class TestReport:
     def test_gives_expected_twice_the_same_and_leaves_nothing(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         settings = load_settings(config(tmp_path), tmp_path / "no.env", False, replay=True)
-        before = sorted(p.name for p in tmp_path.iterdir())
+        before = sorted(path.name for path in tmp_path.iterdir())
         first = replay_report(settings, recording)
         second = replay_report(settings, recording)
         assert first == second
@@ -314,7 +314,7 @@ class TestReport:
         # 2 doubles of 1 XBT: buy at 0.0096 and sell at 0.0100, 0.2 % on each
         each = D("0.0100") - D("0.0096") - (D("0.0100") + D("0.0096")) * D("0.002")
         assert first.net == 2 * each
-        assert sorted(p.name for p in tmp_path.iterdir()) == before
+        assert sorted(path.name for path in tmp_path.iterdir()) == before
 
     def test_total_competitor_fills_nothing(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
@@ -349,4 +349,3 @@ def test_report_on_fixed_real_sample(tmp_path):
     assert (report.misses, report.hanging, report.halted) == (0, 1, None)
     assert round(report.net * 100_000_000) == 8
     assert report == replay_report(settings, FIXTURES / "muestra.jsonl")
-

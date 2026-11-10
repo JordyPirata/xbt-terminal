@@ -110,11 +110,11 @@ async def collect(server: FakeNeoxa, until, timeout: float = 3.0, on_event=None)
 
 
 def got_last(events) -> bool:
-    return any(isinstance(e, Trade) and e.qty == D("0.7") for e in events)
+    return any(isinstance(event, Trade) and event.qty == D("0.7") for event in events)
 
 
 def states(events):
-    return [(e.source, e.status) for e in events if isinstance(e, ConnState)]
+    return [(event.source, event.status) for event in events if isinstance(event, ConnState)]
 
 
 @pytest.mark.spec("RF-01")
@@ -134,14 +134,14 @@ class TestWebSocket:
             [("ws", "up")],
         )
 
-        books = [e for e in events if isinstance(e, BookSnapshot)]
+        books = [event for event in events if isinstance(event, BookSnapshot)]
         assert len(books) == 1  # the NEOX_BTC one is ignored
         assert books[0].ts == 1_792_506_600_000 and books[0].seq is None
         assert len(books[0].bids) == 50 and len(books[0].asks) == 50
         assert books[0].bids[0] == Level(D("0.00713454"), D("0.12668383"), amm=True)
 
-        trades = [e for e in events if isinstance(e, Trade)]
-        assert [t.ts for t in trades[:20]] == sorted(t.ts for t in trades[:20])
+        trades = [event for event in events if isinstance(event, Trade)]
+        assert [trade.ts for trade in trades[:20]] == sorted(trade.ts for trade in trades[:20])
         assert trades[-2] == Trade("nx", D("0.00722875"), D("0.5"), "buy", 1792506600000)
         assert len(trades) == 22
 
@@ -155,7 +155,7 @@ class TestWebSocket:
         server = FakeNeoxa("drop", "stay")
         events = await collect(server, got_last)
         assert states(events).count(("ws", "up")) == 2
-        trades = [e for e in events if isinstance(e, Trade)]
+        trades = [event for event in events if isinstance(event, Trade)]
         assert len(trades) == len(set(trades)) == 22  # 20 of the batch + 2 live, no repeats
 
 
@@ -179,8 +179,12 @@ class TestReconnection:
             ("rest", "up"),
             ("ws", "up"),
         ]
-        i = next(i for i, e in enumerate(events) if isinstance(e, ConnState) and e.source == "rest")
-        rest_books = [e for e in events[i:] if isinstance(e, BookSnapshot)]
+        i = next(
+            i
+            for i, event in enumerate(events)
+            if isinstance(event, ConnState) and event.source == "rest"
+        )
+        rest_books = [event for event in events[i:] if isinstance(event, BookSnapshot)]
         assert rest_books and len(rest_books[0].bids) == 20  # the fixture's REST book
 
     async def test_rest_down_is_reported(self):
@@ -211,13 +215,13 @@ async def test_resync_reconnects_and_another_book_arrives(rest):
     asked = []
 
     async def resync_after_first_book(venue, events):
-        if not asked and any(isinstance(e, BookSnapshot) for e in events):
+        if not asked and any(isinstance(event, BookSnapshot) for event in events):
             asked.append(True)
             await venue.resync()
 
     events = await collect(
         server,
-        lambda evs: len([e for e in evs if isinstance(e, BookSnapshot)]) == 2,
+        lambda evs: len([event for event in evs if isinstance(event, BookSnapshot)]) == 2,
         on_event=resync_after_first_book,
     )
     assert len(server.received) == 2

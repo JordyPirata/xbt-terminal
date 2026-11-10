@@ -115,7 +115,7 @@ class DryRunVenue:
         return out
 
     async def open_orders(self) -> list[Order]:
-        return [o for o in self._orders.values() if not o.is_done]
+        return [order for order in self._orders.values() if not order.is_done]
 
     async def recent_orders(self, since: int) -> list[Order]:
         """All simulated ones, finished included (D-26)."""

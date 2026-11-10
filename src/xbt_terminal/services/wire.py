@@ -47,11 +47,14 @@ def encode(obj: Any) -> Any:
     if isinstance(obj, Decimal):
         return format(obj, "f")
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return {f.name: encode(getattr(obj, f.name)) for f in dataclasses.fields(obj)}
+                return {
+            dc_field.name: encode(getattr(obj, dc_field.name))
+            for dc_field in dataclasses.fields(obj)
+        }
     if isinstance(obj, dict):
-        return {str(k): encode(v) for k, v in obj.items()}
+        return {str(k): encode(item) for k, item in obj.items()}
     if isinstance(obj, list | tuple | deque | set | frozenset):
-        return [encode(v) for v in obj]
+        return [encode(item) for item in obj]
     return obj
 
 
@@ -136,15 +139,15 @@ def _decode_dataclass(target_type: Any, data: Any) -> Any:
         raise TypeError(f"{target_type.__name__} llega como objeto")
     hints = _hints(target_type)
     kwargs: dict[str, Any] = {}
-    for f in dataclasses.fields(target_type):
-        if not f.init or f.name not in data:
+    for dc_field in dataclasses.fields(target_type):
+        if not dc_field.init or dc_field.name not in data:
             continue
-        value = decode(hints[f.name], data[f.name])
-        if isinstance(value, deque) and f.default_factory is not dataclasses.MISSING:
-            fresh = f.default_factory()  # keeps the field's `maxlen`
+        value = decode(hints[dc_field.name], data[dc_field.name])
+        if isinstance(value, deque) and dc_field.default_factory is not dataclasses.MISSING:
+            fresh = dc_field.default_factory()  # keeps the field's `maxlen`
             fresh.extend(value)
             value = fresh
-        kwargs[f.name] = value
+        kwargs[dc_field.name] = value
     return target_type(**kwargs)
 
 
@@ -152,7 +155,7 @@ def _decode_mapping(target_type: Any, data: Any) -> dict[Any, Any]:
     if not isinstance(data, dict):
         raise TypeError("se esperaba un objeto")
     key_t, val_t = typing.get_args(target_type)
-    return {decode(key_t, k): decode(val_t, v) for k, v in data.items()}
+    return {decode(key_t, k): decode(val_t, raw_value) for k, raw_value in data.items()}
 
 
 def _decode_sequence(target_type: Any, data: Any) -> Any:
@@ -161,8 +164,8 @@ def _decode_sequence(target_type: Any, data: Any) -> Any:
         raise TypeError("se esperaba una lista")
     origin, args = typing.get_origin(target_type), typing.get_args(target_type)
     if origin is tuple and not (len(args) == 2 and args[1] is Ellipsis):
-        return tuple(decode(a, v) for a, v in zip(args, data, strict=True))
-    return origin(decode(args[0], v) for v in data)
+        return tuple(decode(arg, raw_item) for arg, raw_item in zip(args, data, strict=True))
+    return origin(decode(args[0], raw_item) for raw_item in data)
 
 
 def _decode_scalar(target_type: Any, data: Any) -> Any:
@@ -244,7 +247,11 @@ def snapshot(engine: Engine) -> Snapshot:
         accounts=dict(engine.account.state) if engine.account is not None else {},
         doubles=dict(orders.doubles) if orders is not None else {},
         hanging=dict(orders.hanging) if orders is not None else {},
-        uncertain=[u.req for u in orders.uncertain.values()] if orders is not None else [],
+                uncertain=(
+            [uncertain_order.req for uncertain_order in orders.uncertain.values()]
+            if orders is not None
+            else []
+        ),
         in_flight=orders.in_flight if orders is not None else 0,
         faults=engine.fault_count,
         can_trade=(

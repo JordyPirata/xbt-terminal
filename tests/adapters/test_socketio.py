@@ -13,46 +13,46 @@ NS = "/exchange"
 @pytest.mark.spec("RF-01")
 class TestDecode:
     def test_open_with_ping_times(self):
-        p = sio.decode(
+        packet = sio.decode(
             '0{"sid":"QWxX_Ogr7_kTyTbcAbAv","upgrades":[],"pingInterval":25000,'
             '"pingTimeout":20000,"maxPayload":1000000}'
         )
-        assert p.kind == "open"
-        assert p.data["pingInterval"] == 25000 and p.data["pingTimeout"] == 20000
+        assert packet.kind == "open"
+        assert packet.data["pingInterval"] == 25000 and packet.data["pingTimeout"] == 20000
 
     def test_engine_ping_and_close(self):
         assert sio.decode("2") == Packet("ping")
         assert sio.decode("1") == Packet("close")
 
     def test_namespace_connect(self):
-        p = sio.decode('40/exchange,{"sid":"ohpzJ6SVqtZre8MzAbAx"}')
-        assert p == Packet("connect", NS, data={"sid": "ohpzJ6SVqtZre8MzAbAx"})
+        packet = sio.decode('40/exchange,{"sid":"ohpzJ6SVqtZre8MzAbAx"}')
+        assert packet == Packet("connect", NS, data={"sid": "ohpzJ6SVqtZre8MzAbAx"})
 
     def test_root_namespace_connect(self):
         assert sio.decode("40") == Packet("connect", "/")
 
     def test_event_with_floats_as_decimal(self):
-        p = sio.decode(
+        packet = sio.decode(
             '42/exchange,["exchange:orderbook",{"pair":"BTCB2_BTC","bids":'
             '[{"price":0.00713454,"quantity":0.12668383,"isAmm":true}],"asks":[]}]'
         )
-        assert (p.kind, p.namespace, p.event) == ("event", NS, "exchange:orderbook")
-        level = p.data["bids"][0]
+        assert (packet.kind, packet.namespace, packet.event) == ("event", NS, "exchange:orderbook")
+        level = packet.data["bids"][0]
         assert level["price"] == Decimal("0.00713454")
         assert isinstance(level["quantity"], Decimal)
 
     def test_event_without_arguments(self):
-        p = sio.decode('42/exchange,["pong"]')
-        assert (p.kind, p.event, p.data) == ("event", "pong", None)
+        packet = sio.decode('42/exchange,["pong"]')
+        assert (packet.kind, packet.event, packet.data) == ("event", "pong", None)
 
     def test_event_with_ack_id(self):
-        p = sio.decode('42/exchange,7["x",{"a":1}]')
-        assert (p.event, p.data) == ("x", {"a": 1})
+        packet = sio.decode('42/exchange,7["x",{"a":1}]')
+        assert (packet.event, packet.data) == ("x", {"a": 1})
 
     def test_disconnect_and_connect_error(self):
         assert sio.decode("41/exchange,").kind == "disconnect"
-        p = sio.decode('44/exchange,{"message":"Invalid namespace"}')
-        assert p.kind == "connect_error" and p.data == {"message": "Invalid namespace"}
+        packet = sio.decode('44/exchange,{"message":"Invalid namespace"}')
+        assert packet.kind == "connect_error" and packet.data == {"message": "Invalid namespace"}
 
     @pytest.mark.parametrize("frame", ["", "9", "4", "47/exchange,", '42/exchange,{"no":"lista"}'])
     def test_invalid_frame(self, frame):
@@ -77,8 +77,8 @@ class TestEncode:
         assert sio.event_frame(NS, "ping") == '42/exchange,["ping"]'
 
     def test_round_trip(self):
-        p = sio.decode(sio.event_frame(NS, "subscribe", {"pair": "BTCB2_BTC"}))
-        assert (p.event, p.data) == ("subscribe", {"pair": "BTCB2_BTC"})
+        packet = sio.decode(sio.event_frame(NS, "subscribe", {"pair": "BTCB2_BTC"}))
+        assert (packet.event, packet.data) == ("subscribe", {"pair": "BTCB2_BTC"})
 
     def test_pong(self):
         assert sio.PONG == "3"

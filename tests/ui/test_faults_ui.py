@@ -33,7 +33,7 @@ class TestFailures:
             await pilot.press("y")
             await until(pilot, lambda: "sin order_ack" in rig.app.last_message)
             assert rig.app.last_error and "No space left" in rig.app.last_message
-            assert [o.order_id for o in await rig.venue.open_orders()] == ["dry-nk-1"]
+            assert [order.order_id for order in await rig.venue.open_orders()] == ["dry-nk-1"]
             await until(pilot, lambda: "✖ 1 fallo" in rig.app.query_one(StatusBar).text)
             assert rig.app.is_running
 

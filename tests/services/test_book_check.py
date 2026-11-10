@@ -37,10 +37,10 @@ class Rig:
     def events(self, name):
         rows = [
             json.loads(line)
-            for f in sorted(self.logs.glob("journal-*.jsonl"))
-            for line in f.read_text().splitlines()
+            for path in sorted(self.logs.glob("journal-*.jsonl"))
+            for line in path.read_text().splitlines()
         ]
-        return [r for r in rows if r["event"] == name]
+        return [row for row in rows if row["event"] == name]
 
 
 @pytest.mark.spec("RNF-24", "CA-18")

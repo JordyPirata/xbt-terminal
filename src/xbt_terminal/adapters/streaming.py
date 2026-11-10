@@ -115,10 +115,10 @@ class Backoff:
     ) -> None:
         self.base_s, self.max_s, self._rng = base_s, max_s, rng
 
-    def delay(self, n: int) -> float:
-        if n < 1:
-            raise ValueError(f"reintento inválido: {n}")
-        raw = min(self.max_s, self.base_s * 2 ** (n - 1))
+    def delay(self, attempt: int) -> float:
+        if attempt < 1:
+            raise ValueError(f"reintento inválido: {attempt}")
+        raw = min(self.max_s, self.base_s * 2 ** (attempt - 1))
         return min(self.max_s, raw * (0.8 + 0.4 * self._rng()))
 
 
@@ -265,11 +265,13 @@ class StreamingVenue:
         trades = await self._fetch_trades(min(limit, self.max_trades))
         for trade_id, _ in trades:
             self._seen.add(trade_id)
-        return sorted((t for _, t in trades), key=lambda t: t.ts)
+        return sorted((trade for _, trade in trades), key=lambda trade: trade.ts)
 
     def fresh(self, trades: list[tuple[str, Trade]]) -> list[Trade]:
         """Only those not delivered yet, in chronological order."""
-        return sorted((t for i, t in trades if self._seen.add(i)), key=lambda t: t.ts)
+        return sorted(
+            (trade for i, trade in trades if self._seen.add(i)), key=lambda trade: trade.ts
+        )
 
     # -- state and latency -----------------------------------------------------
 
@@ -366,11 +368,11 @@ class StreamingVenue:
     async def _poll(self, emit: Callable[[MarketEvent], None]) -> None:
         """Fallback REST polling until the supervisor cancels it."""
         status: ConnStatus | None = None
-        n = 0
+        poll_count = 0
         while True:
             try:
                 events: list[MarketEvent] = [await self.book_snapshot(self._book_depth)]
-                if n % TRADES_EVERY_POLLS == 0:
+                if poll_count % TRADES_EVERY_POLLS == 0:
                     limit = min(FALLBACK_TRADES, self.max_trades)
                     events += self.fresh(await self._fetch_trades(limit))
                 new_status: ConnStatus = "up"
@@ -385,7 +387,7 @@ class StreamingVenue:
                 emit(self.state("rest", status))
             for event in events:
                 emit(event)
-            n += 1
+            poll_count += 1
             await asyncio.sleep(self._fallback_every_s)
 
     async def _heartbeat(self, emit: Callable[[MarketEvent], None]) -> None:

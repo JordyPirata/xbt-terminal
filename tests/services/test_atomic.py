@@ -36,76 +36,76 @@ async def settle():
 @pytest.mark.spec("RNF-13", "RF-10")
 class TestSameVenue:
     async def test_second_counts_the_one_in_flight(self, tmp_path):
-        s = Rig(tmp_path)
-        first = await s.orders.prepare(buy(price="0.00725000"))
-        second = await s.orders.prepare(sell(price="0.00724000"))
+        rig = Rig(tmp_path)
+        first = await rig.orders.prepare(buy(price="0.00725000"))
+        second = await rig.orders.prepare(sell(price="0.00724000"))
         gate = asyncio.Event()
-        slow(s.venue, gate)
-        a = asyncio.create_task(s.orders.confirm(first))
-        b = asyncio.create_task(s.orders.confirm(second))
+        slow(rig.venue, gate)
+        first_task = asyncio.create_task(rig.orders.confirm(first))
+        second_task = asyncio.create_task(rig.orders.confirm(second))
         await settle()
-        assert not b.done()  # waits for the first send to end
+        assert not second_task.done()  # waits for the first send to end
         gate.set()
-        ra, rb = await a, await b
+        ra, rb = await first_task, await second_task
         assert isinstance(ra, Sent)
         assert isinstance(rb, Rejected) and "self_cross" in rb.codes
-        assert s.events() == ["order_sent", "order_ack", "reject_local"]
+        assert rig.events() == ["order_sent", "order_ack", "reject_local"]
 
     async def test_uncertain_counts_as_open(self, tmp_path):
         """It may exist on the venue: until known, it counts (when in doubt, do not send)."""
-        s = Rig(tmp_path)
-        s.lose_reply(create=False)
-        assert isinstance(await s.send(buy(price="0.00725000")), Uncertain)
-        result = await s.orders.prepare(sell(price="0.00724000"))
+        rig = Rig(tmp_path)
+        rig.lose_reply(create=False)
+        assert isinstance(await rig.send(buy(price="0.00725000")), Uncertain)
+        result = await rig.orders.prepare(sell(price="0.00724000"))
         assert isinstance(result, Rejected) and "self_cross" in result.codes
 
     async def test_resolved_as_missing_stops_counting(self, tmp_path):
-        s = Rig(tmp_path)
-        s.lose_reply(create=False)
-        await s.send(buy(price="0.00725000"))
-        s.now = NOW + 61_000
-        s.book("nk", "0.00720000", "0.00730000", ts=s.now)
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "missing"
-        assert isinstance(await s.send(sell(price="0.00724000")), Sent)
+        rig = Rig(tmp_path)
+        rig.lose_reply(create=False)
+        await rig.send(buy(price="0.00725000"))
+        rig.now = NOW + 61_000
+        rig.book("nk", "0.00720000", "0.00730000", ts=rig.now)
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "missing"
+        assert isinstance(await rig.send(sell(price="0.00724000")), Sent)
 
     async def test_uncertain_and_found_does_not_count_twice(self, tmp_path):
         """With the order already on the venue and the same client_id, only once."""
-        s = Rig(tmp_path)
-        s.lose_reply()
-        await s.send(buy(price="0.00725000"))
-        open_orders = await s.orders._snapshot("nk", s.venue)
-        assert [o.client_id for o in open_orders[0]] == ["t-000001"]
+        rig = Rig(tmp_path)
+        rig.lose_reply()
+        await rig.send(buy(price="0.00725000"))
+        open_orders = await rig.orders._snapshot("nk", rig.venue)
+        assert [order.client_id for order in open_orders[0]] == ["t-000001"]
 
 
 @pytest.mark.spec("RNF-13")
 class TestDifferentVenues:
     async def test_do_not_block_each_other(self, tmp_path):
-        s = double.Setup(tmp_path)
+        rig = double.Setup(tmp_path)
         gate = asyncio.Event()
-        slow(s.venues["nk"], gate)
-        stuck = asyncio.create_task(s.orders.confirm(await s.orders.prepare(buy(venue="nk"))))
+        slow(rig.venues["nk"], gate)
+        stuck = asyncio.create_task(rig.orders.confirm(await rig.orders.prepare(buy(venue="nk"))))
         await settle()
-        nx = await s.orders.prepare(sell(venue="nx", price="0.00727000"))
-        result = await asyncio.wait_for(s.orders.confirm(nx), 1)
+        nx = await rig.orders.prepare(sell(venue="nx", price="0.00727000"))
+        result = await asyncio.wait_for(rig.orders.confirm(nx), 1)
         assert isinstance(result, Sent) and not stuck.done()
         gate.set()
         assert isinstance(await stuck, Sent)
 
     async def test_double_order_waits_for_both_venues(self, tmp_path):
-        s = double.Setup(tmp_path)
+        rig = double.Setup(tmp_path)
         gate = asyncio.Event()
-        slow(s.venues["nx"], gate)
+        slow(rig.venues["nx"], gate)
         stuck = asyncio.create_task(
-            s.orders.confirm(await s.orders.prepare(sell(venue="nx", price="0.00727000")))
+            rig.orders.confirm(await rig.orders.prepare(sell(venue="nx", price="0.00727000")))
         )
         await settle()
         command = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
-        pending = await s.orders.prepare_double(command)
-        task = asyncio.create_task(s.orders.confirm_double(pending))
+        pending = await rig.orders.prepare_double(command)
+        task = asyncio.create_task(rig.orders.confirm_double(pending))
         await settle()
         assert not task.done()
-        assert [e for e, _ in s.events()] == ["order_sent"]  # not even the nk leg goes
+        assert [event for event, _ in rig.events()] == ["order_sent"]  # not even the nk leg goes
         gate.set()
         assert isinstance(await stuck, Sent)
         assert isinstance(await asyncio.wait_for(task, 1), DoubleSent)

@@ -106,34 +106,34 @@ class L2Book:
     def depth(self) -> tuple[int, int]:
         return len(self._bids), len(self._asks)
 
-    def top(self, n: int) -> tuple[tuple[BookRow, ...], tuple[BookRow, ...]]:
+    def top(self, count: int) -> tuple[tuple[BookRow, ...], tuple[BookRow, ...]]:
         """Best N levels per side (bids high to low, asks low to high)."""
         if not self.valid:
             return (), ()
-        bids, asks = self._best(n)
+        bids, asks = self._best(count)
         return _rows(bids), _rows(asks)
 
-    def best_levels(self, n: int) -> tuple[tuple[Level, ...], tuple[Level, ...]]:
+    def best_levels(self, count: int) -> tuple[tuple[Level, ...], tuple[Level, ...]]:
         """Best N levels per side as the book holds them, without the cumulative: the bot
         reads one per book change, and copying them cost more than deciding (T-92)."""
         if not self.valid:
             return (), ()
-        bids, asks = self._best(n)
+        bids, asks = self._best(count)
         return tuple(bids), tuple(asks)
 
-    def _best(self, n: int) -> tuple[list[Level], list[Level]]:
+    def _best(self, count: int) -> tuple[list[Level], list[Level]]:
         """Best N per side without sorting the whole book (D-70): `heapq` gives the
         same as `sorted(...)[:n]`, and prices do not repeat (they are keys)."""
-        bids = heapq.nlargest(n, self._bids.values(), key=_price)
-        asks = heapq.nsmallest(n, self._asks.values(), key=_price)
+        bids = heapq.nlargest(count, self._bids.values(), key=_price)
+        asks = heapq.nsmallest(count, self._asks.values(), key=_price)
         return bids, asks
 
-    def snapshot(self, n: int) -> BookSnapshot | None:
+    def snapshot(self, count: int) -> BookSnapshot | None:
         """Best N levels per side as a snapshot, to forward the book over the
         daemon socket (D-66); None if the book is invalid."""
         if not self.valid or self.ts is None:
             return None
-        bids, asks = self._best(n)
+        bids, asks = self._best(count)
         return BookSnapshot(self.venue, tuple(bids), tuple(asks), self.ts, self.seq)
 
 

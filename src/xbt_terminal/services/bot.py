@@ -194,8 +194,10 @@ class BotService:
             parts.append(
                 f"sin disparar: {skip.reason}" + (f" ({skip.detail})" if skip.detail else "")
             )
-        parts += [self._token_status(venue_id, t) for venue_id, t in self._fee_tokens.items()]
-        hits = sum(1 for t in state.fired_at if t // DAY_MS == now // DAY_MS)
+        parts += [
+            self._token_status(venue_id, token) for venue_id, token in self._fee_tokens.items()
+        ]
+        hits = sum(1 for fired in state.fired_at if fired // DAY_MS == now // DAY_MS)
         parts.append(f"disparos hoy {hits}, {spent:f} BTC de compra")
         return " · ".join(parts)
 
@@ -269,7 +271,7 @@ class BotService:
         self._set(replace(self.state, status="halted", reason=reason))
         if self._firing is not None:  # whatever stayed open of the double (RF-21)
             task = asyncio.ensure_future(self._orders.cancel_double(self._firing))
-            task.add_done_callback(lambda t: t.exception())
+            task.add_done_callback(lambda done_task: done_task.exception())
             self._orders.skip_held(self._firing)  # the other leg no longer goes (D-75)
             self._firing = None
 
@@ -278,7 +280,7 @@ class BotService:
         if self._orders.uncertain:
             self.last_skip = Skip("uncertain_open", "hay órdenes inciertas sin reconciliar")
             return
-        if any(not d.done for d in self._orders.doubles.values()):
+        if any(not double.done for double in self._orders.doubles.values()):
             self.last_skip = Skip("double_open", "hay una orden doble sin terminar")
             return
         views = self._views(now)
@@ -292,7 +294,7 @@ class BotService:
                 self._set(capped(self.state, self._limits))
             return
         self.last_skip = None
-        await self._fire(result, {venue_id: v.move_pct for venue_id, v in views.items()})
+        await self._fire(result, {venue_id: view.move_pct for venue_id, view in views.items()})
 
     def _views(self, now: int) -> dict[VenueId, VenueView]:
         views: dict[VenueId, VenueView] = {}
@@ -344,9 +346,10 @@ class BotService:
     def _token_text(self) -> str:
         """Confirmation lines with each venue's token fee, or nothing."""
         return "".join(
-            f"{NAMES[venue_id]} fee taker -{t.discount_pct} % mientras haya {t.min_available} "
-            f"{t.asset} disponibles; si no, la completa\n"
-            for venue_id, t in self._fee_tokens.items()
+            f"{NAMES[venue_id]} fee taker -{token.discount_pct} % "
+            f"mientras haya {token.min_available} "
+            f"{token.asset} disponibles; si no, la completa\n"
+            for venue_id, token in self._fee_tokens.items()
         )
 
     def _token_status(self, venue_id: VenueId, token: FeeToken) -> str:
@@ -464,15 +467,19 @@ class BotService:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._limits.fill_timeout_ms / 1000
         while loop.time() < deadline:
-            d = self._orders.doubles[double_id]
-            if d.done or any(order_leg.status in ("rejected", "unknown") for order_leg in d.legs):
+            double_state = self._orders.doubles[double_id]
+            if double_state.done or any(
+                order_leg.status in ("rejected", "unknown") for order_leg in double_state.legs
+            ):
                 break
             await asyncio.sleep(POLL_S)
         cancel = await self._orders.cancel_double(double_id)
         settle = loop.time() + self._settle_s
         while loop.time() < settle:
-            d = self._orders.doubles[double_id]
-            if d.done or any(order_leg.status == "unknown" for order_leg in d.legs):
+            double_state = self._orders.doubles[double_id]
+            if double_state.done or any(
+                order_leg.status == "unknown" for order_leg in double_state.legs
+            ):
                 break
             await asyncio.sleep(POLL_S)
         return _verdict(self._orders.doubles[double_id], cancel.errors)
@@ -537,13 +544,13 @@ class BotService:
                 fires.append((int(row["data"]["at"]), Decimal(row["data"]["notional"])))
             except (ValueError, KeyError, TypeError):
                 continue  # an odd line does not stop startup
-        today = [(at, n) for at, n in fires if at // DAY_MS == now // DAY_MS]
+        today = [(at, notional) for at, notional in fires if at // DAY_MS == now // DAY_MS]
         if not today:
             return BotState()
         restored = BotState(
             fired_at=tuple(at for at, _ in today),
             day=now // DAY_MS,
-            day_btc=sum((n for _, n in today), ZERO),
+            day_btc=sum((notional for _, notional in today), ZERO),
             last_fire_at=max(at for at, _ in today),
         )
         return tick(restored, self._limits, now)
@@ -581,20 +588,25 @@ def _lead_text(lim: BotLimits) -> str:
     )
 
 
-def _verdict(d: DoubleState, cancel_errors: dict[VenueId, str]) -> str | None:
-    for order_leg in d.legs:
+def _verdict(double_state: DoubleState, cancel_errors: dict[VenueId, str]) -> str | None:
+    for order_leg in double_state.legs:
         if order_leg.status == "unknown":
             return f"uncertain: {order_leg.label}: {order_leg.error}"
-    for order_leg in d.legs:
+    for order_leg in double_state.legs:
         if order_leg.status == "rejected":
             return f"rejected: {order_leg.label}: {order_leg.error or 'rechazada'}"
-    if not d.done:
-        open_legs = ", ".join(order_leg.label for order_leg in d.legs if not order_leg.done)
-        errors = "; ".join(f"{NAMES[v]}: {e}" for v, e in cancel_errors.items())
+    if not double_state.done:
+        open_legs = ", ".join(
+            order_leg.label for order_leg in double_state.legs if not order_leg.done
+        )
+        errors = "; ".join(
+            f"{NAMES[venue_id]}: {error}" for venue_id, error in cancel_errors.items()
+        )
         return f"unsettled: {open_legs} sin cerrar" + (f" ({errors})" if errors else "")
-    if d.buy.filled != d.sell.filled:
+    if double_state.buy.filled != double_state.sell.filled:
         return (
-            f"hanging_leg: compra {d.buy.filled} y venta {d.sell.filled} {BASE_LABEL} "
-            f"en la doble {d.id}"
+            f"hanging_leg: compra {double_state.buy.filled} "
+            f"y venta {double_state.sell.filled} {BASE_LABEL} "
+            f"en la doble {double_state.id}"
         )
     return None

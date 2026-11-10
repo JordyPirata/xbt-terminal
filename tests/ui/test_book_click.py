@@ -29,15 +29,15 @@ async def ready(rig, pilot):
             ConnState(venue_id, "market", "ws", "up", 100.0, rig.now),
             book(venue_id, "0.00720000", "0.00730000", ts=rig.now),
         )
-    await until(pilot, lambda: all(rig.hub.state[v].ready for v in ("nk", "nx")))
+    await until(pilot, lambda: all(rig.hub.state[venue].ready for venue in ("nk", "nx")))
     panel = rig.app.query_one("#book-nk", BookPanel)
     await until(pilot, lambda: "0.00730000" in panel.text)
     return panel
 
 
-async def click(pilot, venue, x, y):
+async def click(pilot, venue, column, line):
     """(x, y) in content coordinates; +1 for the panel border."""
-    await pilot.click(f"#book-{venue}", offset=(x + 1, y + 1))
+    await pilot.click(f"#book-{venue}", offset=(column + 1, line + 1))
     await pilot.pause()
 
 
@@ -52,8 +52,8 @@ class TestLevelUnderMouse:
             assert panel.level_at(BID_X, 2) == ("bid", D("0.00719900"), D("2"))
             assert panel.level_at(ASK_X, 1) == ("ask", D("0.00730000"), D("0.5"))
             assert panel.level_at(ASK_X, 2) == ("ask", D("0.00730100"), D("3"))
-            for x in (37, 38, 39):  # separator " │ "
-                assert panel.level_at(x, 1) is None, x
+            for column in (37, 38, 39):  # separator " │ "
+                assert panel.level_at(column, 1) is None, column
             assert panel.level_at(36, 1) is not None and panel.level_at(40, 1) is not None
             assert panel.level_at(BID_X, 3) is None  # empty level
             assert panel.level_at(BID_X, 16) is None  # summary line

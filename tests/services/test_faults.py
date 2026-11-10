@@ -23,7 +23,7 @@ KEY = "s3cr3t-api-key-0123456789"
 
 def lines(logs):
     files = sorted(logs.glob("journal-*.jsonl"))
-    return [json.loads(ln) for f in files for ln in f.read_text().splitlines()]
+    return [json.loads(ln) for path in files for ln in path.read_text().splitlines()]
 
 
 async def until(predicate, timeout=1.0):
@@ -76,8 +76,8 @@ class TestFaults:
         crashes, calls, waits = [], [], []
         real_sleep = asyncio.sleep
 
-        async def sleep(s):
-            waits.append(s)
+        async def sleep(seconds):
+            waits.append(seconds)
             await real_sleep(0)
 
         monkeypatch.setattr("xbt_terminal.services.faults.asyncio.sleep", sleep)
@@ -88,7 +88,7 @@ class TestFaults:
                 raise RuntimeError(f"bug {len(calls)}")
 
         await asyncio.wait_for(supervised(work, crashes.append, retry_s=1.0, max_s=8.0), 1)
-        assert [str(e) for e in crashes] == [f"bug {i}" for i in range(1, 6)]
+        assert [str(crash) for crash in crashes] == [f"bug {i}" for i in range(1, 6)]
         assert waits == [1.0, 2.0, 4.0, 8.0, 8.0]
 
     async def test_supervised_does_not_swallow_cancellation(self):
@@ -102,9 +102,9 @@ class TestFaults:
 class Buggy(FakeFeed):
     """`market()` has a bug the first `n` times (not a network error)."""
 
-    def __init__(self, venue, n=1):
+    def __init__(self, venue, failures=1):
         super().__init__(venue)
-        self.bugs = n
+        self.bugs = failures
 
     async def market(self):
         if self.bugs:
@@ -163,32 +163,32 @@ class TestAccount:
 @pytest.mark.spec("RNF-14", "RF-11")
 class TestJournalAfterSending:
     async def test_order_ack_without_disk_order_still_counts(self, tmp_path):
-        s = Setup(tmp_path)
-        full_disk(s.journal, "order_ack")
+        setup = Setup(tmp_path)
+        full_disk(setup.journal, "order_ack")
         seen = []
-        s.orders.faults.subscribe(seen.append)
-        result = await s.orders.confirm(await s.orders.prepare(buy(price="0.00725000")))
+        setup.orders.faults.subscribe(seen.append)
+        result = await setup.orders.confirm(await setup.orders.prepare(buy(price="0.00725000")))
         assert isinstance(result, Sent)
         (fault,) = seen
         assert fault.where == "journal" and "dry-nk-1 enviada" in fault.message
         assert "No space left" in fault.message
-        again = await s.orders.prepare(buy(price="0.00725000"))
+        again = await setup.orders.prepare(buy(price="0.00725000"))
         assert again is not None  # the service keeps working
 
     async def test_no_order_sent_nothing_sent(self, tmp_path):
         """Without a trace of what is about to be sent, it is not sent (RF-11)."""
-        s = Setup(tmp_path)
-        full_disk(s.journal, "order_sent")
-        result = await s.orders.confirm(await s.orders.prepare(buy()))
+        setup = Setup(tmp_path)
+        full_disk(setup.journal, "order_sent")
+        result = await setup.orders.confirm(await setup.orders.prepare(buy()))
         assert isinstance(result, Failed) and "journal" in result.error
-        assert await s.venue.open_orders() == []
+        assert await setup.venue.open_orders() == []
 
     async def test_cancels_even_if_journal_fails(self, tmp_path):
         """Cancelling reduces risk: it is not skipped because of the disk."""
-        s = Setup(tmp_path)
-        await s.orders.confirm(await s.orders.prepare(buy()))
-        full_disk(s.journal, "cancel_sent", "cancel_ack")
-        plan = await s.orders.plan_cancel(CancelVenue("nk"))
-        result = await s.orders.execute_cancel(plan)
-        assert result.ok and await s.venue.open_orders() == []
-        assert {f.where for f in s.orders.faults.recent} == {"journal"}
+        setup = Setup(tmp_path)
+        await setup.orders.confirm(await setup.orders.prepare(buy()))
+        full_disk(setup.journal, "cancel_sent", "cancel_ack")
+        plan = await setup.orders.plan_cancel(CancelVenue("nk"))
+        result = await setup.orders.execute_cancel(plan)
+        assert result.ok and await setup.venue.open_orders() == []
+        assert {fault.where for fault in setup.orders.faults.recent} == {"journal"}

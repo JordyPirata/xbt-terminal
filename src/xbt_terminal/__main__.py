@@ -131,17 +131,21 @@ def trading_venues(
         cfg = settings.config.replay
         assert cfg is not None  # load_settings does not get here without it
         return {
-            venue_id: SimVenue(v, cfg, clock=clock)
-            for venue_id, v in venues.items()
-            if isinstance(v, ReplayVenue)
+            venue_id: SimVenue(venue_data, cfg, clock=clock)
+            for venue_id, venue_data in venues.items()
+            if isinstance(venue_data, ReplayVenue)
         }
-    tradable = {venue_id: v for venue_id, v in venues.items() if settings.can_trade(venue_id)}
+    tradable = {
+        venue_id: venue_data
+        for venue_id, venue_data in venues.items()
+        if settings.can_trade(venue_id)
+    }
     if settings.mode == "dry-run":
         return {
             venue_id: DryRunVenue(
-                v, spec=lambda venue_id=venue_id: hub.state[venue_id].spec, clock=clock
+                venue_data, spec=lambda venue_id=venue_id: hub.state[venue_id].spec, clock=clock
             )
-            for venue_id, v in tradable.items()
+            for venue_id, venue_data in tradable.items()
         }
     out: dict[VenueId, Venue] = {}
     for venue_id, venue in tradable.items():
@@ -155,9 +159,9 @@ def deposit_service(settings: Settings, venues: dict[VenueId, MarketData]) -> De
     """Deposit addresses (RF-28) with the real adapters of venues with keys, in any
     mode: they are only read. Without keys, None."""
     readers = {
-        venue_id: v
-        for venue_id, v in venues.items()
-        if venue_id in settings.credentials and isinstance(v, Depositor)
+        venue_id: venue_data
+        for venue_id, venue_data in venues.items()
+        if venue_id in settings.credentials and isinstance(venue_data, Depositor)
     }
     return DepositService(readers) if readers else None
 
@@ -168,9 +172,9 @@ def rebalance_service(
     """Withdrawal fees for the rebalance plan (RF-29), like deposits: real adapters of
     venues with keys. Without keys, None."""
     readers = {
-        venue_id: v
-        for venue_id, v in venues.items()
-        if venue_id in settings.credentials and isinstance(v, WithdrawalFees)
+        venue_id: venue_data
+        for venue_id, venue_data in venues.items()
+        if venue_id in settings.credentials and isinstance(venue_data, WithdrawalFees)
     }
     return RebalanceService(readers) if readers else None
 
@@ -181,19 +185,23 @@ def results_service(
     """Results of the journal in `directory` (RF-25), with the fee token price of each
     venue that has one, to value its fees (D-65)."""
     pricers = {}
-    for venue_id, v in settings.config.venues.items():
+    for venue_id, venue_config in settings.config.venues.items():
         venue = venues.get(venue_id)
-        if v.fee_token is not None and isinstance(venue, TokenPricer):
-            pricers[v.fee_token] = lambda venue=venue, token=v.fee_token: venue.token_price(token)
+        if venue_config.fee_token is not None and isinstance(venue, TokenPricer):
+            pricers[venue_config.fee_token] = lambda venue=venue, token=venue_config.fee_token: (
+                venue.token_price(token)
+            )
     return ResultsService(directory, pricers=pricers)
 
 
 def fee_tokens(venues: Mapping[VenueId, VenueConfig]) -> dict[VenueId, FeeToken]:
     """Venues paying fees in a token, for the bot (RF-24, D-63)."""
     return {
-        venue_id: FeeToken(v.fee_token, v.fee_token_min, v.fee_discount_pct)
-        for venue_id, v in venues.items()
-        if v.fee_token is not None and v.fee_token_min is not None
+        venue_id: FeeToken(
+            venue_config.fee_token, venue_config.fee_token_min, venue_config.fee_discount_pct
+        )
+        for venue_id, venue_config in venues.items()
+        if venue_config.fee_token is not None and venue_config.fee_token_min is not None
     }
 
 
@@ -258,7 +266,9 @@ def client_view(settings: Settings) -> ClientView:
     return ClientView(
         book_levels=cfg.ui.book_levels,
         timeframe=cfg.ui.default_timeframe,
-        fee_discounts={venue_id: v.fee_discount_pct for venue_id, v in cfg.venues.items()},
+        fee_discounts={
+            venue_id: venue_config.fee_discount_pct for venue_id, venue_config in cfg.venues.items()
+        },
         inventory=cfg.inventory,
         bot_limits=cfg.bot.limits if cfg.bot is not None else None,
     )
@@ -322,7 +332,9 @@ def replay_report(settings: Settings, recording: Path) -> ReplayReport:
             feeds = replay_venues(recording, info, loop.now_ms)
             engine = build_engine(settings, logs=Path(tmp), venues=feeds, clock=loop.now_ms)
             probe_ = CrossingProbe(engine.hub, bot.limits, loop.now_ms)
-            timeline = next(v.timeline for v in feeds.values() if isinstance(v, ReplayVenue))
+            timeline = next(
+                feed.timeline for feed in feeds.values() if isinstance(feed, ReplayVenue)
+            )
             loop.run_until_complete(run_report(engine, timeline))
             return summarize_journal(Path(tmp), probe_.count, info)
     finally:

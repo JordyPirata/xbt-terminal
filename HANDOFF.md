@@ -6,12 +6,12 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-09)
 
-- **M20 — Nombres descriptivos (D-83), en curso, rama `t-98-descriptive-names` (PR abierta):**
-  T-98 sin cerrar y T-99 sin empezar. Hechos: `vid`, `exc`, `cmd`, `st`, `lv`, `leg`,
-  `pct`, `req`, `qty`, `ts` y `tp` en `src/`, `tests/` y `tools/`. Queda la **letra
-  suelta** (unos 5 900 usos; `D` es el alias de Decimal), que pide decidir por función
-  y bloquea el test de guarda. `leg` en `core/double.py` se conserva (término del
-  dominio). Detalle en el cuerpo de T-98.
+- **M20 — Nombres descriptivos (D-83), rama `t-98-descriptive-names` (PR abierta):**
+  T-98 hecha: nombres completos en `src/`, `tests/` y `tools/`, con dos excepciones
+  (`tests/unit/bot_reference.py`, oráculo congelado, y el campo `t` de
+  `services/recording.py`). Guarda en `tests/unit/test_names.py`. Siguiente: **T-99**,
+  quitar los comentarios que repiten el código (los del porqué, las referencias
+  `Spec: … Task: …` y las notas de seguridad se quedan).
 - **Test de timing intermitente:** `tests/ui/test_orders_ui.py::test_dialog_does_not_wait_for_network`
   (umbral de 0,3 s) falló una vez en la suite completa con carga; en aislado pasa
   3 de 3. No tiene relación con los renombrados.

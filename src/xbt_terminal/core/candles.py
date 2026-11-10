@@ -37,14 +37,14 @@ class CandleBuilder:
 
     def load(self, history: Iterable[Candle]) -> None:
         """Replace everything with the REST history (in any order)."""
-        ordered = sorted(history, key=lambda c: c.ts_open)
-        for c in ordered:
-            if c.ts_open % self.step:
-                raise ValueError(f"vela {c.ts_open} no alineada a {self.timeframe}")
+        ordered = sorted(history, key=lambda candle: candle.ts_open)
+        for candle in ordered:
+            if candle.ts_open % self.step:
+                raise ValueError(f"vela {candle.ts_open} no alineada a {self.timeframe}")
         self._candles.clear()
-        for c in ordered:
-            self._fill_until(c.ts_open)
-            self._candles.append(c)
+        for candle in ordered:
+            self._fill_until(candle.ts_open)
+            self._candles.append(candle)
 
     def on_trade(self, trade: Trade) -> None:
         bucket = trade.ts - trade.ts % self.step

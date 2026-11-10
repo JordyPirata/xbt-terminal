@@ -18,9 +18,9 @@ from .test_nonkyc_stream import FakeNonKYC, FreeLimiter, rest  # noqa: F401  (fi
 
 
 def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
 
 
 class Consumer:
@@ -47,7 +47,7 @@ class Consumer:
 
 
 def last_state(events):
-    states = [e for e in events if isinstance(e, ConnState)]
+    states = [event for event in events if isinstance(event, ConnState)]
     return (states[-1].source, states[-1].status) if states else None
 
 
@@ -75,7 +75,8 @@ async def test_ws_drops_and_returns(rest):  # noqa: F811
             await consumer.wait(lambda evs: last_state(evs) == ("ws", "up"))
             await consumer.wait(
                 lambda evs: any(
-                    isinstance(e, ConnState) and e.source == "ws" and e.latency_ms for e in evs
+                    isinstance(event, ConnState) and event.source == "ws" and event.latency_ms
+                    for event in evs
                 )
             )
 
@@ -85,7 +86,7 @@ async def test_ws_drops_and_returns(rest):  # noqa: F811
             await consumer.wait(lambda evs: last_state(evs) == ("rest", "up"))
             cut = len(consumer.events)
             await consumer.wait(
-                lambda evs: any(isinstance(e, BookSnapshot) for e in evs[cut:])
+                lambda evs: any(isinstance(event, BookSnapshot) for event in evs[cut:])
             )  # still a book, now over REST
 
             # 3. The network returns: it reconnects by itself and ends up in ws again.
@@ -96,11 +97,11 @@ async def test_ws_drops_and_returns(rest):  # noqa: F811
             await asyncio.sleep(0.1)
             assert len(rest.calls) == calls  # polling stopped
             assert all(
-                not (isinstance(e, ConnState) and e.source == "rest")
-                for e in consumer.events[back:]
+                not (isinstance(event, ConnState) and event.source == "rest")
+                for event in consumer.events[back:]
             )
-            ws_up = [e for e in consumer.events[back:] if isinstance(e, ConnState)]
-            assert ws_up and all(e.source == "ws" and e.status == "up" for e in ws_up)
+            ws_up = [event for event in consumer.events[back:] if isinstance(event, ConnState)]
+            assert ws_up and all(event.source == "ws" and event.status == "up" for event in ws_up)
         finally:
             await consumer.close()
             server.close()

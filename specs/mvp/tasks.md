@@ -277,34 +277,7 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 
 ## M20 — Nombres descriptivos (D-83)
 
-### T-98 Renombrar identificadores abreviados · `todo` · RNF-21 · D-83
-- Renombrar locales, parámetros, atributos privados y funciones internas
-  abreviadas (`vid`, `req`, `qty`, `pct`, `st`, `lv`, `leg`, `ts`, `cmd`, `exc`, y
-  letras sueltas donde no sean índices triviales) por nombres completos, según el
-  glosario de D-83. Fuera de alcance: lo que D-83 enumera como frontera.
-- Orden: `core/` → `adapters/` → `services/` → `ui/` → top-level → `tests/` → `tools/`,
-  con los tests en verde al cerrar cada paquete.
-- Test: `tests/unit/test_english.py` (o uno nuevo, `@pytest.mark.spec("RNF-21")`)
-  falla ante identificadores de una letra fuera de una lista corta y justificada.
-- Cierre: `uv run pytest`, `uv run ruff check .`, `uv run python tools/spec_trace.py`;
-  `git diff` sin cambios en `tests/fixtures/`, `config.example.toml` ni `docs/`.
-- **Estado (2026-11-09), sin cerrar.** Hechos en `src/`, `tests/` y `tools/`:
-  `vid`, `exc`, `cmd`, `st`, `lv`, `leg`, `pct`, `req`, `qty`, `ts` y `tp`. Verificado
-  contra el commit: AST idéntico salvo nombres; los únicos literales de cadena que
-  cambian son los nombres de `parametrize` que siguen a un parámetro renombrado y el
-  docstring de `decode`; atributos, keywords (`qty=`, `ts=`) y campos de clase intactos;
-  ruff limpio; 1736 tests en verde.
-  - `cmd` en `tests/ui/test_account_ui.py` pasa a `command_line` (la función se llama
-    `command`); `exc` pasa a `exception` donde la función ya usa `error`.
-  - Los helpers de módulo `req` y `lv` en los tests se renombran a mano (un `def` a
-    nivel de módulo no lo renombra el renombrado por función).
-  - Las llamadas con keyword se conservan: `qty=`, `ts=` y `tp=` son campos de dataclass
-    o parámetros de helpers; las funciones que reciben esos keywords no se renombran
-    (renombrado por tokens que excluye los nodos `keyword`).
-  - `leg` en `core/double.py` se conserva: es el término del dominio (`DoubleState.leg`).
-  Pendiente: **letras sueltas** (unos 5 900 usos en 145 ficheros, `D` incluido), que
-  piden decidir por función. Sin ellas no se puede cerrar T-98 ni escribir el test de
-  guarda contra abreviaturas.
+### T-98 Renombrar identificadores abreviados · `done` · RNF-21 · D-83
 
 ### T-99 Quitar comentarios que repiten el código · `todo` · RNF-21 · D-83 · dep T-98
 - Revisar `#` y docstrings de `src/`, `tests/` y `tools/`. Se borran los que

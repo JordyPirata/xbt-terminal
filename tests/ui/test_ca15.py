@@ -39,8 +39,12 @@ class DaemonRig(BotRig):
         )  # fmt: skip
         self.daemon = asyncio.create_task(run_daemon(self.engine, self.stop, socket=self.socket))
         await self.until(self.socket.exists)
-        await self.until(lambda: all(s.ready for s in self.hub.state.values()))
-        await self.until(lambda: all(s.balances for s in self.account.state.values()))
+        await self.until(
+            lambda: all(market_state.ready for market_state in self.hub.state.values())
+        )
+        await self.until(
+            lambda: all(market_state.balances for market_state in self.account.state.values())
+        )
         return self
 
     async def __aexit__(self, *error):
@@ -89,7 +93,7 @@ async def test_bot_stays_armed_and_fires_after_closing_tui(tmp_path):
         # the TUI left: the daemon stays the same
         await asyncio.sleep(0.1)
         assert rig.bot.state.status == "armed"
-        assert [e["data"]["status"] for e in rig.events("bot_state")] == ["armed"]
+        assert [entry["data"]["status"] for entry in rig.events("bot_state")] == ["armed"]
         assert rig.events("order_sent") == []  # nothing sent before the cross
 
         # and fires when the market crosses
@@ -136,8 +140,8 @@ async def test_stop_waits_for_double_in_flight(tmp_path):
         gate.set()
     sent = rig.events("order_sent")
     assert len(sent) == 2
-    acks = {e["client_id"] for e in rig.events("order_ack")}
-    assert {e["client_id"] for e in sent} <= acks
+    acks = {entry["client_id"] for entry in rig.events("order_ack")}
+    assert {entry["client_id"] for entry in sent} <= acks
 
 
 @pytest.mark.spec("CA-15", "RF-30", "RF-07", "RF-21")

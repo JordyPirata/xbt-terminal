@@ -14,14 +14,14 @@ BAL = {
 
 
 def render(target):
-    views = {venue_id: AccountView(b, 0, None) for venue_id, b in BAL.items()}
+    views = {venue_id: AccountView(balances, 0, None) for venue_id, balances in BAL.items()}
     inv = inventory(BAL, {"nk": D("0.01"), "nx": D("0.01")})
     return render_balances(views, inv, 0, target)
 
 
 def style_of(text, fragment):
     start = text.plain.index(fragment)
-    return [s.style for s in text.spans if s.start <= start < s.end]
+    return [span.style for span in text.spans if span.start <= start < span.end]
 
 
 @pytest.mark.spec("RF-27", "CA-12")

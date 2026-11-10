@@ -312,7 +312,7 @@ def summarize_journal(directory: Path, crossings: int, info: RecordingInfo) -> R
         lines += path.read_text(encoding="utf-8").splitlines()
     rows, _ = read_rows(lines)
     results = compute(rows, mode="dry-run")
-    filled = sum(d.result is not None and d.mismatch == 0 for d in results.doubles)
+    filled = sum(double.result is not None and double.mismatch == 0 for double in results.doubles)
     return summarize(
         rows,
         crossings=crossings,

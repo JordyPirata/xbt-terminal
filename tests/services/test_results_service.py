@@ -14,7 +14,7 @@ from ..unit.test_results import DAY, T0, fill, plain_double
 
 def write(directory, day, rows, extra=()):
     directory.mkdir(exist_ok=True)
-    lines = [json.dumps(r) for r in rows] + list(extra)
+    lines = [json.dumps(row) for row in rows] + list(extra)
     (directory / f"journal-{day}.jsonl").write_text("\n".join(lines) + "\n")
 
 
@@ -26,9 +26,13 @@ class TestService:
         write(tmp_path, "20261020", plain_double("d-semana", T0 - 2 * DAY))
         write(tmp_path, "20261022", plain_double("d-hoy", T0))
         svc = ResultsService(tmp_path, clock=lambda: T0)
-        assert [d.id for d in svc.load("dia").doubles] == ["d-hoy"]
-        assert [d.id for d in svc.load("7d").doubles] == ["d-semana", "d-hoy"]
-        assert [d.id for d in svc.load("todo").doubles] == ["d-viejo", "d-semana", "d-hoy"]
+        assert [double.id for double in svc.load("dia").doubles] == ["d-hoy"]
+        assert [double.id for double in svc.load("7d").doubles] == ["d-semana", "d-hoy"]
+        assert [double.id for double in svc.load("todo").doubles] == [
+            "d-viejo",
+            "d-semana",
+            "d-hoy",
+        ]
 
     def test_yesterdays_double_with_fills_today(self, tmp_path):
         midnight = T0 - 12 * 3600_000
@@ -136,7 +140,7 @@ def fresh(directory, rng):
 
 
 def append(directory, day, rows, extra=()):
-    lines = [json.dumps(r) for r in rows] + list(extra)
+    lines = [json.dumps(row) for row in rows] + list(extra)
     with (directory / f"journal-{day}.jsonl").open("a") as out:
         out.write("".join(line + "\n" for line in lines))
 
@@ -177,9 +181,9 @@ class TestCache:
 
     def test_appended_line_appears_in_next_load(self, journals):
         svc = ResultsService(journals, clock=lambda: T0)
-        assert [d.id for d in svc.load("dia").doubles] == ["d-hoy"]
+        assert [double.id for double in svc.load("dia").doubles] == ["d-hoy"]
         append(journals, "20261022", plain_double("d-tarde", T0 + 3600_000))
-        assert [d.id for d in svc.load("dia").doubles] == ["d-hoy", "d-tarde"]
+        assert [double.id for double in svc.load("dia").doubles] == ["d-hoy", "d-tarde"]
 
     def test_unchanged_files_are_not_read_again(self, journals, monkeypatch):
         svc = ResultsService(journals, clock=lambda: T0)
@@ -217,7 +221,7 @@ class TestCache:
         stat = path.stat()
         os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
         reads = Reads(svc, monkeypatch)
-        assert "d-semanb" in [d.id for d in svc.load("todo").doubles]
+        assert "d-semanb" in [double.id for double in svc.load("todo").doubles]
         assert reads.calls == [("journal-20261020.jsonl", 0)]
 
     def test_half_written_line_counts_until_completed(self, journals):
@@ -238,4 +242,4 @@ class TestCache:
         svc = ResultsService(journals, clock=lambda: T0)
         svc.load("todo")
         (journals / "journal-20261012.jsonl").unlink()
-        assert [d.id for d in svc.load("todo").doubles] == ["d-semana", "d-hoy"]
+        assert [double.id for double in svc.load("todo").doubles] == ["d-semana", "d-hoy"]

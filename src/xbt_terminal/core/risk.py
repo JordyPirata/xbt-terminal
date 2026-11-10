@@ -150,14 +150,16 @@ def _mid_deviation(
 
 def _self_cross(order_request: OrderRequest, ctx: RiskContext) -> list[Violation]:
     """Crossing own open orders on the same venue."""
-    mine = [o for o in ctx.open_orders if o.venue == ctx.market.venue and not o.is_done]
+    mine = [
+        order for order in ctx.open_orders if order.venue == ctx.market.venue and not order.is_done
+    ]
     if order_request.side == "buy":
-        asks = [o.price for o in mine if o.side == "sell"]
+        asks = [order.price for order in mine if order.side == "sell"]
         if asks and order_request.price >= min(asks):
             message = f"compra a {order_request.price} cruza tu venta abierta a {min(asks)}"
             return [Violation("self_cross", message)]
     else:
-        bids = [o.price for o in mine if o.side == "buy"]
+        bids = [order.price for order in mine if order.side == "buy"]
         if bids and order_request.price <= max(bids):
             message = f"venta a {order_request.price} cruza tu compra abierta a {max(bids)}"
             return [Violation("self_cross", message)]

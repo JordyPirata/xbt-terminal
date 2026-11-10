@@ -361,7 +361,7 @@ class XbtApp(App[None]):
         for venue_id in VENUES:
             state = self.account.state.get(venue_id)
             if state is not None:
-                out += sorted(state.orders.values(), key=lambda o: (o.ts, o.order_id))
+                out += sorted(state.orders.values(), key=lambda order: (order.ts, order.order_id))
         return out
 
     def _flush_books(self) -> None:
@@ -378,8 +378,8 @@ class XbtApp(App[None]):
             self.query_one(f"#book-{venue}", BookPanel).show(state.book, state.spec)
         self._dirty_books.clear()
         notes = [
-            f"{VENUE_NAME[v]} con fee -{percent:f} %"
-            for v, percent in self._fee_discounts.items()
+            f"{VENUE_NAME[venue_id]} con fee -{percent:f} %"
+            for venue_id, percent in self._fee_discounts.items()
             if percent
         ]
         self.query_one(CrossPanel).show(self._quote("nk"), self._quote("nx"), ", ".join(notes))
@@ -452,13 +452,13 @@ class XbtApp(App[None]):
             self.say("desconectando: el daemon y el bot siguen igual")
             self.exit()
             return
-        n = len(self._open_orders()) if self.mode == "live" else 0
-        if not n:
+        open_count = len(self._open_orders()) if self.mode == "live" else 0
+        if not open_count:
             self._quit()
             return
         if isinstance(self.screen, ConfirmScreen):
             return  # a dialog is already open
-        what = "1 orden abierta" if n == 1 else f"{n} órdenes abiertas"
+        what = "1 orden abierta" if open_count == 1 else f"{open_count} órdenes abiertas"
         summary = f"hay {what} en el exchange: siguen ahí al salir (no se cancelan)"
         self.push_screen(ConfirmScreen(summary, self.mode, action="quit"), self._quit_confirmed)
 
@@ -617,8 +617,11 @@ class XbtApp(App[None]):
             assert self.orders is not None
             result = await self.orders.confirm(pending)
             if isinstance(result, Sent):
-                o = result.order
-                self.say(f"enviada: {o.order_id} {o.side} {o.qty} @ {o.price} ({o.status})")
+                order = result.order
+                self.say(
+                    f"enviada: {order.order_id} {order.side} {order.qty} @ {order.price} "
+                    f"({order.status})"
+                )
             elif isinstance(result, Rejected):
                 self.say(result.message, error=True)
             elif isinstance(result, Failed):
@@ -677,7 +680,9 @@ class XbtApp(App[None]):
         assert self.remote is not None
         doubles = self.remote.doubles
         if doubles:
-            self._shown_double = max(doubles.values(), key=lambda d: d.created).id
+            self._shown_double = max(
+                doubles.values(), key=lambda double_state: double_state.created
+            ).id
             self._draw_legs()
 
     def _draw_legs(self) -> None:
@@ -697,9 +702,9 @@ class XbtApp(App[None]):
     # -- uncertain sends (RNF-12) ------------------------------------------------
 
     def _say_uncertain(self, result: Uncertain) -> None:
-        r = result.req
+        request = result.req
         self.say(
-            f"⚠ orden INCIERTA {r.client_id} en {VENUE_NAME[r.venue]}: {result.error}. "
+            f"⚠ orden INCIERTA {request.client_id} en {VENUE_NAME[request.venue]}: {result.error}. "
             "Puede existir: se está comprobando en el venue",
             error=True,
         )
@@ -757,7 +762,9 @@ class XbtApp(App[None]):
         if self.results is None:
             self.say("resultados: no hay directorio del journal", error=True)
             return
-        self.push_screen(ResultsScreen(self.results, rng, lambda m: self.say(m, error=True)))
+        self.push_screen(
+            ResultsScreen(self.results, rng, lambda message: self.say(message, error=True))
+        )
 
     def action_deposits(self) -> None:
         if self.deposits is None or not self.deposits.venues:

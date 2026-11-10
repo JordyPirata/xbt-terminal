@@ -101,12 +101,12 @@ def inventory(
         venues[venue_id] = VenueInventory(
             btc, btcb2, btc + btcb2 * mid if mid is not None else None
         )
-    known = [v for v in venues.values() if v is not None]
+    known = [venue_inventory for venue_inventory in venues.values() if venue_inventory is not None]
     complete = len(known) == len(venues)
-    values = [v.value for v in known]
+    values = [venue_inventory.value for venue_inventory in known]
     return Inventory(
         venues=venues,
-        btc=sum((v.btc for v in known), ZERO) if complete else None,
-        btcb2=sum((v.btcb2 for v in known), ZERO) if complete else None,
+        btc=sum((venue_inventory.btc for venue_inventory in known), ZERO) if complete else None,
+        btcb2=sum((venue_inventory.btcb2 for venue_inventory in known), ZERO) if complete else None,
         value=sum(values, ZERO) if complete and None not in values else None,  # type: ignore[arg-type]
     )

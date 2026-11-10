@@ -277,7 +277,7 @@ class NeoxaHarness(RestHarness):
     def cancel_all_reached_venue(self) -> bool:
         """No "cancel all" on Neoxa: one by one, the active orders of the pair."""
         paths = [call.request.url.path for call in self.cancel_route.calls]
-        return len(paths) == 2 and not any(self.foreign_orders[0] in p for p in paths)
+        return len(paths) == 2 and not any(self.foreign_orders[0] in path for path in paths)
 
     def new_own_trade(self) -> str:
         payload = json.loads(self.fixture("trades_my.json"))

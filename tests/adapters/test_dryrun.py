@@ -59,9 +59,9 @@ class TestOrders:
 
     async def test_sequential_ids(self):
         venue = make()
-        a = await venue.place_limit(order_request(cid="t-1"))
-        b = await venue.place_limit(order_request(cid="t-2"))
-        assert (a.order_id, b.order_id) == ("dry-nk-1", "dry-nk-2")
+        first = await venue.place_limit(order_request(cid="t-1"))
+        second = await venue.place_limit(order_request(cid="t-2"))
+        assert (first.order_id, second.order_id) == ("dry-nk-1", "dry-nk-2")
 
     async def test_no_simulated_balance_rejected(self):
         venue = make(btc="0.00001")
@@ -87,7 +87,7 @@ class TestOrders:
         await venue.place_limit(order_request("sell", cid="t-2"))
         await venue.cancel_all()
         assert await venue.open_orders() == []
-        assert all(b.locked == 0 for b in (await venue.balances()).values())
+        assert all(balance.locked == 0 for balance in (await venue.balances()).values())
 
     async def test_initial_balances_not_shared(self):
         initial = balances()
@@ -111,7 +111,7 @@ async def test_private_stream_reports_each_change():
     await venue.cancel(order.order_id)
     await asyncio.sleep(0.01)
     task.cancel()
-    assert [o.status for o in seen] == ["open", "cancelled"]
+    assert [item.status for item in seen] == ["open", "cancelled"]
 
 
 @pytest.mark.spec("RF-13", "RF-09")
@@ -155,7 +155,7 @@ class TestSimulatedFill:
         await venue.simulate_fill(order.order_id, D("0.01"))
         await asyncio.sleep(0.01)
         task.cancel()
-        kinds = [type(e).__name__ for e in seen]
+        kinds = [type(event).__name__ for event in seen]
         assert kinds == ["Order", "Order", "Fill"]
         fill = seen[2]
         assert (fill.order_id, fill.qty, fill.fee) == (

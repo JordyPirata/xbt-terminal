@@ -34,16 +34,16 @@ CASES = [
 @pytest.mark.spec("RF-36", "RNF-09", "CA-21")
 @pytest.mark.parametrize(("harness", "check"), CASES)
 async def test_venue_honours_clause(harness, check):
-    async with harness() as h:
-        await check.run(h)
+    async with harness() as clause_harness:
+        await check.run(clause_harness)
 
 
 @pytest.mark.spec("RF-36", "CA-21")
 @pytest.mark.parametrize("name", CHECKS)
 async def test_broken_adapter_fails_its_clause(name):
-    async with FakeHarness(MUTANTS[name]) as h:
+    async with FakeHarness(MUTANTS[name]) as harness:
         with pytest.raises(AssertionError):
-            await CHECKS[name].run(h)
+            await CHECKS[name].run(harness)
 
 
 @pytest.mark.spec("RF-36", "CA-21")
@@ -59,11 +59,15 @@ def test_document_lists_exactly_the_clauses():
 
 
 @pytest.mark.spec("RF-36")
-@pytest.mark.parametrize("protocol", PROTOCOLS, ids=lambda p: p.__name__)
+@pytest.mark.parametrize("protocol", PROTOCOLS, ids=lambda proto: proto.__name__)
 def test_document_covers_the_protocols(protocol):
     assert f"`{protocol.__name__}`" in DOC
     members = {
         *inspect.get_annotations(protocol),
-        *(n for n, _ in inspect.getmembers(protocol, callable) if not n.startswith("_")),
+        *(
+            member_name
+            for member_name, _ in inspect.getmembers(protocol, callable)
+            if not member_name.startswith("_")
+        ),
     }
     assert members and all(f"`{member}" in DOC for member in members)

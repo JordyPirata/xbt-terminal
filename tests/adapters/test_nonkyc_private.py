@@ -145,7 +145,7 @@ class TestSignature:
     async def test_nonce_always_grows(self, venue, api):
         for _ in range(3):
             await venue.balances()
-        nonces = [int(c.request.headers["X-API-NONCE"]) for c in api.calls]
+        nonces = [int(call.request.headers["X-API-NONCE"]) for call in api.calls]
         assert nonces == [NOW, NOW + 1, NOW + 2]  # same clock: forced to grow
 
     async def test_no_keys_venue_is_not_called(self, limiter, api):
@@ -209,7 +209,7 @@ class TestOrders:
         raw = [*json.loads(fixture("orders_active.json")), cancelled, filled]
         api.get(f"{REST_URL}/account/orders").respond(json=raw)
         orders = await venue.open_orders()
-        assert [o.order_id for o in orders] == [
+        assert [order.order_id for order in orders] == [
             "6a0000000000000000000001", "6a0000000000000000000002",
         ]  # fmt: skip
 
@@ -336,7 +336,7 @@ async def next_state(stream, timeout=3.0):
 
 
 def polls(api):
-    return sum(1 for c in api.calls if c.request.url.path == "/api/v2/account/orders")
+    return sum(1 for call in api.calls if call.request.url.path == "/api/v2/account/orders")
 
 
 @pytest.mark.spec("RF-09", "RF-14")
@@ -462,7 +462,7 @@ class TestRecentOrders:
 
     async def test_active_without_new_trades(self, venue, api, limiter):
         orders = await venue.recent_orders(1_792_530_400_000)
-        assert [o.order_id for o in orders] == [
+        assert [order.order_id for order in orders] == [
             "6a0000000000000000000001",
             "6a0000000000000000000002",
         ]
@@ -478,7 +478,7 @@ class TestRecentOrders:
         }
         api.get(url__regex=rf"{REST_URL}/getorder/.+").respond(json=done)
         orders = await venue.recent_orders(1_792_510_000_000)
-        assert [(o.order_id, o.client_id, o.status) for o in orders][-1] == (
+        assert [(order.order_id, order.client_id, order.status) for order in orders][-1] == (
             "6a00000000000000000000ff",
             "t-zzz999",
             "filled",
@@ -533,28 +533,34 @@ def mixed(api):
 class TestOtherMarkets:
     async def test_other_market_fills_stay_out(self, venue, mixed):
         fills = await venue.fetch_fills()
-        assert [f.trade_id for f in fills] == [
-            r["id"] for r in json.loads(fixture("trades_my.json"))
+        assert [fill.trade_id for fill in fills] == [
+            row["id"] for row in json.loads(fixture("trades_my.json"))
         ]
 
     async def test_other_market_active_orders_stay_out(self, venue, mixed):
         orders = await venue.fetch_active()
-        assert [o.order_id for o in orders] == [
+        assert [order.order_id for order in orders] == [
             "6a0000000000000000000001",
             "6a0000000000000000000002",
         ]
 
     async def test_no_symbol_in_row_counts_as_pair(self, venue, api):
         """Only what claims to be from another market is dropped."""
-        bare = {k: v for k, v in json.loads(fixture("trades_my.json"))[0].items() if k != "market"}
+        bare = {
+            k: value
+            for k, value in json.loads(fixture("trades_my.json"))[0].items()
+            if k != "market"
+        }
         api.get(f"{REST_URL}/account/trades").respond(json=[bare])
-        assert [f.trade_id for f in await venue.fetch_fills()] == [bare["id"]]
+        assert [fill.trade_id for fill in await venue.fetch_fills()] == [bare["id"]]
 
     async def test_recent_does_not_ask_other_market_orders(self, venue, mixed):
         orders = await venue.recent_orders(1_792_510_000_000)
-        assert "6a00000000000000000000aa" not in {o.order_id for o in orders}
-        paths = [c.request.url.path for c in mixed.calls]
-        assert not any(p.endswith("/getorder/6a00000000000000000000aa") for p in paths)
+        assert "6a00000000000000000000aa" not in {order.order_id for order in orders}
+        paths = [call.request.url.path for call in mixed.calls]
+        assert not any(
+            request_path.endswith("/getorder/6a00000000000000000000aa") for request_path in paths
+        )
 
 
 NKYC_BALANCE = {

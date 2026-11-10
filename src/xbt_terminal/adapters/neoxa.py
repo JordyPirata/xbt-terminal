@@ -76,7 +76,7 @@ STATUSES: dict[str, OrderStatus] = {
 
 
 def parse_market(payload: dict[str, Any], symbol: str) -> MarketSpec:
-    pair = next((p for p in payload.get("pairs") or [] if p.get("pair") == symbol), None)
+    pair = next((row for row in payload.get("pairs") or [] if row.get("pair") == symbol), None)
     if pair is None:
         raise VenueError(f"Neoxa: el par {symbol} no existe")
     base, quote = symbol.split("_")
@@ -146,16 +146,16 @@ def parse_trade(raw: dict[str, Any]) -> tuple[str, Trade]:
 def parse_candles(payload: dict[str, Any]) -> list[Candle]:
     candles = [
         Candle(
-            ts_open=int(c["time"]) * 1000,
-            open=D(c["open"]),
-            high=D(c["high"]),
-            low=D(c["low"]),
-            close=D(c["close"]),
-            volume=D(c["volume"]),
+            ts_open=int(candle["time"]) * 1000,
+            open=D(candle["open"]),
+            high=D(candle["high"]),
+            low=D(candle["low"]),
+            close=D(candle["close"]),
+            volume=D(candle["volume"]),
         )
-        for c in payload.get("candles") or []
+        for candle in payload.get("candles") or []
     ]
-    return sorted(candles, key=lambda c: c.ts_open)
+    return sorted(candles, key=lambda candle: candle.ts_open)
 
 
 def parse_balances(payload: dict[str, Any], assets: Iterable[str]) -> dict[str, Balance]:
@@ -164,11 +164,11 @@ def parse_balances(payload: dict[str, Any], assets: Iterable[str]) -> dict[str, 
     raw = payload.get("balances") or {}
     out: dict[str, Balance] = {}
     for asset in assets:
-        b = raw.get(asset)
-        if b is None:
+        row = raw.get(asset)
+        if row is None:
             out[asset] = Balance(asset, ZERO)
             continue
-        out[asset] = Balance(asset, D(b["available"]), D(b["locked"]) + D(b["in_orders"]))
+        out[asset] = Balance(asset, D(row["available"]), D(row["locked"]) + D(row["in_orders"]))
     return out
 
 
@@ -220,9 +220,9 @@ def parse_withdrawal_fee(payload: dict[str, Any], asset: str, chain: str) -> Wit
     """`/withdrawals/fees` brings every token; the asset's entry on its deposit chain
     counts (RF-29). Fee and minimum come as number or text. The fee is on top: its
     web asks 0.2, 0.2 arrives and 0.2001 is deducted (D-53)."""
-    for f in payload.get("fees") or []:
-        if f.get("token") == asset and f.get("chain") == chain:
-            fee, minimum = f.get("withdrawalFee"), f.get("minWithdrawal")
+    for fee_row in payload.get("fees") or []:
+        if fee_row.get("token") == asset and fee_row.get("chain") == chain:
+            fee, minimum = fee_row.get("withdrawalFee"), fee_row.get("minWithdrawal")
             if fee in (None, ""):
                 break
             return WithdrawalFee(
@@ -345,7 +345,7 @@ class NeoxaVenue(StreamingVenue):
         return self.parsing(parse_candles, payload)
 
     def _parse_trades(self, raws: Iterable[dict[str, Any]]) -> list[tuple[str, Trade]]:
-        return self.parsing(lambda rs: [parse_trade(r) for r in rs], list(raws))
+        return self.parsing(lambda rs: [parse_trade(row) for row in rs], list(raws))
 
     # -- private ---------------------------------------------------------------
 
@@ -378,14 +378,16 @@ class NeoxaVenue(StreamingVenue):
         payload = await self._private("/exchange/orders", params)
         now = self._clock()
         return self.parsing(
-            lambda rs: [parse_order(r, None, now) for r in rs if r.get("pair") == self.symbol],
+            lambda rs: [
+                parse_order(row, None, now) for row in rs if row.get("pair") == self.symbol
+            ],
             payload.get("orders") or [],
         )
 
     async def fetch_fills(self) -> list[Fill]:
         payload = await self._private("/exchange/trades/my", {"limit": MY_TRADES})
         return self.parsing(
-            lambda rs: [parse_fill(r) for r in rs if r.get("pair") == self.symbol],
+            lambda rs: [parse_fill(row) for row in rs if row.get("pair") == self.symbol],
             payload.get("trades") or [],
         )
 
@@ -414,7 +416,9 @@ class NeoxaVenue(StreamingVenue):
         payload = await self._private("/exchange/orders/history", {"limit": HISTORY})
         now = self._clock()
         history = self.parsing(
-            lambda rs: [parse_order(r, None, now) for r in rs if r.get("pair") == self.symbol],
+            lambda rs: [
+                parse_order(row, None, now) for row in rs if row.get("pair") == self.symbol
+            ],
             payload.get("orders") or [],
         )
         return active + history
@@ -468,30 +472,30 @@ class NeoxaVenue(StreamingVenue):
             while True:
                 frame = await asyncio.wait_for(ws.recv(), timeout)
                 try:
-                    p = sio.decode(frame)
+                    packet = sio.decode(frame)
                 except sio.ProtocolError as error:
                     raise VenueError(f"Neoxa WS: {error}") from error
-                if p.kind == "ping":
+                if packet.kind == "ping":
                     await ws.send(sio.PONG)
-                elif p.kind in ("close", "disconnect", "connect_error"):
-                    raise VenueError(f"Neoxa WS: {p.kind} {p.data or ''}".strip())
-                elif p.kind == "connect" and p.namespace == NAMESPACE and not subscribed:
+                elif packet.kind in ("close", "disconnect", "connect_error"):
+                    raise VenueError(f"Neoxa WS: {packet.kind} {packet.data or ''}".strip())
+                elif packet.kind == "connect" and packet.namespace == NAMESPACE and not subscribed:
                     await ws.send(sio.event_frame(NAMESPACE, "subscribe", {"pair": self.symbol}))
                     subscribed = True
-                elif p.kind == "event" and p.namespace == NAMESPACE:
-                    for event in self._on_event(p):
+                elif packet.kind == "event" and packet.namespace == NAMESPACE:
+                    for event in self._on_event(packet):
                         yield event
 
-    def _on_event(self, p: sio.Packet) -> list[MarketEvent]:
-        data = p.data if isinstance(p.data, dict) else {}
-        if p.event == "exchange:error":
-            raise VenueError(f"Neoxa WS: {data.get('message') or p.data}")
+    def _on_event(self, packet: sio.Packet) -> list[MarketEvent]:
+        data = packet.data if isinstance(packet.data, dict) else {}
+        if packet.event == "exchange:error":
+            raise VenueError(f"Neoxa WS: {data.get('message') or packet.data}")
         if data.get("pair") != self.symbol:
             return []
-        if p.event == "exchange:orderbook":
+        if packet.event == "exchange:orderbook":
             return [self.parsing(parse_book, data, self._clock())]
-        if p.event == "exchange:trades":
+        if packet.event == "exchange:trades":
             return list(self.fresh(self._parse_trades(data.get("trades") or [])))
-        if p.event == "exchange:trade":
+        if packet.event == "exchange:trade":
             return list(self.fresh(self._parse_trades([data])))
         return []  # exchange:pool, pong and others are of no interest to the MVP

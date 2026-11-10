@@ -61,7 +61,7 @@ class Setup:
 
     def lines(self):
         files = sorted(self.logs.glob("journal-*.jsonl"))
-        return [json.loads(ln) for f in files for ln in f.read_text().splitlines()]
+        return [json.loads(ln) for file in files for ln in file.read_text().splitlines()]
 
     def events(self):
         return [(ln["event"], ln["venue"]) for ln in self.lines()]
@@ -79,83 +79,82 @@ def dbl(quantity="0.01", buy="0.00725000", sell="0.00726000"):
 @pytest.mark.spec("RF-07", "RF-10")
 class TestPrepare:
     async def test_two_legs_and_a_summary(self, tmp_path):
-        s = Setup(tmp_path)
-        p = await s.orders.prepare_double(dbl())
-        assert isinstance(p, PendingDouble) and p.id == "d-000001"
-        assert (p.buy.req.venue, p.buy.req.side, p.sell.req.venue, p.sell.req.side) == (
-            "nk", "buy", "nx", "sell",
-        )  # fmt: skip
-        assert p.gross == D("0.0000001")  # (0.00726 - 0.00725) × 0.01
-        assert p.net == D("0.0000726") * D("0.998") - D("0.0000725") * D("1.002")
-        text = p.summary
+        setup = Setup(tmp_path)
+        prepared_double = await setup.orders.prepare_double(dbl())
+        assert isinstance(prepared_double, PendingDouble) and prepared_double.id == "d-000001"
+        buy, sell = prepared_double.buy.req, prepared_double.sell.req
+        assert (buy.venue, buy.side, sell.venue, sell.side) == ("nk", "buy", "nx", "sell")
+        assert prepared_double.gross == D("0.0000001")  # (0.00726 - 0.00725) × 0.01
+        assert prepared_double.net == D("0.0000726") * D("0.998") - D("0.0000725") * D("1.002")
+        text = prepared_double.summary
         assert "COMPRA 0.0100 XBT @ 0.00725000 en NonKYC" in text
         assert "VENTA 0.01000000 XBT @ 0.00726000 en Neoxa" in text
         assert "bruto +0.00000010 BTC (+10 sats)" in text and "neto -0.00000019 BTC" in text
-        assert s.lines() == []
+        assert setup.lines() == []
 
     async def test_rejected_leg_sends_neither(self, tmp_path):
-        s = Setup(tmp_path, nx_btcb2="0")  # Neoxa without BTCB2 to sell
-        r = await s.orders.prepare_double(dbl())
-        assert isinstance(r, DoubleRejected)
-        assert "no se envía ninguna pierna" in r.message and "venta en Neoxa" in r.message
-        assert "insufficient_balance" in r.codes
-        assert s.events() == [("reject_local", "nx")]
-        assert s.lines()[0]["data"]["double"] == "d-000001"
-        for venue in s.venues.values():
+        setup = Setup(tmp_path, nx_btcb2="0")  # Neoxa without BTCB2 to sell
+        result = await setup.orders.prepare_double(dbl())
+        assert isinstance(result, DoubleRejected)
+        assert "no se envía ninguna pierna" in result.message and "venta en Neoxa" in result.message
+        assert "insufficient_balance" in result.codes
+        assert setup.events() == [("reject_local", "nx")]
+        assert setup.lines()[0]["data"]["double"] == "d-000001"
+        for venue in setup.venues.values():
             assert await venue.open_orders() == []
 
     async def test_both_rejected(self, tmp_path):
-        s = Setup(tmp_path, nk_btc="0", nx_btcb2="0")
-        r = await s.orders.prepare_double(dbl())
-        assert isinstance(r, DoubleRejected)
-        assert s.events() == [("reject_local", "nk"), ("reject_local", "nx")]
+        setup = Setup(tmp_path, nk_btc="0", nx_btcb2="0")
+        result = await setup.orders.prepare_double(dbl())
+        assert isinstance(result, DoubleRejected)
+        assert setup.events() == [("reject_local", "nk"), ("reject_local", "nx")]
 
 
 @pytest.mark.spec("RF-07", "CA-03")
 class TestSend:
     async def test_sends_both_and_follows_them(self, tmp_path):
-        s = Setup(tmp_path)
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
+        setup = Setup(tmp_path)
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(dbl()))
         assert isinstance(sent, DoubleSent)
         state = sent.state
         assert (state.buy.status, state.sell.status) == ("open", "open")
         assert (state.buy.order_id, state.sell.order_id) == ("dry-nk-1", "dry-nx-1")
-        assert sorted(s.events()) == sorted(
+        assert sorted(setup.events()) == sorted(
             [("order_sent", "nk"), ("order_sent", "nx"), ("order_ack", "nk"), ("order_ack", "nx")]
         )
-        assert {ln["data"]["double"] for ln in s.lines()} == {"d-000001"}
-        assert s.orders.doubles["d-000001"] == state
+        assert {ln["data"]["double"] for ln in setup.lines()} == {"d-000001"}
+        assert setup.orders.doubles["d-000001"] == state
 
     async def test_confirm_revalidates_and_on_failure_neither_goes(self, tmp_path):
-        s = Setup(tmp_path)
-        p = await s.orders.prepare_double(dbl())
-        s.book("nx", "0.00800000", "0.00810000")  # Neoxa's mid moves 10 %
-        r = await s.orders.confirm_double(p)
-        assert isinstance(r, DoubleRejected) and "mid_deviation" in r.codes
-        assert s.events() == [("reject_local", "nx")]
-        assert "d-000001" not in s.orders.doubles
+        setup = Setup(tmp_path)
+        prepared_double = await setup.orders.prepare_double(dbl())
+        setup.book("nx", "0.00800000", "0.00810000")  # Neoxa's mid moves 10 %
+        result = await setup.orders.confirm_double(prepared_double)
+        assert isinstance(result, DoubleRejected) and "mid_deviation" in result.codes
+        assert setup.events() == [("reject_local", "nx")]
+        assert "d-000001" not in setup.orders.doubles
 
     async def test_error_sending_a_leg(self, tmp_path):
-        s = Setup(tmp_path)
+        setup = Setup(tmp_path)
 
         async def boom(order_request):
             raise VenueError("Neoxa: HTTP 400: PRICE_OUT_OF_BAND")
 
-        s.venues["nx"].place_limit = boom
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
+        setup.venues["nx"].place_limit = boom
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(dbl()))
         state = sent.state
         assert (state.buy.status, state.sell.status) == ("open", "rejected")
         assert "PRICE_OUT_OF_BAND" in (state.sell.error or "")
-        assert ("order_error", "nx") in s.events() and ("order_ack", "nk") in s.events()
+        assert ("order_error", "nx") in setup.events() and ("order_ack", "nk") in setup.events()
 
     async def test_order_changes_update_the_leg(self, tmp_path):
-        s = Setup(tmp_path)
+        setup = Setup(tmp_path)
         seen = []
-        s.orders.subscribe_doubles(seen.append)
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
-        await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.004"))
-        await s.feed("nk")
-        state = s.orders.doubles["d-000001"]
+        setup.orders.subscribe_doubles(seen.append)
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(dbl()))
+        await setup.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.004"))
+        await setup.feed("nk")
+        state = setup.orders.doubles["d-000001"]
         assert (state.buy.status, state.buy.filled) == ("partial", D("0.004"))
         assert "d-000001" in seen
 
@@ -163,51 +162,51 @@ class TestSend:
 @pytest.mark.spec("RF-07", "CA-03")
 class TestHangingLeg:
     async def test_filled_and_other_open_over_n_seconds(self, tmp_path):
-        s = Setup(tmp_path)
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
-        order = await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
-        s.orders.on_private_event("nk", order)
-        s.now += LIMITS.hanging_leg_after_s * 1000
-        assert s.orders.check_doubles() == []  # not yet at the exact limit
-        s.now += 1
-        assert s.orders.check_doubles() == ["d-000001"]
-        (line,) = [ln for ln in s.lines() if ln["event"] == "hanging_leg"]
+        setup = Setup(tmp_path)
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(dbl()))
+        order = await setup.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
+        setup.orders.on_private_event("nk", order)
+        setup.now += LIMITS.hanging_leg_after_s * 1000
+        assert setup.orders.check_doubles() == []  # not yet at the exact limit
+        setup.now += 1
+        assert setup.orders.check_doubles() == ["d-000001"]
+        (line,) = [ln for ln in setup.lines() if ln["event"] == "hanging_leg"]
         assert line["venue"] is None and line["data"]["double"] == "d-000001"
         assert "venta en Neoxa" in line["data"]["reason"]
         assert line["data"]["legs"]["buy"]["filled"] == "0.01"
-        assert s.orders.hanging["d-000001"].startswith("venta en Neoxa")
+        assert setup.orders.hanging["d-000001"].startswith("venta en Neoxa")
 
     async def test_warns_only_once(self, tmp_path):
-        s = Setup(tmp_path)
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
-        s.orders.on_private_event(
-            "nk", await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
+        setup = Setup(tmp_path)
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(dbl()))
+        setup.orders.on_private_event(
+            "nk", await setup.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
         )
-        s.now += 31_000
-        s.orders.check_doubles()
-        s.now += 10_000
-        assert s.orders.check_doubles() == []
-        assert [ln["event"] for ln in s.lines()].count("hanging_leg") == 1
+        setup.now += 31_000
+        setup.orders.check_doubles()
+        setup.now += 10_000
+        assert setup.orders.check_doubles() == []
+        assert [ln["event"] for ln in setup.lines()].count("hanging_leg") == 1
 
     async def test_rejected_on_send_with_other_filled_is_immediate(self, tmp_path):
-        s = Setup(tmp_path)
+        setup = Setup(tmp_path)
 
         async def boom(order_request):
             raise VenueError("rechazada por el venue")
 
-        s.venues["nx"].place_limit = boom
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
-        s.orders.on_private_event(
-            "nk", await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
+        setup.venues["nx"].place_limit = boom
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(dbl()))
+        setup.orders.on_private_event(
+            "nk", await setup.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
         )
-        assert s.orders.check_doubles() == ["d-000001"]
+        assert setup.orders.check_doubles() == ["d-000001"]
 
     async def test_both_filled_is_not_hanging(self, tmp_path):
-        s = Setup(tmp_path)
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
+        setup = Setup(tmp_path)
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(dbl()))
         for venue, order_leg in (("nk", sent.state.buy), ("nx", sent.state.sell)):
-            s.orders.on_private_event(
-                venue, await s.venues[venue].simulate_fill(order_leg.order_id, D("0.01"))
+            setup.orders.on_private_event(
+                venue, await setup.venues[venue].simulate_fill(order_leg.order_id, D("0.01"))
             )
-        s.now += 120_000
-        assert s.orders.check_doubles() == [] and s.orders.doubles["d-000001"].done
+        setup.now += 120_000
+        assert setup.orders.check_doubles() == [] and setup.orders.doubles["d-000001"].done

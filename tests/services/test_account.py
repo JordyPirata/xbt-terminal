@@ -73,11 +73,11 @@ class Rig:
             retry_s=0.01,
             clock=lambda: T0,
         )
-        self.account.subscribe(lambda v, what: self.seen.append((v, what)))
+        self.account.subscribe(lambda venue, what: self.seen.append((venue, what)))
 
     def lines(self):
         files = sorted(self.logs.glob("journal-*.jsonl"))
-        return [json.loads(ln) for f in files for ln in f.read_text().splitlines()]
+        return [json.loads(ln) for path in files for ln in path.read_text().splitlines()]
 
     async def __aenter__(self):
         self.task = asyncio.create_task(self.account.run())
@@ -181,7 +181,7 @@ async def test_fill_of_unknown_order_has_no_client_id(tmp_path):
 async def test_forwards_each_event_to_those_asking(tmp_path):
     async with Rig(tmp_path) as rig:
         got = []
-        rig.account.subscribe_events(lambda v, ev: got.append((v, ev)))
+        rig.account.subscribe_events(lambda venue, ev: got.append((venue, ev)))
         rig.venue.push(order("a"), fill())
         await until(lambda: len(got) == 2)
         assert got == [("nk", order("a")), ("nk", fill())]
@@ -260,8 +260,8 @@ async def test_interval_does_not_add_read_time(tmp_path):
     async with Rig(tmp_path, every=0.2) as rig:
         rig.venue.balances = slow_balances
         await until(lambda: len(starts) >= 4, timeout=2.0)
-    gaps = [b - a for a, b in pairwise(starts)]
-    assert all(g < 0.24 for g in gaps[1:]), gaps  # 0.2 interval, not 0.26
+    gaps = [later - earlier for earlier, later in pairwise(starts)]
+    assert all(gap < 0.24 for gap in gaps[1:]), gaps  # 0.2 interval, not 0.26
 
 
 @pytest.mark.spec("RF-11", "RF-19")
@@ -294,6 +294,6 @@ async def test_corrected_fee_to_journal_without_another_fill(tmp_path):
             "fee": "0.0000893166",
             "fee_asset": "NKYC",
         }
-        (f,) = state.fills
-        assert (f.qty, f.fee, f.fee_asset) == (D("0.004"), D("0.0000893166"), "NKYC")
+        (filled,) = state.fills
+        assert (filled.qty, filled.fee, filled.fee_asset) == (D("0.004"), D("0.0000893166"), "NKYC")
         assert ("nk", "fill") in rig.seen

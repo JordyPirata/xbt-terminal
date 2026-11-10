@@ -72,12 +72,20 @@ def test_fulfils_the_common_interface(limiter):
 @pytest.mark.spec("RNF-09", "RNF-10")
 class TestMarket:
     async def test_pair_rules(self, venue, api):
-        m = await venue.market()
-        assert (m.venue, m.symbol, m.base, m.quote) == ("nk", "BTCB2/BTC", "BTCB2", "BTC")
-        assert m.tick_size == D("0.00000001") and m.lot_size == D("0.0001")
-        assert m.min_qty == D("0.0001")  # minimumQuantity 0 → the lot
-        assert m.min_notional == D("0.000012609180967214268")
-        assert (m.maker_fee, m.taker_fee) == (D("0.002"), D("0.002"))  # from the config (PA-04)
+        market = await venue.market()
+        assert (market.venue, market.symbol, market.base, market.quote) == (
+            "nk",
+            "BTCB2/BTC",
+            "BTCB2",
+            "BTC",
+        )
+        assert market.tick_size == D("0.00000001") and market.lot_size == D("0.0001")
+        assert market.min_qty == D("0.0001")  # minimumQuantity 0 → the lot
+        assert market.min_notional == D("0.000012609180967214268")
+        assert (market.maker_fee, market.taker_fee) == (
+            D("0.002"),
+            D("0.002"),
+        )  # from the config (PA-04)
 
     async def test_inactive_min_quote(self, venue, api):
         api.get(f"{REST_URL}/market/getbysymbol/BTCB2_BTC").respond(
@@ -143,7 +151,7 @@ class TestTrades:
         params = api.calls.last.request.url.params
         assert (params["symbol"], params["limit"]) == ("BTCB2/BTC", "20")
         assert len(trades) == 20
-        assert [t.ts for t in trades] == sorted(t.ts for t in trades)
+        assert [trade.ts for trade in trades] == sorted(trade.ts for trade in trades)
         newest, oldest = trades[-1], trades[0]
         assert (newest.side, newest.price, newest.qty) == ("sell", D("0.00724092"), D("0.3109"))
         assert newest.ts == 1792508948406
@@ -170,8 +178,10 @@ class TestCandles:
         params = api.calls.last.request.url.params
         assert params["symbol"] == "BTCB2/BTC" and params["resolution"] == resolution
         assert params["countBack"] == "5" and params["firstDataRequest"] == "1"
-        assert len(candles) == 5 and all(c.ts_open % step == 0 for c in candles)
-        assert [c.ts_open for c in candles] == sorted(c.ts_open for c in candles)
+        assert len(candles) == 5 and all(candle.ts_open % step == 0 for candle in candles)
+        assert [candle.ts_open for candle in candles] == sorted(
+            candle.ts_open for candle in candles
+        )
 
     async def test_exact_values(self, venue, api):
         first = (await venue.candles("5m", 5))[0]
@@ -190,11 +200,11 @@ class TestCandles:
         assert api.calls.last.request.url.path.endswith("/market/trades")
         assert api.calls.last.request.url.params["limit"] == str(MAX_TRADES)
         trades = await venue.recent_trades(20)
-        assert all(c.ts_open % 60_000 == 0 for c in candles)
+        assert all(candle.ts_open % 60_000 == 0 for candle in candles)
         assert candles[0].ts_open == trades[0].ts - trades[0].ts % 60_000
         assert candles[-1].ts_open == trades[-1].ts - trades[-1].ts % 60_000
         assert len(candles) == (candles[-1].ts_open - candles[0].ts_open) // 60_000 + 1
-        assert sum(c.volume for c in candles) == sum(t.qty for t in trades)
+        assert sum(candle.volume for candle in candles) == sum(trade.qty for trade in trades)
         assert candles[0].open == trades[0].price and candles[-1].close == trades[-1].price
 
     async def test_1m_respects_the_limit(self, venue, api):
@@ -218,7 +228,7 @@ class TestCandles:
         candles = await venue.candles("1m", 1000)
         oldest_bucket = (NOW - (MAX_TRADES - 1) * 30_000) // 60_000 * 60_000
         assert candles[0].ts_open == oldest_bucket + 60_000
-        assert all(c.volume == D("2") for c in candles[:-1])
+        assert all(candle.volume == D("2") for candle in candles[:-1])
         assert candles[-1].volume == D("1")  # the current candle only has NOW's trade
 
 

@@ -37,10 +37,10 @@ def _spec(rnd: random.Random, venue: str) -> MarketSpec:
     )
 
 
-def _levels(rnd: random.Random, start: Decimal, n: int, up: bool) -> tuple[Level, ...]:
+def _levels(rnd: random.Random, start: Decimal, count: int, up: bool) -> tuple[Level, ...]:
     """`n` distinct levels from `start`, up (asks) or down (bids)."""
     out, price = [], start
-    for _ in range(n):
+    for _ in range(count):
         if price <= 0:
             break
         quantity = Decimal(rnd.choice(["0.0001", "0.001", "0.05", "0.3", "1", "7", "40", "250"]))
@@ -119,11 +119,11 @@ def test_unsorted_book_same_decision():
         rnd = random.Random(-seed)
         views = {
             venue_id: replace(
-                v,
-                asks=tuple(rnd.sample(v.asks, len(v.asks))),
-                bids=tuple(rnd.sample(v.bids, len(v.bids))),
+                venue_view,
+                asks=tuple(rnd.sample(venue_view.asks, len(venue_view.asks))),
+                bids=tuple(rnd.sample(venue_view.bids, len(venue_view.bids))),
             )
-            for venue_id, v in views.items()
+            for venue_id, venue_view in views.items()
         }
         got = decide(views, state, limits, NOW, target)
         assert got == ref.decide(views, state, limits, NOW, target), f"semilla {seed}"

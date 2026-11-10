@@ -30,8 +30,8 @@ async def neoxa(clock):
     lim.close()
 
 
-async def burst(lim: RateLimiter, kind: str, n: int) -> None:
-    for _ in range(n):
+async def burst(lim: RateLimiter, kind: str, count: int) -> None:
+    for _ in range(count):
         await asyncio.wait_for(lim.acquire(kind), 0.1)
 
 

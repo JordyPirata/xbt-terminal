@@ -29,8 +29,8 @@ class FakeBot:
         self.disarmed = True
 
 
-def engine_for(s, *, mode="dry-run", **kw):
-    return Engine(s.hub, mode=mode, orders=s.orders, journal=s.journal, **kw)
+def engine_for(rig, *, mode="dry-run", **kw):
+    return Engine(rig.hub, mode=mode, orders=rig.orders, journal=rig.journal, **kw)
 
 
 async def until(predicate, timeout=2.0):
@@ -42,9 +42,9 @@ async def until(predicate, timeout=2.0):
 @pytest.mark.spec("RF-30")
 class TestRun:
     async def test_starts_notifies_and_stops_when_asked(self, tmp_path):
-        s = Rig(tmp_path)
+        rig = Rig(tmp_path)
         bot = FakeBot()
-        engine = engine_for(s, bot=bot)
+        engine = engine_for(rig, bot=bot)
         stop, ready = asyncio.Event(), []
         daemon = asyncio.create_task(run_daemon(engine, stop, on_ready=lambda: ready.append(1)))
         await asyncio.wait_for(bot.ran.wait(), 1)
@@ -54,9 +54,9 @@ class TestRun:
         assert bot.disarmed
 
     async def test_error_notices_go_to_journal(self, tmp_path):
-        s = Rig(tmp_path)
-        s.hub._venues["nk"].clock_skew_ms = 9_000
-        engine = engine_for(s, max_clock_skew_s=5)
+        rig = Rig(tmp_path)
+        rig.hub._venues["nk"].clock_skew_ms = 9_000
+        engine = engine_for(rig, max_clock_skew_s=5)
         stop = asyncio.Event()
         daemon = asyncio.create_task(run_daemon(engine, stop))
         await asyncio.sleep(0)
@@ -64,68 +64,68 @@ class TestRun:
         engine._say("todo bien")  # non-errors only go to the log
         stop.set()
         await daemon
-        (line,) = [ln for ln in s.lines() if ln["event"] == "notice"]
+        (line,) = [ln for ln in rig.lines() if ln["event"] == "notice"]
         assert "reloj desfasado" in line["data"]["text"]
 
 
 @pytest.mark.spec("RF-30", "RNF-15")
 class TestStopping:
     async def test_send_in_flight_reaches_journal(self, tmp_path):
-        s = Rig(tmp_path)
+        rig = Rig(tmp_path)
         gate = asyncio.Event()
-        real = s.venue.place_limit
+        real = rig.venue.place_limit
 
         async def slow(order_request):
             await gate.wait()
             return await real(order_request)
 
-        s.venue.place_limit = slow
+        rig.venue.place_limit = slow
         stop = asyncio.Event()
-        daemon = asyncio.create_task(run_daemon(engine_for(s), stop))
-        sending = asyncio.create_task(s.send(buy()))
-        await until(lambda: s.orders.in_flight)
+        daemon = asyncio.create_task(run_daemon(engine_for(rig), stop))
+        sending = asyncio.create_task(rig.send(buy()))
+        await until(lambda: rig.orders.in_flight)
         stop.set()
         await asyncio.sleep(0.01)
         assert not daemon.done()  # waits for the send
         gate.set()
         await asyncio.wait_for(daemon, 1)
         await sending
-        assert s.events() == ["order_sent", "order_ack"]
+        assert rig.events() == ["order_sent", "order_ack"]
 
     async def test_live_with_open_orders_notes_it(self, tmp_path):
-        s = Rig(tmp_path)
+        rig = Rig(tmp_path)
         venue = FakePrivate()
         venue.push(order("o-1"), order("o-2"))
         account = AccountService({"nk": venue}, retry_s=0.01, clock=lambda: NOW)
-        engine = engine_for(s, mode="live", account=account)
+        engine = engine_for(rig, mode="live", account=account)
         stop = asyncio.Event()
         daemon = asyncio.create_task(run_daemon(engine, stop))
         await until(lambda: len(account.state["nk"].orders) == 2)
         stop.set()
         await daemon
-        (line,) = [ln for ln in s.lines() if ln["event"] == "notice"]
+        (line,) = [ln for ln in rig.lines() if ln["event"] == "notice"]
         assert "2 órdenes abiertas" in line["data"]["text"]
 
     async def test_dry_run_does_not_warn_of_open_orders(self, tmp_path):
-        s = Rig(tmp_path)
+        rig = Rig(tmp_path)
         venue = FakePrivate()
         venue.push(order("o-1"))
         account = AccountService({"nk": venue}, retry_s=0.01, clock=lambda: NOW)
-        engine = engine_for(s, account=account)
+        engine = engine_for(rig, account=account)
         stop = asyncio.Event()
         daemon = asyncio.create_task(run_daemon(engine, stop))
         await until(lambda: len(account.state["nk"].orders) == 1)
         stop.set()
         await daemon
-        assert "notice" not in s.events()
+        assert "notice" not in rig.events()
 
 
 @pytest.mark.spec("RF-30", "RF-31")
 async def test_opens_socket_and_closes_on_stop(tmp_path):
-    s = Rig(tmp_path)
+    rig = Rig(tmp_path)
     path = tmp_path / "xbt.sock"
     stop = asyncio.Event()
-    daemon = asyncio.create_task(run_daemon(engine_for(s), stop, socket=path))
+    daemon = asyncio.create_task(run_daemon(engine_for(rig), stop, socket=path))
     await until(path.exists)
     reader, writer = await asyncio.open_unix_connection(str(path))
     assert b'"hello"' in await asyncio.wait_for(reader.readline(), 1)

@@ -46,10 +46,10 @@ class TestLayout:
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
             await pilot.pause()
-            p = panels(app)
-            assert [len(v) for v in p.values()] == [2, 2, 1, 1]
-            widgets = [w for group in p.values() for w in group]
-            assert all(w.display and w.region.area > 0 for w in widgets)
+            panel_groups = panels(app)
+            assert [len(panel_list) for panel_list in panel_groups.values()] == [2, 2, 1, 1]
+            widgets = [widget for group in panel_groups.values() for widget in group]
+            assert all(widget.display and widget.region.area > 0 for widget in widgets)
             assert not app.query_one(TooSmall).display
 
     async def test_nonkyc_left_neoxa_right(self):
@@ -57,7 +57,7 @@ class TestLayout:
         async with app.run_test(size=SIZE) as pilot:
             await pilot.pause()
             for kind in (ChartPanel, BookPanel):
-                left, right = sorted(app.query(kind), key=lambda w: w.region.x)
+                left, right = sorted(app.query(kind), key=lambda widget: widget.region.x)
                 assert (left.venue, right.venue) == ("nk", "nx")
                 assert left.region.y == right.region.y
 
@@ -158,10 +158,14 @@ class TestCandleBars:
     async def test_each_venue_its_chart_with_history(self):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
-            await until(pilot, lambda: all(c.candles for c in app.query(ChartPanel)), timeout=3)
+            await until(
+                pilot,
+                lambda: all(candle_chart.candles for candle_chart in app.query(ChartPanel)),
+                timeout=3,
+            )
             for chart in app.query(ChartPanel):
                 assert chart.timeframe == "1m"
-                assert all(c.ts_open % 60_000 == 0 for c in chart.candles)
+                assert all(candle_chart.ts_open % 60_000 == 0 for candle_chart in chart.candles)
 
     @pytest.mark.parametrize(
         "key,tf,step",
@@ -175,15 +179,28 @@ class TestCandleBars:
     async def test_timeframe_shortcuts(self, key, tf, step):
         app, _ = make_app()
         async with app.run_test(size=SIZE) as pilot:
-            await until(pilot, lambda: all(c.candles for c in app.query(ChartPanel)), timeout=3)
+            await until(
+                pilot,
+                lambda: all(candle_chart.candles for candle_chart in app.query(ChartPanel)),
+                timeout=3,
+            )
             await pilot.press(key)
             await until(
-                pilot, lambda: all(c.timeframe == tf for c in app.query(ChartPanel)), timeout=3
+                pilot,
+                lambda: all(candle_chart.timeframe == tf for candle_chart in app.query(ChartPanel)),
+                timeout=3,
             )
             for chart in app.query(ChartPanel):
-                assert chart.candles and all(c.ts_open % step == 0 for c in chart.candles)
+                assert chart.candles and all(
+                    candle_chart.ts_open % step == 0 for candle_chart in chart.candles
+                )
             await pilot.press("1")
-            await until(pilot, lambda: all(c.timeframe == "1m" for c in app.query(ChartPanel)))
+            await until(
+                pilot,
+                lambda: all(
+                    candle_chart.timeframe == "1m" for candle_chart in app.query(ChartPanel)
+                ),
+            )
 
 
 async def test_q_exits():
@@ -256,8 +273,12 @@ def _candle_columns(chart: ChartPanel) -> tuple[list[int], int]:
     lines = chart.render().plain.splitlines()
     top = next(line for line in lines if "┌" in line)
     left, right = top.index("┌"), top.index("┐")
-    rows = lines[lines.index(top) + 1 : next(i for i, x in enumerate(lines) if "└" in x)]
-    return sorted({c for r in rows for c in range(left + 1, right) if r[c] in "█│"}), right
+    rows = lines[
+        lines.index(top) + 1 : next(i for i, text_line in enumerate(lines) if "└" in text_line)
+    ]
+    return sorted(
+        {column for row in rows for column in range(left + 1, right) if row[column] in "█│"}
+    ), right
 
 
 @pytest.mark.spec("RF-03")
@@ -268,10 +289,14 @@ async def test_candles_without_stray_gaps(key):
     app, _ = make_app()
     async with app.run_test(size=SIZE) as pilot:
         await pilot.press(key)
-        await until(pilot, lambda: all(c.candles for c in app.query(ChartPanel)), timeout=3)
+        await until(
+            pilot,
+            lambda: all(candle_chart.candles for candle_chart in app.query(ChartPanel)),
+            timeout=3,
+        )
         await pilot.pause()
         for chart in app.query(ChartPanel):
             cols, right = _candle_columns(chart)
-            steps = {b - a for a, b in itertools.pairwise(cols)}
+            steps = {current - previous for previous, current in itertools.pairwise(cols)}
             assert len(steps) == 1, steps
             assert cols[-1] == right - 1

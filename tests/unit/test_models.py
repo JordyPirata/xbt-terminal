@@ -43,9 +43,9 @@ class TestQuantizePrice:
         assert spec().quantize_price(D("850.01"), "sell") == D("850.01")
 
     def test_tick_not_power_of_ten(self):
-        m = spec(tick="0.05")
-        assert m.quantize_price(D("850.01"), "buy") == D("850.05")
-        assert m.quantize_price(D("850.04"), "sell") == D("850.00")
+        market = spec(tick="0.05")
+        assert market.quantize_price(D("850.01"), "buy") == D("850.05")
+        assert market.quantize_price(D("850.04"), "sell") == D("850.00")
 
     def test_result_with_tick_exponent(self):
         # 850 -> "850.00", not "8.5000E+2": what goes to the venue is str(price)
@@ -117,7 +117,7 @@ def test_balance_total():
 
 
 def test_order_remaining_and_finished():
-    o = Order("nk", "id1", "t-1", "buy", D("850"), D("0.01"), D("0.004"), "partial", 0)
-    assert o.remaining == D("0.006")
-    assert not o.is_done
+    order = Order("nk", "id1", "t-1", "buy", D("850"), D("0.01"), D("0.004"), "partial", 0)
+    assert order.remaining == D("0.006")
+    assert not order.is_done
     assert Order("nk", "id1", "t-1", "buy", D("850"), D("0.01"), D("0.01"), "filled", 0).is_done

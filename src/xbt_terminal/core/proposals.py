@@ -36,10 +36,11 @@ class Pending:
     @property
     def summary(self) -> str:
         qd, pd = _decimals(self.spec.lot_size), _decimals(self.spec.tick_size)
-        r = self.req
+        request = self.req
         text = (
-            f"{r.side.upper()} {r.qty:.{qd}f} {asset_label(self.spec.base)} @ {r.price:.{pd}f} "
-            f"en {NAMES[r.venue]} = {self.notional:.8f} {asset_label(self.spec.quote)} "
+            f"{request.side.upper()} {request.qty:.{qd}f} {asset_label(self.spec.base)} "
+            f"@ {request.price:.{pd}f} "
+            f"en {NAMES[request.venue]} = {self.notional:.8f} {asset_label(self.spec.quote)} "
             f"(fee ≤ {self.fee:.8f})"
         )
         return f"{text}\n{self.basis}" if self.basis else text
@@ -52,11 +53,11 @@ class Rejected:
 
     @property
     def codes(self) -> tuple[str, ...]:
-        return tuple(v.code for v in self.violations)
+        return tuple(violation.code for violation in self.violations)
 
     @property
     def message(self) -> str:
-        return "rechazada: " + "; ".join(v.message for v in self.violations)
+        return "rechazada: " + "; ".join(violation.message for violation in self.violations)
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,11 +89,13 @@ class PendingDouble:
 
     @property
     def summary(self) -> str:
-        def leg(p: Pending, label: str) -> str:
-            qd, pd = _decimals(p.spec.lot_size), _decimals(p.spec.tick_size)
+        def leg(pending: Pending, label: str) -> str:
+            qd, pd = _decimals(pending.spec.lot_size), _decimals(pending.spec.tick_size)
             return (
-                f"{label} {p.req.qty:.{qd}f} {asset_label(p.spec.base)} @ {p.req.price:.{pd}f} "
-                f"en {NAMES[p.req.venue]} = {p.notional:.8f} {asset_label(p.spec.quote)}"
+                f"{label} {pending.req.qty:.{qd}f} {asset_label(pending.spec.base)} "
+                f"@ {pending.req.price:.{pd}f} "
+                f"en {NAMES[pending.req.venue]} = {pending.notional:.8f} "
+                f"{asset_label(pending.spec.quote)}"
             )
 
         return (
@@ -110,14 +113,14 @@ class DoubleRejected:
 
     @property
     def codes(self) -> tuple[str, ...]:
-        return tuple(c for r in self.rejected for c in r.codes)
+        return tuple(code for rejection in self.rejected for code in rejection.codes)
 
     @property
     def message(self) -> str:
         parts = [
-            f"{SIDE_LABEL[r.req.side]} en {NAMES[r.req.venue]}: "
-            + "; ".join(v.message for v in r.violations)
-            for r in self.rejected
+            f"{SIDE_LABEL[rejection.req.side]} en {NAMES[rejection.req.venue]}: "
+            + "; ".join(violation.message for violation in rejection.violations)
+            for rejection in self.rejected
         ]
         return "orden doble rechazada, no se envía ninguna pierna: " + " | ".join(parts)
 
@@ -136,19 +139,22 @@ class CancelPlan:
 
     @property
     def summary(self) -> str:
-        n = sum(len(v) for v in self.orders.values())
+        total = sum(len(venue_orders) for venue_orders in self.orders.values())
         if self.scope == "order":
             ((venue, (order,)),) = self.orders.items()
             return (
                 f"cancelar 1 orden en {NAMES[venue]}: {order.order_id} "
                 f"{order.side} {order.qty} @ {order.price}"
             )
-        what = f"{n} {'orden' if n == 1 else 'órdenes'}"
+        what = f"{total} {'orden' if total == 1 else 'órdenes'}"
         if self.scope == "venue":
             ((venue, _),) = self.orders.items()
             what = f"{what} en {NAMES[venue]}"
         else:
-            per = ", ".join(f"{len(v)} en {NAMES[venue_id]}" for venue_id, v in self.orders.items())
+            per = ", ".join(
+                f"{len(venue_orders)} en {NAMES[venue_id]}"
+                for venue_id, venue_orders in self.orders.items()
+            )
             what = f"{what} ({per})"
         return (
             f"cancelar {what}: todas las abiertas del par, "
@@ -173,13 +179,13 @@ class CancelResult:
     @property
     def message(self) -> str:
         parts = []
-        for venue_id, n in self.remaining.items():
+        for venue_id, open_count in self.remaining.items():
             if venue_id in self.errors:
                 parts.append(f"{NAMES[venue_id]}: error: {self.errors[venue_id]}")
-            elif n == 1:
+            elif open_count == 1:
                 parts.append(f"{NAMES[venue_id]}: queda 1 abierta")
-            elif n:
-                parts.append(f"{NAMES[venue_id]}: quedan {n} abiertas")
+            elif open_count:
+                parts.append(f"{NAMES[venue_id]}: quedan {open_count} abiertas")
         if not parts:
             return "cancelado · quedan 0 abiertas de las que se querían cancelar"
         return "cancelar: " + " · ".join(parts)

@@ -235,10 +235,15 @@ class OrderService:
             _, balances = await self._snapshot(command.venue, venue)
         except (VenueError, httpx.HTTPError) as error:
             return self._reject(order_request, [self._unreadable(command.venue, error)])
-        s = size_from_percent(command.side, percent.value, command.price, balances, spec)
-        basis = f"{s.pct} % de {s.basis:.8f} {asset_label(s.asset)} en {NAMES[command.venue]}"
-        order_request = OrderRequest(command.venue, command.side, s.qty, command.price, client_id)
-        if s.qty <= 0:
+        sizing = size_from_percent(command.side, percent.value, command.price, balances, spec)
+        basis = (
+            f"{sizing.pct} % de {sizing.basis:.8f} {asset_label(sizing.asset)} "
+            f"en {NAMES[command.venue]}"
+        )
+        order_request = OrderRequest(
+            command.venue, command.side, sizing.qty, command.price, client_id
+        )
+        if sizing.qty <= 0:
             msg = f"{basis}: no llega a un lote ({spec.lot_size:f} {asset_label(spec.base)})"
             return self._reject(order_request, [Violation("insufficient_balance", msg)])
         return order_request, basis
@@ -344,12 +349,12 @@ class OrderService:
     ) -> PendingDouble | DoubleRejected:
         extra = {"double": double_id}
         checked = [await self._validate(buy, extra), await self._validate(sell, extra)]
-        rejected = tuple(c for c in checked if isinstance(c, Rejected))
+        rejected = tuple(outcome for outcome in checked if isinstance(outcome, Rejected))
         if rejected:
             return DoubleRejected(double_id, rejected)
-        b, s = checked
-        assert isinstance(b, Pending) and isinstance(s, Pending)
-        return PendingDouble(double_id, b, s)
+        buy_pending, sell_pending = checked
+        assert isinstance(buy_pending, Pending) and isinstance(sell_pending, Pending)
+        return PendingDouble(double_id, buy_pending, sell_pending)
 
     async def confirm_double(
         self, pending: PendingDouble, *, lead: VenueId | None = None
@@ -471,39 +476,44 @@ class OrderService:
         """One round: each venue with uncertain orders is queried once. If it does not
         answer, it waits for the next (without looking, nothing is deemed nonexistent)."""
         by_venue: dict[VenueId, list[UncertainOrder]] = {}
-        for u in self.uncertain.values():
-            by_venue.setdefault(u.req.venue, []).append(u)
+        for uncertain_order in self.uncertain.values():
+            by_venue.setdefault(uncertain_order.req.venue, []).append(uncertain_order)
         out: list[Reconciled] = []
         for venue_id, pending in by_venue.items():
             venue = self._venues[venue_id]
-            since = min(u.sent_at for u in pending) - WINDOW_MS
+            since = min(uncertain_order.sent_at for uncertain_order in pending) - WINDOW_MS
             try:
                 orders = await venue.recent_orders(since)
             except (VenueError, httpx.HTTPError):
                 continue
             now = self._clock()
-            for u in pending:
+            for uncertain_order in pending:
                 # neither those the terminal sent later with an ack: they are others
-                known = u.known | self._acked.get(venue_id, set())
+                known = uncertain_order.known | self._acked.get(venue_id, set())
                 by_id = venue.keeps_client_id
-                found = candidates(u.req, orders, u.sent_at, known, by_client_id=by_id)
+                found = candidates(
+                    uncertain_order.req, orders, uncertain_order.sent_at, known, by_client_id=by_id
+                )
                 if len(found) == 1:
-                    out.append(self._found(u, found[0]))
-                elif found and not u.warned:
-                    u.warned = True
+                    out.append(self._found(uncertain_order, found[0]))
+                elif found and not uncertain_order.warned:
+                    uncertain_order.warned = True
                     msg = (
-                        f"orden incierta {u.req.client_id}: {len(found)} órdenes iguales en "
-                        f"{NAMES[venue_id]} ({', '.join(o.order_id for o in found)}); "
+                        f"orden incierta {uncertain_order.req.client_id}: "
+                        f"{len(found)} órdenes iguales en "
+                        f"{NAMES[venue_id]} ({', '.join(order.order_id for order in found)}); "
                         "sigue incierta, "
                         "revísala a mano"
                     )
-                    out.append(Reconciled(u.req.client_id, venue_id, "ambiguous", msg))
-                elif not found and now - u.sent_at > GIVE_UP_MS:
-                    out.append(self._missing(u))
+                    out.append(
+                        Reconciled(uncertain_order.req.client_id, venue_id, "ambiguous", msg)
+                    )
+                elif not found and now - uncertain_order.sent_at > GIVE_UP_MS:
+                    out.append(self._missing(uncertain_order))
         return out
 
-    def _found(self, u: UncertainOrder, order: Order) -> Reconciled:
-        order_request = u.req
+    def _found(self, uncertain_order: UncertainOrder, order: Order) -> Reconciled:
+        order_request = uncertain_order.req
         del self.uncertain[order_request.client_id]
         order = replace(
             order, client_id=order_request.client_id
@@ -516,7 +526,7 @@ class OrderService:
                 "order_id": order.order_id,
                 "status": order.status,
                 "reconciled": True,
-                **u.extra,
+                **uncertain_order.extra,
             },
         )
         self._acked.setdefault(order_request.venue, set()).add(order.order_id)
@@ -530,15 +540,15 @@ class OrderService:
         )
         return Reconciled(order_request.client_id, order_request.venue, "found", msg)
 
-    def _missing(self, u: UncertainOrder) -> Reconciled:
-        order_request = u.req
+    def _missing(self, uncertain_order: UncertainOrder) -> Reconciled:
+        order_request = uncertain_order.req
         del self.uncertain[order_request.client_id]
         error = f"no existe en {NAMES[order_request.venue]} tras {GIVE_UP_MS // 1000} s"
         self._record(
             "order_error",
             venue=order_request.venue,
             client_id=order_request.client_id,
-            data={"error": error, "reconciled": True, **u.extra},
+            data={"error": error, "reconciled": True, **uncertain_order.extra},
         )
         for double_id, state in list(self.doubles.items()):
             order_leg = state.leg(order_request.side)
@@ -564,10 +574,10 @@ class OrderService:
             return CancelRefused(f"no se pudieron leer las órdenes abiertas ({describe(error)})")
         if isinstance(command, CancelOrder):
             hits = {
-                venue_id: tuple(o for o in orders if o.order_id == command.order_id)
+                venue_id: tuple(order for order in orders if order.order_id == command.order_id)
                 for venue_id, orders in found.items()
             }
-            hits = {venue_id: o for venue_id, o in hits.items() if o}
+            hits = {venue_id: order for venue_id, order in hits.items() if order}
             if not hits:
                 return CancelRefused(f"no hay ninguna orden abierta {command.order_id}")
             if len(hits) > 1:
@@ -588,19 +598,19 @@ class OrderService:
         for order_leg in state.legs:
             if order_leg.done or order_leg.order_id is None or order_leg.status == "unknown":
                 continue
-            r = order_leg.req
+            request = order_leg.req
             order = Order(
-                r.venue,
+                request.venue,
                 order_leg.order_id,
-                r.client_id,
-                r.side,
-                r.price,
-                r.qty,
+                request.client_id,
+                request.side,
+                request.price,
+                request.qty,
                 order_leg.filled,
                 "open",
                 self._clock(),
             )  # fmt: skip
-            orders[r.venue] = (order,)
+            orders[request.venue] = (order,)
         if not orders:
             return CancelResult({}, {})
         return await self.execute_cancel(CancelPlan("order", orders))
@@ -613,7 +623,7 @@ class OrderService:
                 for venue_id, orders in plan.orders.items()
             )
         )
-        remaining = {venue_id: n for venue_id, n, _ in results}
+        remaining = {venue_id: remaining_count for venue_id, remaining_count, _ in results}
         errors = {venue_id: err for venue_id, _, err in results if err}
         return CancelResult(remaining, errors)
 
@@ -621,7 +631,7 @@ class OrderService:
         self, venue_id: VenueId, scope: str, orders: tuple[Order, ...]
     ) -> tuple[VenueId, int, str | None]:
         venue = self._venues[venue_id]
-        ids = [o.order_id for o in orders]
+        ids = [order.order_id for order in orders]
         client_id = orders[0].client_id if scope == "order" else None
         self._record(
             "cancel_sent",
@@ -636,7 +646,7 @@ class OrderService:
                 await venue.cancel_all()
             still = await venue.open_orders()
             # one order: if it remains; venue or all: any of the pair (CA-05)
-            left = sum(o.order_id in ids for o in still) if scope == "order" else len(still)
+            left = sum(order.order_id in ids for order in still) if scope == "order" else len(still)
         except (VenueError, httpx.HTTPError) as error:
             self._record(
                 "error",
@@ -694,7 +704,10 @@ class OrderService:
                 "side": order_request.side,
                 "qty": order_request.qty,
                 "price": order_request.price,
-                "violations": [{"code": v.code, "message": v.message} for v in violations],
+                "violations": [
+                    {"code": violation.code, "message": violation.message}
+                    for violation in violations
+                ],
                 **(extra or {}),
             },
         )
@@ -724,7 +737,8 @@ class OrderService:
         try:
             # all venues with keys: the per order cap is a % of the total (D-19)
             snaps = {
-                venue_id: await self._snapshot(venue_id, v) for venue_id, v in self._venues.items()
+                venue_id: await self._snapshot(venue_id, adapter)
+                for venue_id, adapter in self._venues.items()
             }
         except (VenueError, httpx.HTTPError) as error:
             return [self._unreadable(order_request.venue, error)]
@@ -777,15 +791,22 @@ class OrderService:
                 orders.setdefault(oid, order)
             balances = dict(state.balances)
         else:
-            orders = {o.order_id: o for o in await venue.open_orders()}
+            orders = {open_order.order_id: open_order for open_order in await venue.open_orders()}
             balances = await venue.balances()
-        seen = {o.client_id for o in orders.values()}
-        for u in self.uncertain.values():
-            r = u.req
-            if r.venue == venue_id and r.client_id not in seen:
-                orders[f"?{r.client_id}"] = Order(
-                    venue_id, f"?{r.client_id}", r.client_id, r.side, r.price, r.qty, ZERO, "open",
-                    u.sent_at,
+        seen = {open_order.client_id for open_order in orders.values()}
+        for uncertain_order in self.uncertain.values():
+            request = uncertain_order.req
+            if request.venue == venue_id and request.client_id not in seen:
+                orders[f"?{request.client_id}"] = Order(
+                    venue_id,
+                    f"?{request.client_id}",
+                    request.client_id,
+                    request.side,
+                    request.price,
+                    request.qty,
+                    ZERO,
+                    "open",
+                    uncertain_order.sent_at,
                 )  # fmt: skip
         return tuple(orders.values()), balances
 
@@ -796,5 +817,7 @@ class OrderService:
         state = self._hub.state[venue]
         if not state.book.valid or state.suspect:
             return None
-        times = [t for t in (state.book.received_at, state.checked_at) if t is not None]
+        times = [
+            moment for moment in (state.book.received_at, state.checked_at) if moment is not None
+        ]
         return max(times) if times else None

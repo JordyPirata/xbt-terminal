@@ -19,13 +19,13 @@ def imported_layers(layer: str) -> dict[str, set[str]]:
                 if node.level == 1:
                     found.add(layer)
                 else:  # `from ..x import y` or `from .. import x`
-                    names = [node.module] if node.module else [a.name for a in node.names]
-                    found.update(n.split(".")[0] for n in names)
+                    names = [node.module] if node.module else [alias.name for alias in node.names]
+                    found.update(module_name.split(".")[0] for module_name in names)
             elif isinstance(node, ast.ImportFrom | ast.Import):
                 mods = (
                     [node.module]
                     if isinstance(node, ast.ImportFrom)
-                    else [a.name for a in node.names]
+                    else [alias.name for alias in node.names]
                 )
                 for mod in mods:
                     if mod and mod.startswith("xbt_terminal."):
@@ -36,15 +36,19 @@ def imported_layers(layer: str) -> dict[str, set[str]]:
 
 @pytest.mark.spec("RNF-09", "RNF-22")
 def test_core_only_imports_core():
-    bad = {f: deps - {"core"} for f, deps in imported_layers("core").items() if deps - {"core"}}
+    bad = {
+        file_path: deps - {"core"}
+        for file_path, deps in imported_layers("core").items()
+        if deps - {"core"}
+    }
     assert bad == {}
 
 
 @pytest.mark.spec("RNF-09")
 def test_adapters_import_neither_services_nor_ui():
     bad = {
-        f: deps & {"services", "ui"}
-        for f, deps in imported_layers("adapters").items()
+        file_path: deps & {"services", "ui"}
+        for file_path, deps in imported_layers("adapters").items()
         if deps & {"services", "ui"}
     }
     assert bad == {}
@@ -52,7 +56,7 @@ def test_adapters_import_neither_services_nor_ui():
 
 @pytest.mark.spec("RNF-09")
 def test_ui_does_not_import_adapters():
-    bad = {f for f, deps in imported_layers("ui").items() if "adapters" in deps}
+    bad = {file_path for file_path, deps in imported_layers("ui").items() if "adapters" in deps}
     assert bad == set()
 
 
@@ -77,8 +81,8 @@ def test_ui_only_imports_daemon_client():
     """D-66: the screen is the client; from `services` only the remote face and the socket
     format, never what talks to venues."""
     bad = {
-        f: deps - {"remote", "wire"}
-        for f, deps in services_imported("ui").items()
+        file_path: deps - {"remote", "wire"}
+        for file_path, deps in services_imported("ui").items()
         if deps - {"remote", "wire"}
     }
     assert bad == {}

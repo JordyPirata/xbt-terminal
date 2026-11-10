@@ -65,8 +65,8 @@ class Engine:
         self._skew_warned: set[VenueId] = set()
         self._listeners: list[Callable[[Notice], None]] = []
         # fault registries of orders, account and hub (one shared in the real app)
-        found = (s.faults for s in (orders, account, hub) if s is not None)
-        self.faults: list[Faults] = list({id(f): f for f in found}.values())
+        found = (service.faults for service in (orders, account, hub) if service is not None)
+        self.faults: list[Faults] = list({id(registry): registry for registry in found}.values())
         # account value in the journal (RF-32, D-69): needs the account
         self.values: ValueRecorder | None = None
         if value_every_s is not None and account is not None and journal is not None:
@@ -97,7 +97,7 @@ class Engine:
     @property
     def fault_count(self) -> int:
         """Session faults, added across all registries."""
-        return sum(f.count for f in self.faults)
+        return sum(faults.count for faults in self.faults)
 
     def subscribe_faults(self, listener: Callable[[Fault], None]) -> None:
         for faults in self.faults:
@@ -162,8 +162,8 @@ class Engine:
         if self.orders is None or not self.orders.uncertain:
             return []
         results = await self.orders.reconcile()
-        for r in results:
-            self._say(r.message, error=r.error)
+        for reconciled in results:
+            self._say(reconciled.message, error=reconciled.error)
         return results
 
     # -- clock (RNF-16, D-30) -----------------------------------------------------

@@ -45,8 +45,8 @@ ARMED = arm(BotState())
 def view(venue, bids=(), asks=(), quote="1", base="1000", blocked=None):
     return VenueView(
         spec=spec(venue),
-        bids=tuple(Level(D(p), D(q)) for p, q in bids),
-        asks=tuple(Level(D(p), D(q)) for p, q in asks),
+        bids=tuple(Level(D(price), D(qty)) for price, qty in bids),
+        asks=tuple(Level(D(price), D(qty)) for price, qty in asks),
         quote_available=D(quote),
         base_available=D(base),
         blocked=blocked,

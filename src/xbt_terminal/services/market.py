@@ -134,11 +134,11 @@ class MarketHub:
         await asyncio.gather(
             *(
                 supervised(
-                    lambda venue_id=venue_id, v=v: self._run_venue(venue_id, v),
+                    lambda venue_id=venue_id, venue=venue: self._run_venue(venue_id, venue),
                     lambda error, venue_id=venue_id: self._crash(venue_id, error),
                     retry_s=self._retry_s,
                 )
-                for venue_id, v in self._venues.items()
+                for venue_id, venue in self._venues.items()
             )
         )
 

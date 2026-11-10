@@ -71,15 +71,20 @@ def sample(
     return ValueSample(timestamp, inv.value, every_ms, tuple(venues))
 
 
-def sample_data(s: ValueSample) -> dict[str, Any]:
+def sample_data(sample: ValueSample) -> dict[str, Any]:
     """The `data` of the journal's `value` event."""
     return {
-        "at": s.ts,
-        "every_ms": s.every_ms,
-        "value": s.value,
+        "at": sample.ts,
+        "every_ms": sample.every_ms,
+        "value": sample.value,
         "venues": {
-            v.venue: {"btc": v.btc, "btcb2": v.btcb2, "mid": v.mid, "value": v.value}
-            for v in s.venues
+            venue_value.venue: {
+                "btc": venue_value.btc,
+                "btcb2": venue_value.btcb2,
+                "mid": venue_value.mid,
+                "value": venue_value.value,
+            }
+            for venue_value in sample.venues
         },
     }
 
@@ -98,8 +103,14 @@ def _ms(stamp: str) -> int:
 def _parse(row: Mapping[str, Any]) -> ValueSample:
     data = row["data"]
     venues = tuple(
-        VenueValue(venue_id, _dec(v["btc"]), _dec(v["btcb2"]), _dec(v["mid"]), _dec(v["value"]))
-        for venue_id, v in sorted(data["venues"].items())
+        VenueValue(
+            venue_id,
+            _dec(entry["btc"]),
+            _dec(entry["btcb2"]),
+            _dec(entry["mid"]),
+            _dec(entry["value"]),
+        )
+        for venue_id, entry in sorted(data["venues"].items())
     )
     at = data.get("at")
     timestamp = at if isinstance(at, int) and not isinstance(at, bool) else _ms(row["ts"])
@@ -117,13 +128,13 @@ def series(
         if row.get("event") != "value":
             continue
         try:
-            s = _parse(row)
+            sample = _parse(row)
         except (KeyError, TypeError, ValueError, ArithmeticError, AttributeError):
             bad += 1
             continue
-        if since_ms is None or s.ts >= since_ms:
-            out.append(s)
-    out.sort(key=lambda s: s.ts)
+        if since_ms is None or sample.ts >= since_ms:
+            out.append(sample)
+    out.sort(key=lambda sample: sample.ts)
     return tuple(out), bad
 
 
@@ -131,7 +142,7 @@ def summarize(values: Sequence[ValueSample]) -> ValueSummary | None:
     if not values:
         return None
     first, last = values[0].value, values[-1].value
-    nums = [s.value for s in values]
+    nums = [sample.value for sample in values]
     return ValueSummary(
         since=values[0].ts,
         until=values[-1].ts,
@@ -149,28 +160,28 @@ def segments(values: Sequence[ValueSample]) -> list[tuple[ValueSample, ...]]:
     """Stretches without gaps: cut where more than two intervals pass between samples
     (the daemon was stopped); gaps are not interpolated."""
     out: list[list[ValueSample]] = []
-    for s in values:
-        if out and s.ts - out[-1][-1].ts <= 2 * s.every_ms:
-            out[-1].append(s)
+    for sample in values:
+        if out and sample.ts - out[-1][-1].ts <= 2 * sample.every_ms:
+            out[-1].append(sample)
         else:
-            out.append([s])
+            out.append([sample])
     return [tuple(seg) for seg in out]
 
 
-def thin(values: Sequence[ValueSample], n: int) -> tuple[ValueSample, ...]:
+def thin(values: Sequence[ValueSample], limit: int) -> tuple[ValueSample, ...]:
     """At most `n` samples spread out, with the first and last: plotext cannot tell
     more points than columns."""
-    if len(values) <= n:
+    if len(values) <= limit:
         return tuple(values)
     last = len(values) - 1
-    picks = sorted({round(i * last / (n - 1)) for i in range(n)})
+    picks = sorted({round(i * last / (limit - 1)) for i in range(limit)})
     return tuple(values[i] for i in picks)
 
 
-def _jumped(a: Decimal, b: Decimal) -> bool:
-    if a == ZERO:
-        return b != ZERO
-    return abs(b - a) / a * HUNDRED > JUMP_PCT
+def _jumped(before: Decimal, after: Decimal) -> bool:
+    if before == ZERO:
+        return after != ZERO
+    return abs(after - before) / before * HUNDRED > JUMP_PCT
 
 
 def last_stretch(values: Sequence[ValueSample]) -> tuple[ValueSample, ...]:
@@ -181,8 +192,12 @@ def last_stretch(values: Sequence[ValueSample]) -> tuple[ValueSample, ...]:
     for i in range(1, len(values)):
         prev, cur = values[i - 1], values[i]
         pairs = [(prev.value, cur.value)]
-        before = {v.venue: v.value for v in prev.venues}
-        pairs += [(before[v.venue], v.value) for v in cur.venues if v.venue in before]
-        if any(_jumped(a, b) for a, b in pairs):
+        before = {venue_value.venue: venue_value.value for venue_value in prev.venues}
+        pairs += [
+            (before[venue_value.venue], venue_value.value)
+            for venue_value in cur.venues
+            if venue_value.venue in before
+        ]
+        if any(_jumped(earlier, later) for earlier, later in pairs):
             start = i
     return tuple(values[start:])

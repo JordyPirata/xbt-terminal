@@ -55,10 +55,13 @@ class TestWithoutClientId:
         assert candidates(REQ, [early], SENT, frozenset(), by_client_id=False) == [early]
 
     def test_all_candidates_returned(self):
-        a, b = order("a"), order("b", status="filled")
-        assert candidates(REQ, [a, b], SENT, frozenset(), by_client_id=False) == [a, b]
+        first, second = order("a"), order("b", status="filled")
+        assert candidates(REQ, [first, second], SENT, frozenset(), by_client_id=False) == [
+            first,
+            second,
+        ]
 
     def test_same_order_twice_counts_once(self):
         """Active and history may bring the same one: the last of the list counts."""
-        a, a_later = order("a"), order("a", status="filled", ts=SENT + 1)
-        assert candidates(REQ, [a, a_later], SENT, frozenset(), by_client_id=False) == [a_later]
+        first, a_later = order("a"), order("a", status="filled", ts=SENT + 1)
+        assert candidates(REQ, [first, a_later], SENT, frozenset(), by_client_id=False) == [a_later]

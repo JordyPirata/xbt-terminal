@@ -55,8 +55,8 @@ class OrderTracker:
 
     @property
     def open(self) -> list[Order]:
-        sent = [o for oid, o in self._sent.items() if oid not in self._orders]
-        return [o for o in [*self._orders.values(), *sent] if not o.is_done]
+        sent = [order for oid, order in self._sent.items() if oid not in self._orders]
+        return [order for order in [*self._orders.values(), *sent] if not order.is_done]
 
     def remember(self, order: Order) -> None:
         """An order just sent by the terminal: keeps its client_id and, if alive, tracks it
@@ -77,23 +77,24 @@ class OrderTracker:
     ) -> tuple[list[PrivateEvent], list[str]]:
         """(events, disappeared ids to query)."""
         events: list[PrivateEvent] = []
-        current = {o.order_id: self._with_client_id(o) for o in active}
-        for oid, o in current.items():
-            if self._orders.get(oid) != o:
-                events.append(o)
+        current = {order.order_id: self._with_client_id(order) for order in active}
+        for oid, order in current.items():
+            if self._orders.get(oid) != order:
+                events.append(order)
         fills = list(fills)
-        new_fills = [f for f in fills if self._seen.add(f.trade_id)]
-        ordered = sorted(new_fills, key=lambda f: f.ts)
+        new_fills = [fill for fill in fills if self._seen.add(fill.trade_id)]
+        ordered = sorted(new_fills, key=lambda fill: fill.ts)
         if self._seeded:
             events.extend(ordered)
         else:  # those from before startup: the account compares them with the journal (D-68)
-            events.extend(PastFill(f) for f in ordered)
+            events.extend(PastFill(fill) for fill in ordered)
         events.extend(
-            FeeUpdate(f.venue, f.trade_id, f.order_id, f.fee, f.fee_asset, f.ts)
-            for f in fills
-            if self._fees.get(f.trade_id, (f.fee, f.fee_asset)) != (f.fee, f.fee_asset)
+            FeeUpdate(fill.venue, fill.trade_id, fill.order_id, fill.fee, fill.fee_asset, fill.ts)
+            for fill in fills
+            if self._fees.get(fill.trade_id, (fill.fee, fill.fee_asset))
+            != (fill.fee, fill.fee_asset)
         )
-        self._fees = {f.trade_id: (f.fee, f.fee_asset) for f in fills}
+        self._fees = {fill.trade_id: (fill.fee, fill.fee_asset) for fill in fills}
         self._seeded = True
         tracked = self._sent | self._orders
         gone = [oid for oid in tracked if oid not in current]
@@ -178,7 +179,7 @@ async def fan_in(
         except BaseException as error:
             queue.put_nowait(_Crash(error))
 
-    tasks = [asyncio.create_task(guarded(w(queue.put_nowait))) for w in workers]
+    tasks = [asyncio.create_task(guarded(worker(queue.put_nowait))) for worker in workers]
     try:
         while True:
             item = await queue.get()

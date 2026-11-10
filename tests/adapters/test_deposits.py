@@ -45,7 +45,7 @@ def nx_payload(**addresses):
     base.update(addresses)
     return {
         "success": True,
-        "addresses": {k: v for k, v in base.items() if v is not None},
+        "addresses": {k: value for k, value in base.items() if value is not None},
         "closedChains": {"dero": "DERO deposits are currently disabled."},
     }
 

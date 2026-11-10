@@ -20,7 +20,9 @@ from ..fakes import T0, FakeFeed, book, spec
 
 
 def hub_with(*venues):
-    return MarketHub({v: FakeFeed(v) for v in venues}, clock=lambda: T0 + 5, faults=Faults())
+    return MarketHub(
+        {venue: FakeFeed(venue) for venue in venues}, clock=lambda: T0 + 5, faults=Faults()
+    )
 
 
 def recorder(tmp_path, hub):
@@ -48,8 +50,10 @@ class TestRecord:
             hub.apply(venue_id, event)
         rec.close()
         rows = list(read_recording(path))
-        assert [(r.t, r.venue) for r in rows] == [(T0 + 5, v) for v in "nk nk nk nk nx".split()]
-        assert [r.event for r in rows] == [spec("nk"), snapshot, delta, trade, conn]
+        assert [(row.t, row.venue) for row in rows] == [
+            (T0 + 5, venue) for venue in "nk nk nk nk nx".split()
+        ]
+        assert [row.event for row in rows] == [spec("nk"), snapshot, delta, trade, conn]
 
     def test_file_is_user_only(self, tmp_path):
         rec, path = recorder(tmp_path, hub_with("nk"))

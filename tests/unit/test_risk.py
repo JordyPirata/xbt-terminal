@@ -58,7 +58,7 @@ def own(side, price, venue="nk", status="open") -> Order:
 
 
 def codes(request, context=None, limits=LIMITS) -> list[str]:
-    return [v.code for v in check(request, context or ctx(), limits)]
+    return [violation.code for violation in check(request, context or ctx(), limits)]
 
 
 @pytest.mark.spec("RF-10", "CA-04")
@@ -100,12 +100,14 @@ class TestEachRule:
         assert codes(order_request(qty="0.01005")) == ["lot"]
 
     def test_min_qty(self):
-        m = replace(MARKET, min_notional=D("0.5"))
-        assert codes(order_request(qty="0.0009"), ctx(market=m)) == ["min_qty"]
+        market_spec = replace(MARKET, min_notional=D("0.5"))
+        assert codes(order_request(qty="0.0009"), ctx(market=market_spec)) == ["min_qty"]
 
     def test_min_notional(self):
-        m = replace(MARKET, min_notional=D("20"))
-        assert codes(order_request(qty="0.01", price="1000"), ctx(market=m)) == ["min_notional"]
+        market_spec = replace(MARKET, min_notional=D("20"))
+        assert codes(order_request(qty="0.01", price="1000"), ctx(market=market_spec)) == [
+            "min_notional"
+        ]
 
     def test_insufficient_balance_buy_includes_fee(self):
         # 0.05 × 1000 = 50 USDT + 0.2 % fee = 50.1 > 50.05
@@ -202,9 +204,9 @@ class TestStaleData:
 
 @pytest.mark.spec("RF-10", "CA-04")
 def test_returns_all_violations():
-    r = order_request("buy", qty="0.10005", price="1100.001")
+    request = order_request("buy", qty="0.10005", price="1100.001")
     poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
-    got = codes(r, ctx(open_orders=(own("sell", "1050"),), balances=poco))
+    got = codes(request, ctx(open_orders=(own("sell", "1050"),), balances=poco))
     assert set(got) == {
         "order_size",
         "mid_deviation",
@@ -217,12 +219,12 @@ def test_returns_all_violations():
 
 @pytest.mark.spec("RF-10")
 def test_readable_messages():
-    (v,) = check(order_request(qty="0.0601", price="1000"), ctx(), LIMITS)
-    assert v.message == (
+    (violation,) = check(order_request(qty="0.0601", price="1000"), ctx(), LIMITS)
+    assert violation.message == (
         "nocional 60.10000000 > 15 % del inventario total (400.00000000 USDT) = 60.00000000"
     )
-    (v,) = check(order_request(), ctx(inventory_value=None), LIMITS)
-    assert "inventario total" in v.message and "no se puede calcular" in v.message
+    (violation,) = check(order_request(), ctx(inventory_value=None), LIMITS)
+    assert "inventario total" in violation.message and "no se puede calcular" in violation.message
 
 
 def test_other_venue_request_is_programming_error():
@@ -238,7 +240,7 @@ class TestViolationOrderAndText:
         poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
         context = ctx(book_ts=NOW - 20_000, open_orders=(own("sell", "1050"),), balances=poco)
         got = check(order_request("buy", qty="0.10005", price="1100.001"), context, LIMITS)
-        assert [(v.code, v.message) for v in got] == [
+        assert [(violation.code, violation.message) for violation in got] == [
             ("stale_data", "book sin actualizar hace más de 15 s"),
             (
                 "order_size",
@@ -257,7 +259,7 @@ class TestViolationOrderAndText:
         market = replace(MARKET, min_qty=D("0.2"), min_notional=D("300"))
         context = ctx(market=market, open_orders=(own("buy", "950"),), balances=rico)
         got = check(order_request("sell", qty="0.15005", price="900.005"), context, LIMITS)
-        assert [(v.code, v.message) for v in got] == [
+        assert [(violation.code, violation.message) for violation in got] == [
             (
                 "order_size",
                 "nocional 135.04575025 > 15 % del inventario total (400.00000000 USDT)"
@@ -278,7 +280,7 @@ class TestViolationOrderAndText:
         rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
         context = ctx(best_ask=None, inventory_value=None, balances=rico)
         got = check(order_request("buy", qty="0.01"), context, LIMITS)
-        assert [(v.code, v.message) for v in got] == [
+        assert [(violation.code, violation.message) for violation in got] == [
             ("stale_data", "sin mid fiable (book vacío, incompleto o cruzado)"),
             ("order_size", "no se puede calcular el inventario total para el tope del 15 %"),
         ]

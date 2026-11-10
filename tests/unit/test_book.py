@@ -24,9 +24,9 @@ def delta(seq, bids=(), asks=(), ts=2_000) -> BookDelta:
 
 @pytest.fixture
 def book() -> L2Book:
-    b = L2Book("nk")
-    b.apply(snap())
-    return b
+    book_obj = L2Book("nk")
+    book_obj.apply(snap())
+    return book_obj
 
 
 @pytest.mark.spec("RF-02")
@@ -37,18 +37,22 @@ class TestSnapshot:
         assert book.ts == 1_000
 
     def test_empty_before_first_snapshot(self):
-        b = L2Book("nk")
-        assert not b.valid
-        assert b.best_bid is None and b.mid is None and b.top(5) == ((), ())
+        book_under_test = L2Book("nk")
+        assert not book_under_test.valid
+        assert (
+            book_under_test.best_bid is None
+            and book_under_test.mid is None
+            and book_under_test.top(5) == ((), ())
+        )
 
     def test_snapshot_replaces_everything(self, book):
         book.apply(snap(seq=50, bids=(price_level("900", "1"),), asks=(price_level("910", "1"),)))
         assert book.best_bid == D("900") and book.depth == (1, 1)
 
     def test_snapshot_ignores_zero_levels(self):
-        b = L2Book("nk")
-        b.apply(snap(bids=(price_level("999", "0"), price_level("998", "1"))))
-        assert b.best_bid == D("998")
+        book_under_test = L2Book("nk")
+        book_under_test.apply(snap(bids=(price_level("999", "0"), price_level("998", "1"))))
+        assert book_under_test.best_bid == D("998")
 
     def test_wrong_venue(self, book):
         with pytest.raises(ValueError):
@@ -64,7 +68,7 @@ class TestTopWithCumulative:
             BookRow(D("998"), D("2"), D("3"), False),
             BookRow(D("997"), D("3"), D("6"), False),
         )
-        assert [r.price for r in asks] == [D("1001"), D("1002")]
+        assert [level.price for level in asks] == [D("1001"), D("1002")]
         assert asks[-1].cumulative == D("2.0")
 
     def test_n_levels(self, book):
@@ -72,9 +76,11 @@ class TestTopWithCumulative:
         assert len(bids) == 2 and len(asks) == 2
 
     def test_amm_levels_marked(self):
-        b = L2Book("nk")
-        b.apply(snap(asks=(price_level("1001", "0.5"), price_level("1003", "4", amm=True))))
-        assert [r.amm for r in b.top(5)[1]] == [False, True]
+        book_under_test = L2Book("nk")
+        book_under_test.apply(
+            snap(asks=(price_level("1001", "0.5"), price_level("1003", "4", amm=True)))
+        )
+        assert [level.amm for level in book_under_test.top(5)[1]] == [False, True]
 
 
 @pytest.mark.spec("RF-02", "RNF-23")
@@ -86,10 +92,10 @@ class TestBestLevels:
         bids, asks = book.best_levels(2)
         top_bids, top_asks = book.top(2)
         assert [(price_level.price, price_level.qty, price_level.amm) for price_level in bids] == [
-            (r.price, r.qty, r.amm) for r in top_bids
+            (level.price, level.qty, level.amm) for level in top_bids
         ]
         assert [(price_level.price, price_level.qty, price_level.amm) for price_level in asks] == [
-            (r.price, r.qty, r.amm) for r in top_asks
+            (level.price, level.qty, level.amm) for level in top_asks
         ]
 
     def test_are_the_applied_levels_not_copies(self, book):
@@ -135,15 +141,15 @@ class TestDeltas:
         assert book.top(1)[0][0].qty == D("5")
 
     def test_no_seq_always_applies(self):
-        b = L2Book("nk")
-        b.apply(snap(seq=None))
-        assert b.apply(delta(None, asks=(price_level("1000.5", "1"),)))
-        assert b.best_ask == D("1000.5")
+        book_under_test = L2Book("nk")
+        book_under_test.apply(snap(seq=None))
+        assert book_under_test.apply(delta(None, asks=(price_level("1000.5", "1"),)))
+        assert book_under_test.best_ask == D("1000.5")
 
     def test_delta_before_snapshot(self):
-        b = L2Book("nk")
-        assert not b.apply(delta(1))
-        assert b.needs_snapshot
+        book_under_test = L2Book("nk")
+        assert not book_under_test.apply(delta(1))
+        assert book_under_test.needs_snapshot
 
     def test_crossed_book_has_no_mid(self, book):
         book.apply(delta(11, bids=(price_level("1001.5", "1"),)))
@@ -153,11 +159,13 @@ class TestDeltas:
 @pytest.mark.spec("RNF-16")
 class TestArrivalTime:
     def test_snapshot_and_delta_keep_local_time(self):
-        b = L2Book("nk")
-        b.apply(snap(ts=1_000), received_at=50_000)
-        assert (b.ts, b.received_at) == (1_000, 50_000)
-        b.apply(delta(11, bids=[price_level("999", "4")], ts=2_000), received_at=51_000)
-        assert (b.ts, b.received_at) == (2_000, 51_000)
+        book_under_test = L2Book("nk")
+        book_under_test.apply(snap(ts=1_000), received_at=50_000)
+        assert (book_under_test.ts, book_under_test.received_at) == (1_000, 50_000)
+        book_under_test.apply(
+            delta(11, bids=[price_level("999", "4")], ts=2_000), received_at=51_000
+        )
+        assert (book_under_test.ts, book_under_test.received_at) == (2_000, 51_000)
 
     def test_old_delta_does_not_move_it(self, book):
         book.apply(snap(seq=10), received_at=50_000)
@@ -165,6 +173,6 @@ class TestArrivalTime:
         assert book.received_at == 50_000
 
     def test_without_local_time_event_time_stays(self):
-        b = L2Book("nk")
-        b.apply(snap(ts=1_000))
-        assert b.received_at == 1_000
+        book_under_test = L2Book("nk")
+        book_under_test.apply(snap(ts=1_000))
+        assert book_under_test.received_at == 1_000

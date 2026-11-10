@@ -82,10 +82,10 @@ class TestLines:
 class Sample:
     """Test dataclass: default value, deque with `maxlen` and a non-init field."""
 
-    a: int
-    b: str = "x"
-    c: deque[int] = dataclasses.field(default_factory=lambda: deque(maxlen=2))
-    d: int = dataclasses.field(default=7, init=False)
+    number: int
+    label: str = "x"
+    history: deque[int] = dataclasses.field(default_factory=lambda: deque(maxlen=2))
+    computed: int = dataclasses.field(default=7, init=False)
 
 
 @pytest.mark.spec("RF-31", "RNF-07")
@@ -123,10 +123,10 @@ class TestEachType:
         assert type(decode(float, 1)) is float
 
     def test_dataclass_codec(self):
-        assert decode(Sample, {"a": 1}) == Sample(1)
-        got = decode(Sample, {"a": 1, "c": [1, 2, 3], "d": 9, "z": 0})
+        assert decode(Sample, {"number": 1}) == Sample(1)
+        got = decode(Sample, {"number": 1, "history": [1, 2, 3], "computed": 9, "z": 0})
         # keeps the field's maxlen; ignores extra keys and non-init fields
-        assert got.c == deque([2, 3]) and got.c.maxlen == 2 and got.d == 7
+        assert got.history == deque([2, 3]) and got.history.maxlen == 2 and got.computed == 7
 
     @pytest.mark.parametrize(
         ("target_type", "data", "error", "message"),
@@ -149,7 +149,7 @@ class TestEachType:
             (Decimal, 1, TypeError, "un Decimal llega como texto, no int"),
             (Decimal, "abc", ValueError, "Decimal inválido: 'abc'"),
             (Sample, [1], TypeError, "Sample llega como objeto"),
-            (Sample, {"a": "1"}, TypeError, "se esperaba int y llegó '1'"),
+            (Sample, {"number": "1"}, TypeError, "se esperaba int y llegó '1'"),
             (dict[str, int], [], TypeError, "se esperaba un objeto"),
             (list[int], {}, TypeError, "se esperaba una lista"),
             (int, True, TypeError, "se esperaba int y llegó True"),

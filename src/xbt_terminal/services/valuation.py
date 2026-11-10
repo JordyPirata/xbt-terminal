@@ -67,7 +67,7 @@ class ValueRecorder:
         """Write the `at` sample if there is one."""
         balances = {venue_id: state.balances for venue_id, state in self._account.state.items()}
         mids = {venue_id: self._hub.state[venue_id].book.mid for venue_id in balances}
-        s = sample(inventory(balances, mids), mids, at, self._every_ms)
-        if s is not None:
-            self._journal.write("value", data=sample_data(s))
-        return s
+        value_sample = sample(inventory(balances, mids), mids, at, self._every_ms)
+        if value_sample is not None:
+            self._journal.write("value", data=sample_data(value_sample))
+        return value_sample

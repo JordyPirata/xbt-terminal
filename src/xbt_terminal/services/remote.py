@@ -58,8 +58,8 @@ log = logging.getLogger(__name__)
 
 RETRY_S = 2.0
 REPLIES: dict[str, type] = {
-    c.__name__: c
-    for c in (
+    command_type.__name__: command_type
+    for command_type in (
         Pending, Rejected, Sent, Failed, Uncertain, PendingDouble, DoubleRejected, DoubleSent,
         CancelPlan, CancelRefused, CancelResult,
     )
@@ -265,9 +265,9 @@ class RemoteDeposits:
         # each row says so, like a venue failure
         except (DaemonGoneError, DaemonRefusedError) as error:
             return [
-                DepositRow(venue_id, a, None, str(error))
+                DepositRow(venue_id, asset, None, str(error))
                 for venue_id in self.venues
-                for a in ASSETS
+                for asset in ASSETS
             ]
         return list(decode(Rows, raw).rows)
 
@@ -287,8 +287,8 @@ class RemoteRebalance:
         try:
             _, raw, _ = await self._link.request("withdrawal_fees", {})
         except (DaemonGoneError, DaemonRefusedError) as error:
-            return {(venue_id, a): str(error) for venue_id in self.venues for a in ASSETS}
-        return {(r.venue, r.asset): r.fee for r in decode(Fees, raw).fees}
+            return {(venue_id, asset): str(error) for venue_id in self.venues for asset in ASSETS}
+        return {(row.venue, row.asset): row.fee for row in decode(Fees, raw).fees}
 
 
 class RemoteBot:
@@ -419,7 +419,7 @@ class RemoteOrders:
         except DaemonRefusedError as exception:
             error = f"el daemon no canceló: {exception}"
             return CancelResult(
-                {venue_id: len(o) for venue_id, o in plan.orders.items()},
+                {venue_id: len(venue_orders) for venue_id, venue_orders in plan.orders.items()},
                 {venue_id: error for venue_id in plan.orders},
             )
 

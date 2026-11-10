@@ -65,6 +65,8 @@ class TestSystemCopy:
         script.write_text("#!/bin/sh\ncat > /dev/null\nsleep 30 &\nexit 0\n")
         script.chmod(0o755)
         got = await system_copy(
-            ADDRESS, env={"DISPLAY": ":0"}, which=lambda n: str(script) if n == "xclip" else None
+            ADDRESS,
+            env={"DISPLAY": ":0"},
+            which=lambda name: str(script) if name == "xclip" else None,
         )
         assert got == "xclip"

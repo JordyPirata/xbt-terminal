@@ -102,8 +102,12 @@ class BotRig:
     async def __aenter__(self):
         for work in (self.hub.run(), self.account.run(), self.bot.run()):
             self.tasks.append(asyncio.create_task(work))
-        await self.until(lambda: all(s.ready for s in self.hub.state.values()))
-        await self.until(lambda: all(s.balances for s in self.account.state.values()))
+        await self.until(
+            lambda: all(market_state.ready for market_state in self.hub.state.values())
+        )
+        await self.until(
+            lambda: all(market_state.balances for market_state in self.account.state.values())
+        )
         return self
 
     async def __aexit__(self, *error):
@@ -130,19 +134,19 @@ class BotRig:
     def events(self, name=None):
         rows = [
             json.loads(line)
-            for f in sorted(self.logs.glob("journal-*.jsonl"))
-            for line in f.read_text().splitlines()
+            for file in sorted(self.logs.glob("journal-*.jsonl"))
+            for line in file.read_text().splitlines()
         ]
-        return [r for r in rows if name is None or r["event"] == name]
+        return [row for row in rows if name is None or row["event"] == name]
 
     async def open_orders(self):
-        return {venue_id: await v.open_orders() for venue_id, v in self.venues.items()}
+        return {venue_id: await venue.open_orders() for venue_id, venue in self.venues.items()}
 
 
 @pytest.fixture
 async def rig(tmp_path):
-    async with BotRig(tmp_path) as r:
-        yield r
+    async with BotRig(tmp_path) as bot_rig:
+        yield bot_rig
 
 
 @pytest.mark.spec("RF-19", "RF-20", "RF-23", "CA-08")
@@ -164,7 +168,7 @@ class TestFire:
         (fire,) = rig.events("bot_fire")
         assert fire["data"]["double"] == double.id and D(fire["data"]["qty"]) == 10
         assert fire["data"]["buy_venue"] == "nk" and fire["data"]["sell_venue"] == "nx"
-        states = [e["data"]["status"] for e in rig.events("bot_state")]
+        states = [entry["data"]["status"] for entry in rig.events("bot_state")]
         assert states == ["armed", "firing", "cooldown"]
         assert len(rig.events("order_sent")) == 2 and len(rig.events("cancel_sent")) == 2
 
@@ -233,7 +237,7 @@ class TestBlocks:
         await asyncio.sleep(0.1)
         assert rig.orders.doubles == {}
         assert rig.bot.last_skip.reason == "blocked" and "book viejo" in rig.bot.last_skip.detail
-        assert [r["venue"] for r in rig.events("book_resync")] == ["nk"]
+        assert [row["venue"] for row in rig.events("book_resync")] == ["nk"]
         rig.books()  # the new book arrives and the cross stays
         await rig.until(lambda: len(rig.orders.doubles) == 1)
 
@@ -335,7 +339,9 @@ class TestStop:
         await rig.until(lambda: rig.bot.state.status == "halted")
         assert rig.bot.state.reason.startswith("rejected")
         assert await rig.open_orders() == {"nk": [], "nx": []}  # the buy, cancelled
-        (halt,) = [e for e in rig.events("bot_state") if e["data"]["status"] == "halted"]
+        (halt,) = [
+            entry for entry in rig.events("bot_state") if entry["data"]["status"] == "halted"
+        ]
         assert "rechazada" in halt["data"]["reason"]
 
     async def test_unconnected_leg_says_not_sent(self, rig):
@@ -385,9 +391,9 @@ class TestStop:
         risk = replace(RISK, max_venue_exposure=D("0.0001"))
         async with BotRig(tmp_path, risk=risk, limits=replace(BOT, cooldown_s=2)) as rig:
             rig.bot.arm()
-            for n in range(1, 4):
+            for attempt in range(1, 4):
                 rig.books()
-                await rig.until(lambda n=n: len(rig.events("bot_fire")) == n)
+                await rig.until(lambda attempt=attempt: len(rig.events("bot_fire")) == attempt)
                 rig.clock.now += 2_000
             await rig.until(lambda: rig.bot.state.status == "halted")
             assert "3 disparos rechazados" in rig.bot.state.reason
@@ -658,7 +664,7 @@ class TestFirstLeg:
         rig, double = await self.fire(tmp_path, D("10"))
         try:
             await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
-            sent = [(e["venue"], D(e["data"]["qty"])) for e in rig.events("order_sent")]
+            sent = [(entry["venue"], D(entry["data"]["qty"])) for entry in rig.events("order_sent")]
             assert sent == [("nx", D("10")), ("nk", D("10"))]
             (fire,) = rig.events("bot_fire")
             assert fire["data"]["lead"] == "nx"
@@ -673,13 +679,13 @@ class TestFirstLeg:
         rig, double = await self.fire(tmp_path, D("4"))
         try:
             await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
-            d = rig.orders.doubles[double.id]
-            assert d.buy.req.qty == D("4")
-            assert d.sell.status == "cancelled" and d.sell.filled == D("4")
-            assert [e["venue"] for e in rig.events("order_sent")] == ["nx", "nk"]
+            double_state = rig.orders.doubles[double.id]
+            assert double_state.buy.req.qty == D("4")
+            assert double_state.sell.status == "cancelled" and double_state.sell.filled == D("4")
+            assert [entry["venue"] for entry in rig.events("order_sent")] == ["nx", "nk"]
             # Neoxa's cancel goes before NonKYC's leg
             assert rig.events("cancel_sent")[0]["venue"] == "nx"
-            await rig.venues["nk"].simulate_fill(d.buy.order_id, D("4"))
+            await rig.venues["nk"].simulate_fill(double_state.buy.order_id, D("4"))
             await rig.until(lambda: rig.bot.state.status == "cooldown")
         finally:
             await rig.__aexit__(None, None, None)
@@ -688,9 +694,13 @@ class TestFirstLeg:
         rig, double = await self.fire(tmp_path, D("0"))
         try:
             await rig.until(lambda: rig.bot.state.status == "cooldown")
-            d = rig.orders.doubles[double.id]
-            assert d.sell.status == "cancelled" and d.buy.status == "skipped" and d.done
-            assert [e["venue"] for e in rig.events("order_sent")] == ["nx"]
+            double_state = rig.orders.doubles[double.id]
+            assert (
+                double_state.sell.status == "cancelled"
+                and double_state.buy.status == "skipped"
+                and double_state.done
+            )
+            assert [entry["venue"] for entry in rig.events("order_sent")] == ["nx"]
             (miss,) = rig.events("bot_miss")
             assert miss["data"]["double"] == double.id and miss["data"]["venue"] == "nx"
             assert rig.events("hanging_leg") == []
@@ -725,11 +735,12 @@ class TestFirstLeg:
             await rig.until(lambda: rig.bot.state.status == "halted")
             (double,) = rig.orders.doubles.values()
             assert double.buy.status == "skipped" and double.buy.order_id is None
-            assert [e["venue"] for e in rig.events("order_sent")] == ["nx"]
+            assert [entry["venue"] for entry in rig.events("order_sent")] == ["nx"]
             assert rig.bot.state.reason.startswith("rejected")
 
     async def test_cancel_fails_because_already_filled(self, tmp_path):
         """As on 2026-10-27 17:23: "Cannot cancel order with status: filled"."""
+
         def setup(rig):
             nx = rig.venues["nx"]
 
@@ -742,8 +753,8 @@ class TestFirstLeg:
         rig, double = await self.fire(tmp_path, D("0"), setup=setup)
         try:
             await rig.until(lambda: rig.orders.doubles[double.id].buy.order_id)
-            d = rig.orders.doubles[double.id]
-            assert d.sell.status == "filled" and d.buy.req.qty == D("10")
+            double_state = rig.orders.doubles[double.id]
+            assert double_state.sell.status == "filled" and double_state.buy.req.qty == D("10")
             assert rig.events("bot_miss") == []
         finally:
             await rig.__aexit__(None, None, None)
@@ -752,9 +763,9 @@ class TestFirstLeg:
         rig, double = await self.fire(tmp_path, D("0.00005"))  # NonKYC lot: 0.0001
         try:
             await rig.until(lambda: rig.bot.state.status == "halted")
-            d = rig.orders.doubles[double.id]
-            assert d.buy.status == "skipped" and d.sell.filled == D("0.00005")
+            double_state = rig.orders.doubles[double.id]
+            assert double_state.buy.status == "skipped" and double_state.sell.filled == D("0.00005")
             assert rig.bot.state.reason.startswith("hanging_leg")
-            assert [e["venue"] for e in rig.events("order_sent")] == ["nx"]
+            assert [entry["venue"] for entry in rig.events("order_sent")] == ["nx"]
         finally:
             await rig.__aexit__(None, None, None)

@@ -13,63 +13,65 @@ from xbt_terminal.services.orders import OrderService, Pending, Rejected
 from .test_orders import LIMITS, NOW, Setup, buy, codes
 
 
-def live(s, skew_ms, *, limits=LIMITS):
+def live(setup, skew_ms, *, limits=LIMITS):
     """The OrderService of `s`, in live, with NonKYC's skew measured at `skew_ms`."""
-    s.hub._venues["nk"].clock_skew_ms = skew_ms
-    return OrderService(s.hub, {"nk": s.venue}, s.journal, limits, clock=lambda: NOW, live=True)
+    setup.hub._venues["nk"].clock_skew_ms = skew_ms
+    return OrderService(
+        setup.hub, {"nk": setup.venue}, setup.journal, limits, clock=lambda: NOW, live=True
+    )
 
 
 @pytest.mark.spec("RNF-16", "RF-10")
 class TestFreshnessWithLocalClock:
     @pytest.mark.parametrize("server", [NOW - 60_000, NOW + 60_000])
     def test_skewed_exchange_time_does_not_count(self, tmp_path, server):
-        s = Setup(tmp_path)
-        s.book("nk", "0.00720000", "0.00730000", ts=server, received=NOW)
-        assert s.hub.state["nk"].book.received_at == NOW
+        setup = Setup(tmp_path)
+        setup.book("nk", "0.00720000", "0.00730000", ts=server, received=NOW)
+        assert setup.hub.state["nk"].book.received_at == NOW
 
     @pytest.mark.parametrize("server", [NOW - 60_000, NOW + 60_000])
     async def test_freshly_received_book_counts(self, tmp_path, server):
-        s = Setup(tmp_path)
-        s.book("nk", "0.00720000", "0.00730000", ts=server, received=NOW - 1_000)
-        assert isinstance(await s.orders.prepare(buy()), Pending)
+        setup = Setup(tmp_path)
+        setup.book("nk", "0.00720000", "0.00730000", ts=server, received=NOW - 1_000)
+        assert isinstance(await setup.orders.prepare(buy()), Pending)
 
     async def test_book_received_long_ago_invalid_even_if_exchange_says_now(self, tmp_path):
-        s = Setup(tmp_path)
-        s.book("nk", "0.00720000", "0.00730000", ts=NOW, received=NOW - 20_000)
-        assert "stale_data" in codes(await s.orders.prepare(buy()))
+        setup = Setup(tmp_path)
+        setup.book("nk", "0.00720000", "0.00730000", ts=NOW, received=NOW - 20_000)
+        assert "stale_data" in codes(await setup.orders.prepare(buy()))
 
 
 @pytest.mark.spec("RNF-16")
 class TestSkewInLive:
     async def test_within_cap_trades(self, tmp_path):
-        s = Setup(tmp_path)
-        assert isinstance(await live(s, 4_000).prepare(buy()), Pending)
+        setup = Setup(tmp_path)
+        assert isinstance(await live(setup, 4_000).prepare(buy()), Pending)
 
     @pytest.mark.parametrize("skew", [6_000, -6_000])
     async def test_above_cap_rejected(self, tmp_path, skew):
-        s = Setup(tmp_path)
-        result = await live(s, skew).prepare(buy())
+        setup = Setup(tmp_path)
+        result = await live(setup, skew).prepare(buy())
         assert isinstance(result, Rejected) and "clock_skew" in result.codes
         assert "6 s" in result.message and "NTP" in result.message
 
     async def test_unmeasured_is_rejected(self, tmp_path):
         """When in doubt, do not send: without a Date header it is unknown."""
-        s = Setup(tmp_path)
-        result = await live(s, None).prepare(buy())
+        setup = Setup(tmp_path)
+        result = await live(setup, None).prepare(buy())
         assert "clock_skew" in codes(result) and "sin medir" in result.message
 
     async def test_cap_comes_from_config(self, tmp_path):
-        s = Setup(tmp_path)
-        orders = live(s, 8_000, limits=replace(LIMITS, max_clock_skew_s=10))
+        setup = Setup(tmp_path)
+        orders = live(setup, 8_000, limits=replace(LIMITS, max_clock_skew_s=10))
         assert isinstance(await orders.prepare(buy()), Pending)
 
     async def test_dry_run_does_not_reject(self, tmp_path):
-        s = Setup(tmp_path)
-        s.hub._venues["nk"].clock_skew_ms = 60_000
-        assert isinstance(await s.orders.prepare(buy()), Pending)
+        setup = Setup(tmp_path)
+        setup.hub._venues["nk"].clock_skew_ms = 60_000
+        assert isinstance(await setup.orders.prepare(buy()), Pending)
 
     def test_hub_gives_adapter_skew(self, tmp_path):
-        s = Setup(tmp_path)
-        assert s.hub.clock_skew_ms("nk") is None  # the fake venue does not measure it
-        s.hub._venues["nk"].clock_skew_ms = 1_500
-        assert s.hub.clock_skew_ms("nk") == 1_500
+        setup = Setup(tmp_path)
+        assert setup.hub.clock_skew_ms("nk") is None  # the fake venue does not measure it
+        setup.hub._venues["nk"].clock_skew_ms = 1_500
+        assert setup.hub.clock_skew_ms("nk") == 1_500

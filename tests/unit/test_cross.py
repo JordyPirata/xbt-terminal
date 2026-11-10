@@ -13,17 +13,17 @@ NK = Quote("nk", D("0.00727748"), D("0.00730299"), taker_fee=D("0.002"))
 NX = Quote("nx", D("0.00735714"), D("0.00742999"), taker_fee=D("0.002"))
 
 
-def no_fees(q: Quote) -> Quote:
-    return Quote(q.venue, q.best_bid, q.best_ask, taker_fee=D("0"))
+def no_fees(quote: Quote) -> Quote:
+    return Quote(quote.venue, quote.best_bid, quote.best_ask, taker_fee=D("0"))
 
 
 @pytest.mark.spec("RF-04")
 class TestPerVenue:
     def test_mid_and_spread(self):
-        s = venue_stats(NK)
-        assert s.mid == D("0.007290235")
-        assert s.spread == D("0.00002551")
-        assert s.spread_pct == D("0.00002551") / D("0.007290235") * 100
+        stats = venue_stats(NK)
+        assert stats.mid == D("0.007290235")
+        assert stats.spread == D("0.00002551")
+        assert stats.spread_pct == D("0.00002551") / D("0.007290235") * 100
 
     @pytest.mark.parametrize(
         "bid,ask",
@@ -41,27 +41,27 @@ class TestPerVenue:
 @pytest.mark.spec("RF-04")
 class TestBetweenVenues:
     def test_mid_difference(self):
-        v = cross(NK, NX)
-        assert v.mid_diff == D("0.00010333")  # mid_nx - mid_nk
-        assert v.mid_diff_pct == D("0.00010333") / D("0.007290235") * 100
+        view = cross(NK, NX)
+        assert view.mid_diff == D("0.00010333")  # mid_nx - mid_nk
+        assert view.mid_diff_pct == D("0.00010333") / D("0.007290235") * 100
 
     def test_buy_on_nk_sell_on_nx(self):
-        r = cross(NK, NX).route("nk", "nx")
-        assert r.gross == D("0.00005415")  # 0.00735714 - 0.00730299
+        route = cross(NK, NX).route("nk", "nx")
+        assert route.gross == D("0.00005415")  # 0.00735714 - 0.00730299
         # 0.00735714 × 0.998 - 0.00730299 × 1.002 = 0.00734242572 - 0.00731759598
-        assert r.net == D("0.00002482974")
-        assert r.gross_pct == D("0.00005415") / D("0.00730299") * 100
-        assert r.net_pct == D("0.00002482974") / D("0.00730299") * 100
+        assert route.net == D("0.00002482974")
+        assert route.gross_pct == D("0.00005415") / D("0.00730299") * 100
+        assert route.net_pct == D("0.00002482974") / D("0.00730299") * 100
 
     def test_other_direction_is_negative(self):
-        r = cross(NK, NX).route("nx", "nk")
-        assert r.gross == D("-0.00015251")  # 0.00727748 - 0.00742999
-        assert r.net < r.gross
+        route = cross(NK, NX).route("nx", "nk")
+        assert route.gross == D("-0.00015251")  # 0.00727748 - 0.00742999
+        assert route.net < route.gross
 
     def test_no_fees_net_equals_gross(self):
-        v = cross(no_fees(NK), no_fees(NX))
-        for r in v.routes:
-            assert r.net == r.gross and r.net_pct == r.gross_pct
+        view = cross(no_fees(NK), no_fees(NX))
+        for route in view.routes:
+            assert route.net == route.gross and route.net_pct == route.gross_pct
 
     def test_fees_of_each_venue_apart(self):
         solo_nx = cross(no_fees(NK), NX).route("nk", "nx")
@@ -69,10 +69,10 @@ class TestBetweenVenues:
 
     def test_side_missing(self):
         sin_ask_nk = Quote("nk", NK.best_bid, None, taker_fee=NK.taker_fee)
-        v = cross(sin_ask_nk, NX)
-        assert v.route("nk", "nx") is None  # no ask on nk, so it cannot buy there
-        assert v.route("nx", "nk") is not None  # selling on nk only needs its bid
-        assert v.stats["nk"] is None and v.mid_diff is None
+        view = cross(sin_ask_nk, NX)
+        assert view.route("nk", "nx") is None  # no ask on nk, so it cannot buy there
+        assert view.route("nx", "nk") is not None  # selling on nk only needs its bid
+        assert view.stats["nk"] is None and view.mid_diff is None
 
     def test_same_venue_is_error(self):
         with pytest.raises(ValueError):

@@ -22,8 +22,8 @@ class TestTarget:
         assert not TARGET.in_band(D("14.99")) and not TARGET.in_band(D("35.01"))
 
     def test_band_clipped_to_0_and_100(self):
-        t = InventoryTarget(D("5"), D("10"))
-        assert (t.low, t.high) == (D("0"), D("15"))
+        target = InventoryTarget(D("5"), D("10"))
+        assert (target.low, target.high) == (D("0"), D("15"))
 
     def test_worsens_only_if_outside_and_further(self):
         assert TARGET.worsens(D("25"), D("40"))  # leaves the band
@@ -53,10 +53,12 @@ class TestTarget:
 def totals(views, nk=("1", "50"), nx=("1", "1000"), mids=True):
     """Total BTC and BTCB2 and mid of each venue (NonKYC at ~26 % by default)."""
     out = dict(views)
-    for venue_id, (q, b) in (("nk", nk), ("nx", nx)):
-        v = out[venue_id]
-        mid = (v.bids[0].price + v.asks[0].price) / 2 if mids else None
-        out[venue_id] = replace(v, quote_total=D(q), base_total=D(b), mid=mid)
+    for venue_id, (quote_amount, base_amount) in (("nk", nk), ("nx", nx)):
+        venue_inventory = out[venue_id]
+        mid = (venue_inventory.bids[0].price + venue_inventory.asks[0].price) / 2 if mids else None
+        out[venue_id] = replace(
+            venue_inventory, quote_total=D(quote_amount), base_total=D(base_amount), mid=mid
+        )
     return out
 
 
