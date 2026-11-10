@@ -79,17 +79,17 @@ class Recorder:
         try:
             self._file.write(line)
             self._file.flush()
-        except OSError as exc:
+        except OSError as error:
             self._file = None  # the recording ends here; the market goes on
-            self._hub.faults.report("recording", exc, note="grabación parada")
+            self._hub.faults.report("recording", error, note="grabación parada")
 
     def close(self) -> None:
         file, self._file = self._file, None
         if file is not None:
             try:
                 file.close()
-            except OSError as exc:
-                self._hub.faults.report("recording", exc)
+            except OSError as error:
+                self._hub.faults.report("recording", error)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,8 +104,8 @@ def _row(path: Path, number: int, raw: bytes) -> Recorded:
         row = loads(raw)
         tp = KINDS[row["kind"]]
         return Recorded(int(row["t"]), row["venue"], decode(tp, row["data"]))
-    except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
-        raise RecordingError(f"{path}:{number}: línea mala: {exc!r}") from None
+    except (ValueError, KeyError, TypeError, ArithmeticError) as error:
+        raise RecordingError(f"{path}:{number}: línea mala: {error!r}") from None
 
 
 def read_recording(path: Path) -> Iterator[Recorded]:
@@ -121,8 +121,8 @@ def read_recording(path: Path) -> Iterator[Recorded]:
                 raise RecordingError(f"{path}: formato de grabación desconocido")
             for number, raw in enumerate(source, 2):
                 yield _row(path, number, raw)
-    except OSError as exc:
-        raise RecordingError(f"{path}: no se puede leer: {exc}") from None
+    except OSError as error:
+        raise RecordingError(f"{path}: no se puede leer: {error}") from None
 
 
 @dataclass(frozen=True, slots=True)

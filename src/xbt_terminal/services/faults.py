@@ -82,8 +82,8 @@ async def supervised(
         try:
             await work()
             return
-        except Exception as exc:  # CancelledError is not an Exception: it propagates
-            on_crash(exc)
+        except Exception as error:  # CancelledError is not an Exception: it propagates
+            on_crash(error)
         if loop.time() - started > max_s:
             delay = retry_s
         await asyncio.sleep(delay)

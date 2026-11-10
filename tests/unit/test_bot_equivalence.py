@@ -75,8 +75,8 @@ def _case(seed: int):
     gap = TICK * rnd.choice([-30000, -10000, -3000, -500, 0, 60, 900, 3000, 10000, 30000])
     views = {"nk": _view(rnd, "nk", base), "nx": _view(rnd, "nx", base + gap)}
     walk = {
-        vid: Decimal(rnd.choice(["0", "0", "0.1", "0.5", "0.8", "2"]))
-        for vid in ("nk", "nx")
+        venue_id: Decimal(rnd.choice(["0", "0", "0.1", "0.5", "0.8", "2"]))
+        for venue_id in ("nk", "nx")
         if rnd.random() < 0.7
     }
     limits = BotLimits(
@@ -118,12 +118,12 @@ def test_unsorted_book_same_decision():
         views, limits, target = _case(seed)
         rnd = random.Random(-seed)
         views = {
-            vid: replace(
+            venue_id: replace(
                 v,
                 asks=tuple(rnd.sample(v.asks, len(v.asks))),
                 bids=tuple(rnd.sample(v.bids, len(v.bids))),
             )
-            for vid, v in views.items()
+            for venue_id, v in views.items()
         }
         got = decide(views, state, limits, NOW, target)
         assert got == ref.decide(views, state, limits, NOW, target), f"semilla {seed}"

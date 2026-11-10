@@ -51,8 +51,8 @@ class TestFaults:
         faults = Faults(journal, clock=lambda: T0)
         try:
             raise RuntimeError(f"bug con la key {KEY} dentro")
-        except RuntimeError as exc:
-            fault = faults.report("market", exc, venue="nk")
+        except RuntimeError as error:
+            fault = faults.report("market", error, venue="nk")
         (line,) = lines(tmp_path)
         assert (line["event"], line["venue"]) == ("error", "nk")
         assert line["data"]["where"] == "market"

@@ -142,9 +142,9 @@ class TestClose:
         gate = asyncio.Event()
         real = s.venue.place_limit
 
-        async def slow(req):
+        async def slow(order_request):
             await gate.wait()
-            return await real(req)
+            return await real(order_request)
 
         s.venue.place_limit = slow
         engine = Engine(s.hub, mode="dry-run", orders=s.orders)
@@ -163,7 +163,7 @@ class TestClose:
     async def test_uncertain_error_in_flight_is_noted(self, tmp_path):
         s = Rig(tmp_path)
 
-        async def lost(req):
+        async def lost(order_request):
             await asyncio.sleep(0.01)
             raise UncertainError("NonKYC: sin respuesta (ReadTimeout)")
 

@@ -79,14 +79,14 @@ def holdings(
 ) -> dict[VenueId, Holding] | str:
     """Each venue's `Holding`, or why they cannot be computed."""
     out: dict[VenueId, Holding] = {}
-    for vid, bal in balances.items():
+    for venue_id, bal in balances.items():
         if bal is None:
-            return f"{vid}: sin saldos todavía"
-        price = mids.get(vid)
+            return f"{venue_id}: sin saldos todavía"
+        price = mids.get(venue_id)
         if price is None:
-            return f"{vid}: sin mid para valorar"
+            return f"{venue_id}: sin mid para valorar"
         btc, btcb2 = bal.get(QUOTE), bal.get(BASE)
-        out[vid] = Holding(
+        out[venue_id] = Holding(
             btc.total if btc else ZERO,
             btcb2.total if btcb2 else ZERO,
             btc.available if btc else ZERO,
@@ -106,7 +106,7 @@ def plan(
     value = sum((h.btc + h.btcb2 * h.price for h in holdings.values()), ZERO)
     base_value = sum((h.btcb2 * h.price for h in holdings.values()), ZERO)
     return Plan(
-        before={vid: h.pct for vid, h in holdings.items()},
+        before={venue_id: h.pct for venue_id, h in holdings.items()},
         total_pct=base_value / value * HUNDRED if value > 0 else None,
         transfers=(
             _base_transfer(va, ha, vb, hb, fees.get((va, BASE), "sin datos")),

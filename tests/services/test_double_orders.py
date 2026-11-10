@@ -30,8 +30,8 @@ class Setup:
         self.now = NOW
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         self.hub = MarketHub(feeds, clock=lambda: self.now)
-        for vid in feeds:
-            self.hub.state[vid].spec = spec(vid)
+        for venue_id in feeds:
+            self.hub.state[venue_id].spec = spec(venue_id)
         self.book("nk", "0.00720000", "0.00730000")
         self.book("nx", "0.00722000", "0.00732000")
         self.venues = {
@@ -117,14 +117,14 @@ class TestSend:
         s = Setup(tmp_path)
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
         assert isinstance(sent, DoubleSent)
-        st = sent.state
-        assert (st.buy.status, st.sell.status) == ("open", "open")
-        assert (st.buy.order_id, st.sell.order_id) == ("dry-nk-1", "dry-nx-1")
+        state = sent.state
+        assert (state.buy.status, state.sell.status) == ("open", "open")
+        assert (state.buy.order_id, state.sell.order_id) == ("dry-nk-1", "dry-nx-1")
         assert sorted(s.events()) == sorted(
             [("order_sent", "nk"), ("order_sent", "nx"), ("order_ack", "nk"), ("order_ack", "nx")]
         )
         assert {ln["data"]["double"] for ln in s.lines()} == {"d-000001"}
-        assert s.orders.doubles["d-000001"] == st
+        assert s.orders.doubles["d-000001"] == state
 
     async def test_confirm_revalidates_and_on_failure_neither_goes(self, tmp_path):
         s = Setup(tmp_path)
@@ -138,14 +138,14 @@ class TestSend:
     async def test_error_sending_a_leg(self, tmp_path):
         s = Setup(tmp_path)
 
-        async def boom(req):
+        async def boom(order_request):
             raise VenueError("Neoxa: HTTP 400: PRICE_OUT_OF_BAND")
 
         s.venues["nx"].place_limit = boom
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
-        st = sent.state
-        assert (st.buy.status, st.sell.status) == ("open", "rejected")
-        assert "PRICE_OUT_OF_BAND" in (st.sell.error or "")
+        state = sent.state
+        assert (state.buy.status, state.sell.status) == ("open", "rejected")
+        assert "PRICE_OUT_OF_BAND" in (state.sell.error or "")
         assert ("order_error", "nx") in s.events() and ("order_ack", "nk") in s.events()
 
     async def test_order_changes_update_the_leg(self, tmp_path):
@@ -155,8 +155,8 @@ class TestSend:
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
         await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.004"))
         await s.feed("nk")
-        st = s.orders.doubles["d-000001"]
-        assert (st.buy.status, st.buy.filled) == ("partial", D("0.004"))
+        state = s.orders.doubles["d-000001"]
+        assert (state.buy.status, state.buy.filled) == ("partial", D("0.004"))
         assert "d-000001" in seen
 
 
@@ -192,7 +192,7 @@ class TestHangingLeg:
     async def test_rejected_on_send_with_other_filled_is_immediate(self, tmp_path):
         s = Setup(tmp_path)
 
-        async def boom(req):
+        async def boom(order_request):
             raise VenueError("rechazada por el venue")
 
         s.venues["nx"].place_limit = boom
@@ -205,9 +205,9 @@ class TestHangingLeg:
     async def test_both_filled_is_not_hanging(self, tmp_path):
         s = Setup(tmp_path)
         sent = await s.orders.confirm_double(await s.orders.prepare_double(dbl()))
-        for venue, leg in (("nk", sent.state.buy), ("nx", sent.state.sell)):
+        for venue, order_leg in (("nk", sent.state.buy), ("nx", sent.state.sell)):
             s.orders.on_private_event(
-                venue, await s.venues[venue].simulate_fill(leg.order_id, D("0.01"))
+                venue, await s.venues[venue].simulate_fill(order_leg.order_id, D("0.01"))
             )
         s.now += 120_000
         assert s.orders.check_doubles() == [] and s.orders.doubles["d-000001"].done

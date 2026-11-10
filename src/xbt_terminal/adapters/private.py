@@ -175,8 +175,8 @@ async def fan_in(
             await work
         except asyncio.CancelledError:
             raise
-        except BaseException as exc:
-            queue.put_nowait(_Crash(exc))
+        except BaseException as error:
+            queue.put_nowait(_Crash(error))
 
     tasks = [asyncio.create_task(guarded(w(queue.put_nowait))) for w in workers]
     try:

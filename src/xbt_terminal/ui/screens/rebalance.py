@@ -105,7 +105,9 @@ class RebalanceScreen(ModalScreen[None]):
 
     @staticmethod
     def _state(p: Plan) -> str:
-        venues = " · ".join(f"{VENUE_NAME[v]} {fmt_share(pct)}" for v, pct in p.before.items())
+        venues = " · ".join(
+            f"{VENUE_NAME[v]} {fmt_share(percent)}" for v, percent in p.before.items()
+        )
         return f"{BASE_LABEL} por venue ahora: {venues} · total {fmt_share(p.total_pct)}"
 
     @staticmethod
@@ -115,7 +117,9 @@ class RebalanceScreen(ModalScreen[None]):
     @classmethod
     def _cells(cls, t: Transfer) -> tuple[str | Text, ...]:
         fee = "—" if t.fee is None else f"{t.fee:f}"
-        after = " · ".join(f"{VENUE_NAME[v]} {fmt_share(pct)}" for v, pct in t.after.items())
+        after = " · ".join(
+            f"{VENUE_NAME[v]} {fmt_share(percent)}" for v, percent in t.after.items()
+        )
         state = Text("viable", style="green") if t.viable else Text(f"⚠ {t.problem}", "yellow")
         return (
             cls._route(t), f"{t.amount:f}", fee, f"{t.debited:f}", f"{t.received:f}",

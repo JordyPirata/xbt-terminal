@@ -292,9 +292,9 @@ def test_daemon_with_data_directory(xdg, served, tmp_path, monkeypatch):
 def test_daemon_without_config_explains_what_to_do(xdg):
     conf, _ = xdg
     (conf / "config.toml").unlink()
-    with pytest.raises(SystemExit, match=str(conf / "config.toml")) as exc:
+    with pytest.raises(SystemExit, match=str(conf / "config.toml")) as error:
         main()
-    assert "config.example.toml" in str(exc.value)
+    assert "config.example.toml" in str(error.value)
 
 
 def test_daemon_with_invalid_config_does_not_start(xdg):

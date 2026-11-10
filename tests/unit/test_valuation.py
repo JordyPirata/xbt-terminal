@@ -84,7 +84,8 @@ class TestSample:
         plain = lambda v: v if isinstance(v, (int, dict)) else str(v)  # noqa: E731
         data = {k: plain(v) for k, v in sample_data(s).items()}
         data["venues"] = {
-            vid: {k: str(v) for k, v in item.items()} for vid, item in data["venues"].items()
+            venue_id: {k: str(v) for k, v in item.items()}
+            for venue_id, item in data["venues"].items()
         }
         got, bad = series([vrow(T0 + 1234, data)], None)
         assert (got, bad) == ((s,), 0)

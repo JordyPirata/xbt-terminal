@@ -129,8 +129,8 @@ async def market_garbage_is_venue_error(h: Harness) -> None:
         await h.venue.market()
     except VenueError:
         return
-    except Exception as exc:
-        raise AssertionError(f"un cambio de API debe ser VenueError, no {exc!r}") from exc
+    except Exception as error:
+        raise AssertionError(f"un cambio de API debe ser VenueError, no {error!r}") from error
     raise AssertionError("aceptó un mercado ilegible")
 
 
@@ -140,10 +140,15 @@ async def book_is_ordered(h: Harness) -> None:
     assert isinstance(book, BookSnapshot)
     assert book.venue == h.venue.id
     assert book.bids and book.asks
-    bids, asks = [lv.price for lv in book.bids], [lv.price for lv in book.asks]
+    bids, asks = (
+        [price_level.price for price_level in book.bids],
+        [price_level.price for price_level in book.asks],
+    )
     assert bids == sorted(set(bids), reverse=True), "bids: de mejor a peor, sin repetir"
     assert asks == sorted(set(asks)), "asks: de mejor a peor, sin repetir"
-    assert all(lv.price > 0 and lv.qty > 0 for lv in (*book.bids, *book.asks))
+    assert all(
+        price_level.price > 0 and price_level.qty > 0 for price_level in (*book.bids, *book.asks)
+    )
     assert bids[0] < asks[0], "book cruzado"
     assert book.ts >= EPOCH_MS_2020
 
@@ -312,19 +317,19 @@ async def open_orders_are_live(h: Harness) -> None:
 
 @check
 async def place_limit_echoes_the_request(h: Harness) -> None:
-    req = h.order
-    order = await h.venue.place_limit(req)
+    order_request = h.order
+    order = await h.venue.place_limit(order_request)
     assert isinstance(order, Order)
     assert order.order_id
-    assert (order.venue, order.side) == (req.venue, req.side)
-    assert (order.price, order.qty) == (req.price, req.qty)
-    assert order.client_id == req.client_id, "la orden devuelta pierde su client_id"
+    assert (order.venue, order.side) == (order_request.venue, order_request.side)
+    assert (order.price, order.qty) == (order_request.price, order_request.qty)
+    assert order.client_id == order_request.client_id, "la orden devuelta pierde su client_id"
 
 
 @check
 async def place_limit_sends_exact_numbers(h: Harness) -> None:
-    req = replace(h.order, price=D("0.00725001"), qty=D("0.12345678"))
-    await h.venue.place_limit(req)
+    order_request = replace(h.order, price=D("0.00725001"), qty=D("0.12345678"))
+    await h.venue.place_limit(order_request)
     text = h.sent_text()
     assert "0.00725001" in text and "0.12345678" in text, text
 
@@ -335,8 +340,8 @@ async def refused_send_is_not_uncertain(h: Harness) -> None:
         h.send_outcome(outcome)
         try:
             await h.venue.place_limit(h.order)
-        except UncertainError as exc:
-            raise AssertionError(f"{outcome}: la orden no existe, no es incierta") from exc
+        except UncertainError as error:
+            raise AssertionError(f"{outcome}: la orden no existe, no es incierta") from error
         except (VenueError, httpx.HTTPError):
             continue
         raise AssertionError(f"{outcome}: no lanzó error")
@@ -350,8 +355,8 @@ async def unclear_send_is_uncertain(h: Harness) -> None:
             await h.venue.place_limit(h.order)
         except UncertainError:
             continue
-        except Exception as exc:
-            raise AssertionError(f"{outcome}: debe ser UncertainError, no {exc!r}") from exc
+        except Exception as error:
+            raise AssertionError(f"{outcome}: debe ser UncertainError, no {error!r}") from error
         raise AssertionError(f"{outcome}: no lanzó error")
 
 
@@ -444,8 +449,8 @@ async def secrets_stay_out(h: Harness) -> None:
     texts = [repr(vars(h.venue))]
     try:
         await h.venue.place_limit(h.order)
-    except VenueError as exc:
-        texts.append(repr(exc))
+    except VenueError as error:
+        texts.append(repr(error))
     for secret in h.secrets:
         assert not any(secret in text for text in texts), "un secreto en un texto"
 

@@ -91,9 +91,11 @@ class AccountService:
         self._listeners: list[Listener] = []
         self._event_listeners: list[EventListener] = []
         self._client_ids: dict[str, str] = {}  # order_id → client_id, finished ones too
-        self._refresh = {vid: asyncio.Event() for vid in self._venues}
+        self._refresh = {venue_id: asyncio.Event() for venue_id in self._venues}
         self._logged: dict[tuple[VenueId, str], str] = {}  # last error noted
-        self.state: dict[VenueId, VenueAccount] = {vid: VenueAccount(vid) for vid in self._venues}
+        self.state: dict[VenueId, VenueAccount] = {
+            venue_id: VenueAccount(venue_id) for venue_id in self._venues
+        }
         self._known: JournalIndex | None = None  # read at the first `PastFill` (D-68)
 
     def subscribe(self, listener: Listener) -> None:
@@ -108,64 +110,70 @@ class AccountService:
 
     async def run(self) -> None:
         loops: list[tuple[str, VenueId, Callable[[], Awaitable[None]]]] = []
-        for vid, v in self._venues.items():
-            loops.append(("private", vid, lambda vid=vid, v=v: self._stream(vid, v)))
-            loops.append(("balances", vid, lambda vid=vid, v=v: self._balances(vid, v)))
+        for venue_id, v in self._venues.items():
+            loops.append(
+                ("private", venue_id, lambda venue_id=venue_id, v=v: self._stream(venue_id, v))
+            )
+            loops.append(
+                ("balances", venue_id, lambda venue_id=venue_id, v=v: self._balances(venue_id, v))
+            )
         await asyncio.gather(
             *(
                 supervised(
                     work,
-                    lambda exc, where=where, vid=vid: self._crash(vid, where, exc),
+                    lambda error, where=where, venue_id=venue_id: self._crash(
+                        venue_id, where, error
+                    ),
                     retry_s=self._retry_s,
                 )
-                for where, vid, work in loops
+                for where, venue_id, work in loops
             )
         )
 
-    def _crash(self, vid: VenueId, where: str, exc: Exception) -> None:
-        self.state[vid].error = self.faults.report(where, exc, venue=vid).error
-        self._notify(vid, "conn")
+    def _crash(self, venue_id: VenueId, where: str, error: Exception) -> None:
+        self.state[venue_id].error = self.faults.report(where, error, venue=venue_id).error
+        self._notify(venue_id, "conn")
 
-    def apply(self, vid: VenueId, event: PrivateEvent) -> None:
-        st = self.state[vid]
+    def apply(self, venue_id: VenueId, event: PrivateEvent) -> None:
+        state = self.state[venue_id]
         for listener in self._event_listeners:
-            listener(vid, event)
+            listener(venue_id, event)
         if isinstance(event, ConnState):
-            st.conn, st.conn_at = event, self._clock()
-            self._notify(vid, "conn")
+            state.conn, state.conn_at = event, self._clock()
+            self._notify(venue_id, "conn")
         elif isinstance(event, Order):
-            self._logged.pop((vid, "private"), None)  # orders are arriving: the streak is over
+            self._logged.pop((venue_id, "private"), None)  # orders are arriving: the streak is over
             if event.client_id:
                 self._client_ids[event.order_id] = event.client_id
             if event.is_done:
-                st.orders.pop(event.order_id, None)
+                state.orders.pop(event.order_id, None)
             else:
-                st.orders[event.order_id] = event
-            self._refresh[vid].set()  # opening or cancelling moves balance to/from locked
-            self._notify(vid, "orders")
+                state.orders[event.order_id] = event
+            self._refresh[venue_id].set()  # opening or cancelling moves balance to/from locked
+            self._notify(venue_id, "orders")
         elif isinstance(event, Fill):
-            st.recent_fills.append(event)
+            state.recent_fills.append(event)
             self._journal_fill(event)
-            self._refresh[vid].set()
-            self._notify(vid, "fill")
+            self._refresh[venue_id].set()
+            self._notify(venue_id, "fill")
         elif isinstance(event, PastFill):
             self._catch_up(event.fill)
         elif isinstance(event, FeeUpdate):  # only the fee changes: neither balances nor legs
-            for i, f in enumerate(st.recent_fills):
+            for i, f in enumerate(state.recent_fills):
                 if f.trade_id == event.trade_id:
-                    st.recent_fills[i] = replace(f, fee=event.fee, fee_asset=event.fee_asset)
+                    state.recent_fills[i] = replace(f, fee=event.fee, fee_asset=event.fee_asset)
             self._journal_fee(event)
-            self._notify(vid, "fill")
+            self._notify(venue_id, "fill")
 
-    def _journal_error(self, vid: VenueId, where: str, error: str) -> None:
+    def _journal_error(self, venue_id: VenueId, where: str, error: str) -> None:
         """One `error` per streak (RF-11): the same failure every 3 s does not flood the
         journal or the diagnostic log (RNF-19)."""
-        if self._logged.get((vid, where)) == error:
+        if self._logged.get((venue_id, where)) == error:
             return
-        self._logged[(vid, where)] = error
-        log.warning("%s: %s: %s", vid, where, error)
+        self._logged[(venue_id, where)] = error
+        log.warning("%s: %s: %s", venue_id, where, error)
         if self._journal is not None:
-            self._journal.write("error", venue=vid, data={"where": where, "error": error})
+            self._journal.write("error", venue=venue_id, data={"where": where, "error": error})
 
     def _journal_fill(
         self, f: Fill, client_id: str | None = None, extra: dict[str, object] | None = None
@@ -241,45 +249,45 @@ class AccountService:
             if path.stem.removeprefix("journal-") >= first.strftime("%Y%m%d"):
                 try:
                     lines += path.read_text(encoding="utf-8").splitlines()
-                except OSError as exc:  # unable to read, nothing is recovered: it does not break
-                    log.warning("could not read %s to catch up: %s", path, exc)
+                except OSError as error:  # unable to read, nothing is recovered: it does not break
+                    log.warning("could not read %s to catch up: %s", path, error)
         return read_rows(lines)[0]
 
-    async def _stream(self, vid: VenueId, venue: Venue) -> None:
-        st = self.state[vid]
+    async def _stream(self, venue_id: VenueId, venue: Venue) -> None:
+        state = self.state[venue_id]
         while True:
             try:
                 async with aclosing(venue.private_stream()) as stream:
                     async for event in stream:
-                        self.apply(vid, event)
-            except ReadOnlyError as exc:
-                st.error = describe(exc)
-                self._notify(vid, "conn")
+                        self.apply(venue_id, event)
+            except ReadOnlyError as error:
+                state.error = describe(error)
+                self._notify(venue_id, "conn")
                 return
-            except (VenueError, httpx.HTTPError) as exc:
-                st.error = describe(exc)
-                self._journal_error(vid, "private", st.error)
-                self._notify(vid, "conn")
+            except (VenueError, httpx.HTTPError) as error:
+                state.error = describe(error)
+                self._journal_error(venue_id, "private", state.error)
+                self._notify(venue_id, "conn")
             await asyncio.sleep(self._retry_s)
 
-    async def _balances(self, vid: VenueId, venue: Venue) -> None:
-        st = self.state[vid]
-        refresh = self._refresh[vid]
+    async def _balances(self, venue_id: VenueId, venue: Venue) -> None:
+        state = self.state[venue_id]
+        refresh = self._refresh[venue_id]
         loop = asyncio.get_running_loop()
         while True:
             refresh.clear()
             started = loop.time()
             try:
-                st.balances = await venue.balances()
-                st.balances_at, st.error = self._clock(), None
-                self._logged.pop((vid, "balances"), None)
-            except ReadOnlyError as exc:
-                st.error = describe(exc)
+                state.balances = await venue.balances()
+                state.balances_at, state.error = self._clock(), None
+                self._logged.pop((venue_id, "balances"), None)
+            except ReadOnlyError as error:
+                state.error = describe(error)
                 return
-            except (VenueError, httpx.HTTPError) as exc:
-                st.error = describe(exc)
-                self._journal_error(vid, "balances", st.error)
-            self._notify(vid, "balances")
+            except (VenueError, httpx.HTTPError) as error:
+                state.error = describe(error)
+                self._journal_error(venue_id, "balances", state.error)
+            self._notify(venue_id, "balances")
             # each read starts `balances_every_s` after the previous one started, not after
             # it ended: otherwise the real interval passes 10 s (CA-01)
             wait = max(0.0, started + self._balances_every_s - loop.time())

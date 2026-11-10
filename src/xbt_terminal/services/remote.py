@@ -85,13 +85,13 @@ class Hello:
 async def _open(path: Path) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
     try:
         return await asyncio.open_unix_connection(str(path), limit=LIMIT)
-    except (FileNotFoundError, ConnectionRefusedError) as exc:
+    except (FileNotFoundError, ConnectionRefusedError) as error:
         raise DaemonGoneError(
             f"no hay daemon escuchando en {path}: arráncalo con `xbt daemon` "
             "(o indica su socket con --socket)"
-        ) from exc
-    except OSError as exc:  # e.g. a path over 107 bytes, or no permission
-        raise DaemonGoneError(f"no se puede abrir el socket {path}: {exc}") from exc
+        ) from error
+    except OSError as error:  # e.g. a path over 107 bytes, or no permission
+        raise DaemonGoneError(f"no se puede abrir el socket {path}: {error}") from error
 
 
 async def probe(path: Path, timeout: float = 5.0) -> Hello:
@@ -101,20 +101,20 @@ async def probe(path: Path, timeout: float = 5.0) -> Hello:
         async with asyncio.timeout(timeout):
             hello = loads(await reader.readline())
             state = loads(await reader.readline())
-    except (TimeoutError, ValueError) as exc:
-        raise DaemonGoneError(f"el daemon de {path} no contesta bien: {exc}") from exc
+    except (TimeoutError, ValueError) as error:
+        raise DaemonGoneError(f"el daemon de {path} no contesta bien: {error}") from error
     finally:
         writer.close()
     try:
         view = decode(ClientView | None, hello.get("view"))
-    except (TypeError, ValueError) as exc:
-        message = f"el daemon de {path} manda una config que no se entiende: {exc}"
-        raise DaemonGoneError(message) from exc
+    except (TypeError, ValueError) as error:
+        message = f"el daemon de {path} manda una config que no se entiende: {error}"
+        raise DaemonGoneError(message) from error
     return Hello(str(hello["mode"]), state.get("state", {}).get("bot") is not None, view)
 
 
-def _fresh(vid: VenueId) -> VenueMarket:
-    return VenueMarket(vid, L2Book(vid), {tf: CandleBuilder(tf) for tf in TIMEFRAMES})
+def _fresh(venue_id: VenueId) -> VenueMarket:
+    return VenueMarket(venue_id, L2Book(venue_id), {tf: CandleBuilder(tf) for tf in TIMEFRAMES})
 
 
 class RemoteMarket:
@@ -125,7 +125,7 @@ class RemoteMarket:
     def __init__(self, clock: Callable[[], int] = now_ms) -> None:
         self._clock = clock
         self.faults = Faults()  # empty: market faults are the daemon's
-        self.state: dict[VenueId, VenueMarket] = {vid: _fresh(vid) for vid in VENUES}
+        self.state: dict[VenueId, VenueMarket] = {venue_id: _fresh(venue_id) for venue_id in VENUES}
         self._listeners: list[Callable[[VenueId, str], None]] = []
 
     def subscribe(self, listener: Callable[[VenueId, str], None]) -> None:
@@ -142,16 +142,16 @@ class RemoteMarket:
     def clock(self) -> Callable[[], int]:
         return self._clock
 
-    def clock_skew_ms(self, vid: VenueId) -> int | None:
+    def clock_skew_ms(self, venue_id: VenueId) -> int | None:
         return None  # the daemon watches the skew (RNF-16)
 
     def roll(self, now: int | None = None) -> None:
         now = self._clock() if now is None else now
-        for vid, st in self.state.items():
-            if st.ready:
-                for builder in st.candles.values():
+        for venue_id, state in self.state.items():
+            if state.ready:
+                for builder in state.candles.values():
                     builder.roll(now)
-                self._notify(vid, "candles")
+                self._notify(venue_id, "candles")
 
     async def run(self) -> None:
         pass  # fed by `RemoteEngine`
@@ -161,39 +161,39 @@ class RemoteMarket:
 
     # -- from the socket ------------------------------------------------------------
 
-    def _init(self, vid: VenueId, view: MarketView) -> None:
-        st = _fresh(vid)
-        st.spec, st.ready, st.error = view.spec, view.ready, view.error
-        st.last_trade = view.last_trade
+    def _init(self, venue_id: VenueId, view: MarketView) -> None:
+        state = _fresh(venue_id)
+        state.spec, state.ready, state.error = view.spec, view.ready, view.error
+        state.last_trade = view.last_trade
         for tf, candles in view.candles.items():
-            st.candles[tf].load(candles)
+            state.candles[tf].load(candles)
         if view.book is not None:
-            st.book.apply(view.book, received_at=self._clock())
+            state.book.apply(view.book, received_at=self._clock())
         if view.conn is not None:
-            st.conn, st.conn_at = view.conn, self._clock()
-        self.state[vid] = st
+            state.conn, state.conn_at = view.conn, self._clock()
+        self.state[venue_id] = state
         for what in ("market", "candles", "book", "conn"):
-            self._notify(vid, what)
+            self._notify(venue_id, what)
 
-    def _book(self, vid: VenueId, book: BookSnapshot | None) -> None:
-        st = self.state[vid]
+    def _book(self, venue_id: VenueId, book: BookSnapshot | None) -> None:
+        state = self.state[venue_id]
         if book is None:
-            st.book = L2Book(vid)
+            state.book = L2Book(venue_id)
         else:
-            st.book.apply(book, received_at=self._clock())
-        self._notify(vid, "book")
+            state.book.apply(book, received_at=self._clock())
+        self._notify(venue_id, "book")
 
-    def _trade(self, vid: VenueId, trade: Trade) -> None:
-        st = self.state[vid]
-        st.last_trade = trade
-        for builder in st.candles.values():
+    def _trade(self, venue_id: VenueId, trade: Trade) -> None:
+        state = self.state[venue_id]
+        state.last_trade = trade
+        for builder in state.candles.values():
             builder.on_trade(trade)
-        self._notify(vid, "candles")
+        self._notify(venue_id, "candles")
 
-    def _conn(self, vid: VenueId, conn: ConnState) -> None:
-        st = self.state[vid]
-        st.conn, st.conn_at = conn, self._clock()
-        self._notify(vid, "conn")
+    def _conn(self, venue_id: VenueId, conn: ConnState) -> None:
+        state = self.state[venue_id]
+        state.conn, state.conn_at = conn, self._clock()
+        self._notify(venue_id, "conn")
 
 
 class RemoteAccount:
@@ -212,13 +212,13 @@ class RemoteAccount:
 
     def _update(self, accounts: dict[VenueId, VenueAccount]) -> None:
         self.state = accounts
-        for vid in accounts:
+        for venue_id in accounts:
             for what in ("conn", "balances", "orders"):
-                self._notify(vid, what)
+                self._notify(venue_id, what)
 
-    def _notify(self, vid: VenueId, what: str) -> None:
+    def _notify(self, venue_id: VenueId, what: str) -> None:
         for listener in self._listeners:
-            listener(vid, what)
+            listener(venue_id, what)
 
 
 EMPTY_REPORT = Report((), Summary(0, ZERO, None, None, None, 0, 0, 0, 0), ())
@@ -240,8 +240,8 @@ class RemoteResults:
         """Ask for the range's report; return the error, if any."""
         try:
             _, raw, _ = await self._link.request("results", {"range": rng})
-        except (DaemonGoneError, DaemonRefusedError) as exc:
-            self.error = str(exc)
+        except (DaemonGoneError, DaemonRefusedError) as error:
+            self.error = str(error)
             return self.error
         self._reports[rng] = decode(Report, raw)
         self.error = None
@@ -263,8 +263,12 @@ class RemoteDeposits:
         try:
             _, raw, _ = await self._link.request("deposits", {})
         # each row says so, like a venue failure
-        except (DaemonGoneError, DaemonRefusedError) as exc:
-            return [DepositRow(vid, a, None, str(exc)) for vid in self.venues for a in ASSETS]
+        except (DaemonGoneError, DaemonRefusedError) as error:
+            return [
+                DepositRow(venue_id, a, None, str(error))
+                for venue_id in self.venues
+                for a in ASSETS
+            ]
         return list(decode(Rows, raw).rows)
 
 
@@ -282,8 +286,8 @@ class RemoteRebalance:
     async def load(self) -> dict[tuple[VenueId, str], FeeInfo]:
         try:
             _, raw, _ = await self._link.request("withdrawal_fees", {})
-        except (DaemonGoneError, DaemonRefusedError) as exc:
-            return {(vid, a): str(exc) for vid in self.venues for a in ASSETS}
+        except (DaemonGoneError, DaemonRefusedError) as error:
+            return {(venue_id, a): str(error) for venue_id in self.venues for a in ASSETS}
         return {(r.venue, r.asset): r.fee for r in decode(Fees, raw).fees}
 
 
@@ -371,8 +375,8 @@ class RemoteOrders:
 
     # -- requests ------------------------------------------------------------------
 
-    async def _ask(self, cmd: str, args: dict[str, Any]) -> Any:
-        kind, raw, token = await self._link.request(cmd, args)
+    async def _ask(self, command: str, args: dict[str, Any]) -> Any:
+        kind, raw, token = await self._link.request(command, args)
         value = decode(REPLIES[kind], raw)
         if token is not None:
             self._tokens[id(value)] = (value, token)
@@ -384,29 +388,29 @@ class RemoteOrders:
             raise DaemonRefusedError("esa propuesta no salió de este cliente")
         return entry[1]
 
-    async def prepare(self, cmd: PlaceOrder) -> Pending | Rejected:
-        return await self._ask("prepare", {"order": cmd})  # type: ignore[no-any-return]
+    async def prepare(self, command: PlaceOrder) -> Pending | Rejected:
+        return await self._ask("prepare", {"order": command})  # type: ignore[no-any-return]
 
     async def confirm(self, pending: Pending) -> Sent | Failed | Uncertain | Rejected:
         try:
             return await self._ask("confirm", {"token": self._token(pending)})  # type: ignore[no-any-return]
-        except DaemonRefusedError as exc:
-            return Failed(pending.req, f"el daemon no la envió: {exc}", local=True)
+        except DaemonRefusedError as error:
+            return Failed(pending.req, f"el daemon no la envió: {error}", local=True)
 
-    async def prepare_double(self, cmd: DoubleOrder) -> PendingDouble | DoubleRejected:
-        return await self._ask("prepare_double", {"order": cmd})  # type: ignore[no-any-return]
+    async def prepare_double(self, command: DoubleOrder) -> PendingDouble | DoubleRejected:
+        return await self._ask("prepare_double", {"order": command})  # type: ignore[no-any-return]
 
     async def confirm_double(self, pending: PendingDouble) -> DoubleSent | DoubleRejected:
         try:
             return await self._ask("confirm_double", {"token": self._token(pending)})  # type: ignore[no-any-return]
-        except DaemonRefusedError as exc:
-            why = (Violation("daemon", f"el daemon no la envió: {exc}"),)
+        except DaemonRefusedError as error:
+            why = (Violation("daemon", f"el daemon no la envió: {error}"),)
             return DoubleRejected(pending.id, (Rejected(pending.buy.req, why),))
 
     async def plan_cancel(
-        self, cmd: CancelOrder | CancelVenue | CancelAll
+        self, command: CancelOrder | CancelVenue | CancelAll
     ) -> CancelPlan | CancelRefused:
-        args = {"kind": type(cmd).__name__, "value": cmd}
+        args = {"kind": type(command).__name__, "value": command}
         return await self._ask("plan_cancel", args)  # type: ignore[no-any-return]
 
     async def execute_cancel(self, plan: CancelPlan) -> CancelResult:
@@ -415,8 +419,8 @@ class RemoteOrders:
         except DaemonRefusedError as exc:
             error = f"el daemon no canceló: {exc}"
             return CancelResult(
-                {vid: len(o) for vid, o in plan.orders.items()},
-                {vid: error for vid in plan.orders},
+                {venue_id: len(o) for venue_id, o in plan.orders.items()},
+                {venue_id: error for venue_id in plan.orders},
             )
 
 
@@ -495,13 +499,13 @@ class RemoteEngine:
 
     # -- connection ------------------------------------------------------------------
 
-    def send(self, cmd: str) -> None:
+    def send(self, command: str) -> None:
         if self._writer is None or not self.connected:
-            self._say(f"sin conexión con el daemon: {cmd} no se mandó", error=True)
+            self._say(f"sin conexión con el daemon: {command} no se mandó", error=True)
             return
-        self._writer.write(dumps({"cmd": cmd}))
+        self._writer.write(dumps({"cmd": command}))
 
-    async def request(self, cmd: str, args: dict[str, Any]) -> tuple[str, Any, str | None]:
+    async def request(self, command: str, args: dict[str, Any]) -> tuple[str, Any, str | None]:
         """Send a request and wait for its reply: `(kind, undecoded value, token)`. Daemon
         error → `DaemonRefusedError`; no daemon → `DaemonGoneError`."""
         if self._writer is None or not self.connected:
@@ -512,7 +516,7 @@ class RemoteEngine:
         )
         self._waiting[rid] = future
         try:
-            self._writer.write(dumps({"id": rid, "cmd": cmd, "args": args}))
+            self._writer.write(dumps({"id": rid, "cmd": command, "args": args}))
             return await future
         finally:
             self._waiting.pop(rid, None)
@@ -561,8 +565,8 @@ class RemoteEngine:
             msg = loads(line)
             try:
                 self._handle(msg)
-            except (KeyError, TypeError, ValueError) as exc:  # an odd one does not cut the rest
-                log.warning("unintelligible daemon message (%s): %s", msg.get("type"), exc)
+            except (KeyError, TypeError, ValueError) as error:  # an odd one does not cut the rest
+                log.warning("unintelligible daemon message (%s): %s", msg.get("type"), error)
 
     def _handle(self, msg: dict[str, Any]) -> None:
         kind = msg.get("type")
@@ -608,15 +612,15 @@ class RemoteEngine:
     def _on_error(self, msg: dict[str, Any]) -> None:
         self._say(f"el daemon no aceptó la orden: {msg['error']}", error=True)
 
-    def _market(self, kind: str, vid: VenueId, msg: dict[str, Any]) -> None:
+    def _market(self, kind: str, venue_id: VenueId, msg: dict[str, Any]) -> None:
         if kind == "market_init":
-            self.market._init(vid, decode(MarketView, msg["market"]))
+            self.market._init(venue_id, decode(MarketView, msg["market"]))
         elif kind == "book":
-            self.market._book(vid, decode(BookSnapshot | None, msg["book"]))
+            self.market._book(venue_id, decode(BookSnapshot | None, msg["book"]))
         elif kind == "trade":
-            self.market._trade(vid, decode(Trade, msg["trade"]))
+            self.market._trade(venue_id, decode(Trade, msg["trade"]))
         else:
-            self.market._conn(vid, decode(ConnState, msg["conn"]))
+            self.market._conn(venue_id, decode(ConnState, msg["conn"]))
 
     def _set_link(self, up: bool) -> None:
         self.connected = up

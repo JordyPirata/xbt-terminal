@@ -184,18 +184,18 @@ class BotService:
         )
 
     def status_text(self) -> str:
-        st, now = self.state, self._clock()
-        spent = st.day_btc if st.day == now // DAY_MS else ZERO
-        parts = [f"bot {STATUS_LABEL[st.status]}"]
-        if st.reason:
-            parts.append(st.reason)
-        if self.last_skip is not None and st.status == "armed":
+        state, now = self.state, self._clock()
+        spent = state.day_btc if state.day == now // DAY_MS else ZERO
+        parts = [f"bot {STATUS_LABEL[state.status]}"]
+        if state.reason:
+            parts.append(state.reason)
+        if self.last_skip is not None and state.status == "armed":
             skip = self.last_skip
             parts.append(
                 f"sin disparar: {skip.reason}" + (f" ({skip.detail})" if skip.detail else "")
             )
-        parts += [self._token_status(vid, t) for vid, t in self._fee_tokens.items()]
-        hits = sum(1 for t in st.fired_at if t // DAY_MS == now // DAY_MS)
+        parts += [self._token_status(venue_id, t) for venue_id, t in self._fee_tokens.items()]
+        hits = sum(1 for t in state.fired_at if t // DAY_MS == now // DAY_MS)
         parts.append(f"disparos hoy {hits}, {spent:f} BTC de compra")
         return " · ".join(parts)
 
@@ -227,13 +227,13 @@ class BotService:
 
     # -- mid move (RF-19, D-71) -----------------------------------------
 
-    def _sample_mid(self, vid: VenueId) -> None:
-        st = self._hub.state.get(vid)
-        mid = st.book.mid if st is not None else None
+    def _sample_mid(self, venue_id: VenueId) -> None:
+        state = self._hub.state.get(venue_id)
+        mid = state.book.mid if state is not None else None
         if mid is None:
             return
         now = self._clock()
-        window = self._mids.setdefault(vid, deque())
+        window = self._mids.setdefault(venue_id, deque())
         window.append((now, mid))
         self._forget(window, now)
 
@@ -243,12 +243,12 @@ class BotService:
         while len(window) > 1 and now - window[1][0] > self._limits.move_window_ms:
             window.popleft()
 
-    def _move_pct(self, vid: VenueId, now: int) -> Decimal | None:
+    def _move_pct(self, venue_id: VenueId, now: int) -> Decimal | None:
         """Mid move in the window, with the current one: a quiet book gives 0."""
-        window = self._mids.setdefault(vid, deque())
+        window = self._mids.setdefault(venue_id, deque())
         self._forget(window, now)
         mids = [mid for _, mid in window]
-        if (current := self._hub.state[vid].book.mid) is not None:
+        if (current := self._hub.state[venue_id].book.mid) is not None:
             mids.append(current)
         return price_move_pct(mids)
 
@@ -263,9 +263,9 @@ class BotService:
             if self.state.status == "armed":
                 await self._evaluate()
 
-    def _crash(self, exc: Exception) -> None:
-        self.faults.report("bot", exc)
-        reason = f"bug: {type(exc).__name__}: {exc}"
+    def _crash(self, error: Exception) -> None:
+        self.faults.report("bot", error)
+        reason = f"bug: {type(error).__name__}: {error}"
         self._set(replace(self.state, status="halted", reason=reason))
         if self._firing is not None:  # whatever stayed open of the double (RF-21)
             task = asyncio.ensure_future(self._orders.cancel_double(self._firing))
@@ -292,91 +292,94 @@ class BotService:
                 self._set(capped(self.state, self._limits))
             return
         self.last_skip = None
-        await self._fire(result, {vid: v.move_pct for vid, v in views.items()})
+        await self._fire(result, {venue_id: v.move_pct for venue_id, v in views.items()})
 
     def _views(self, now: int) -> dict[VenueId, VenueView]:
         views: dict[VenueId, VenueView] = {}
-        for vid, st in self._hub.state.items():
-            if st.spec is None:
+        for venue_id, state in self._hub.state.items():
+            if state.spec is None:
                 continue
-            bids, asks = st.book.best_levels(BOOK_LEVELS)
+            bids, asks = state.book.best_levels(BOOK_LEVELS)
             # the account state is read once per venue (D-70)
-            acct = self._account.state.get(vid) if self._account is not None else None
+            acct = self._account.state.get(venue_id) if self._account is not None else None
             balances = (acct.balances if acct is not None else None) or {}
-            quote, base = balances.get(st.spec.quote), balances.get(st.spec.base)
-            views[vid] = VenueView(
-                spec=st.spec,
+            quote, base = balances.get(state.spec.quote), balances.get(state.spec.base)
+            views[venue_id] = VenueView(
+                spec=state.spec,
                 bids=bids,
                 asks=asks,
                 quote_available=quote.available if quote is not None else ZERO,
                 base_available=base.available if base is not None else ZERO,
-                blocked=self._blocked(vid, now, acct),
+                blocked=self._blocked(venue_id, now, acct),
                 quote_total=quote.total if quote is not None else ZERO,
                 base_total=base.total if base is not None else ZERO,
-                mid=st.book.mid,
-                net_fee=self._net_fee(vid, st.spec.taker_fee, acct),
-                move_pct=self._move_pct(vid, now),
+                mid=state.book.mid,
+                net_fee=self._net_fee(venue_id, state.spec.taker_fee, acct),
+                move_pct=self._move_pct(venue_id, now),
             )
         return views
 
     # -- fee paid in token (RF-24, D-63) -----------------------------------------
 
-    def _acct(self, vid: VenueId) -> VenueAccount | None:
-        return self._account.state.get(vid) if self._account is not None else None
+    def _acct(self, venue_id: VenueId) -> VenueAccount | None:
+        return self._account.state.get(venue_id) if self._account is not None else None
 
     def _token_available(
-        self, vid: VenueId, asset: str, acct: VenueAccount | None = None
+        self, venue_id: VenueId, asset: str, acct: VenueAccount | None = None
     ) -> Decimal | None:
-        acct = acct if acct is not None else self._acct(vid)
+        acct = acct if acct is not None else self._acct(venue_id)
         if acct is None or acct.balances is None:
             return None
         bal = acct.balances.get(asset)
         return bal.available if bal is not None else ZERO
 
     def _net_fee(
-        self, vid: VenueId, taker: Decimal, acct: VenueAccount | None = None
+        self, venue_id: VenueId, taker: Decimal, acct: VenueAccount | None = None
     ) -> Decimal | None:
-        token = self._fee_tokens.get(vid)
+        token = self._fee_tokens.get(venue_id)
         if token is None:
             return None
-        return token_fee(taker, token, self._token_available(vid, token.asset, acct))
+        return token_fee(taker, token, self._token_available(venue_id, token.asset, acct))
 
     def _token_text(self) -> str:
         """Confirmation lines with each venue's token fee, or nothing."""
         return "".join(
-            f"{NAMES[vid]} fee taker -{t.discount_pct} % mientras haya {t.min_available} "
+            f"{NAMES[venue_id]} fee taker -{t.discount_pct} % mientras haya {t.min_available} "
             f"{t.asset} disponibles; si no, la completa\n"
-            for vid, t in self._fee_tokens.items()
+            for venue_id, t in self._fee_tokens.items()
         )
 
-    def _token_status(self, vid: VenueId, token: FeeToken) -> str:
-        available = self._token_available(vid, token.asset)
+    def _token_status(self, venue_id: VenueId, token: FeeToken) -> str:
+        available = self._token_available(venue_id, token.asset)
         if available is None:
-            return f"{NAMES[vid]} fee completa: sin saldo de {token.asset}"
+            return f"{NAMES[venue_id]} fee completa: sin saldo de {token.asset}"
         if available < token.min_available:
-            return f"{NAMES[vid]} fee completa: {available:f} {token.asset} < {token.min_available}"
-        return f"{NAMES[vid]} fee con {token.asset} (-{token.discount_pct} %)"
+            return (
+                f"{NAMES[venue_id]} fee completa: {available:f} {token.asset} "
+                f"< {token.min_available}"
+            )
+        return f"{NAMES[venue_id]} fee con {token.asset} (-{token.discount_pct} %)"
 
-    def _blocked(self, vid: VenueId, now: int, acct: VenueAccount | None) -> str | None:
-        st = self._hub.state[vid]
-        if not self._orders.can_trade(vid):
+    def _blocked(self, venue_id: VenueId, now: int, acct: VenueAccount | None) -> str | None:
+        state = self._hub.state[venue_id]
+        if not self._orders.can_trade(venue_id):
             return "sin keys"
-        if not st.book.valid:
+        if not state.book.valid:
             return "book sin datos"
-        fresh = self._orders.fresh_at(vid)
+        fresh = self._orders.fresh_at(venue_id)
         stale_ms = self._orders.limits.stale_after_s * 1000
         if fresh is None or now - fresh > stale_ms:
             return "book viejo"
-        if st.conn is None or st.conn.status != "up":
-            return f"mercado {st.conn.status if st.conn else 'sin conexión'}"
-        if st.error is not None:  # an error without text blocks too (D-51)
-            return f"error del mercado: {st.error or '?'}"
+        if state.conn is None or state.conn.status != "up":
+            return f"mercado {state.conn.status if state.conn else 'sin conexión'}"
+        if state.error is not None:  # an error without text blocks too (D-51)
+            return f"error del mercado: {state.error or '?'}"
         if acct is not None and acct.error is not None:
             return f"error de la cuenta: {acct.error or '?'}"
         if acct is None or acct.balances is None:
             return "sin saldos"
         if self._live:
-            skew, cap = self._hub.clock_skew_ms(vid), self._orders.limits.max_clock_skew_s
+            skew, cap = self._hub.clock_skew_ms(venue_id), self._orders.limits.max_clock_skew_s
             if skew is None or abs(skew) > cap * 1000:
                 return "reloj desfasado o sin medir"
         return None
@@ -386,10 +389,10 @@ class BotService:
     async def _fire(self, fire: Fire, move: Mapping[VenueId, Decimal | None]) -> None:
         now = self._clock()
         self._set(fired(self.state, fire, now))
-        cmd = DoubleOrder(
+        command = DoubleOrder(
             fire.qty, fire.buy_venue, fire.buy_price, fire.sell_venue, fire.sell_price
         )
-        pending = await self._orders.prepare_double(cmd)
+        pending = await self._orders.prepare_double(command)
         double_id = pending.double_id if isinstance(pending, DoubleRejected) else pending.id
         self._record_fire(fire, double_id, now, move)
         if isinstance(pending, DoubleRejected):
@@ -430,7 +433,7 @@ class BotService:
             self._orders.skip_held(double_id)  # uncertain, rejected or unclosed
             return _verdict(self._orders.doubles[double_id], cancel_errors)
         legs = self._orders.doubles[double_id].legs
-        held = next(leg for leg in legs if leg.req.venue != lead)
+        held = next(order_leg for order_leg in legs if order_leg.req.venue != lead)
         if first.filled == 0:
             self._orders.skip_held(double_id)
             self._record(
@@ -450,7 +453,11 @@ class BotService:
         return await self._follow(double_id)
 
     def _first(self, double_id: str, lead: VenueId) -> Leg:
-        return next(leg for leg in self._orders.doubles[double_id].legs if leg.req.venue == lead)
+        return next(
+            order_leg
+            for order_leg in self._orders.doubles[double_id].legs
+            if order_leg.req.venue == lead
+        )
 
     async def _follow(self, double_id: str) -> str | None:
         """Wait, cancel the rest and say what failed (None if balanced)."""
@@ -458,14 +465,14 @@ class BotService:
         deadline = loop.time() + self._limits.fill_timeout_ms / 1000
         while loop.time() < deadline:
             d = self._orders.doubles[double_id]
-            if d.done or any(leg.status in ("rejected", "unknown") for leg in d.legs):
+            if d.done or any(order_leg.status in ("rejected", "unknown") for order_leg in d.legs):
                 break
             await asyncio.sleep(POLL_S)
         cancel = await self._orders.cancel_double(double_id)
         settle = loop.time() + self._settle_s
         while loop.time() < settle:
             d = self._orders.doubles[double_id]
-            if d.done or any(leg.status == "unknown" for leg in d.legs):
+            if d.done or any(order_leg.status == "unknown" for order_leg in d.legs):
                 break
             await asyncio.sleep(POLL_S)
         return _verdict(self._orders.doubles[double_id], cancel.errors)
@@ -507,8 +514,8 @@ class BotService:
     def _record(self, event: str, data: dict[str, object]) -> None:
         try:
             self._journal.write(event, data=data)
-        except OSError as exc:
-            self.faults.report("journal", exc, note=f"{event} sin escribir en el journal")
+        except OSError as error:
+            self.faults.report("journal", error, note=f"{event} sin escribir en el journal")
 
     def _restore(self) -> BotState:
         """Today's counters from the journal (`bot_fire` of the same mode): the bot starts
@@ -544,7 +551,11 @@ class BotService:
 
 def _walk_text(lim: BotLimits) -> str:
     """Confirmation line with the book walk (RF-20, D-60), or nothing."""
-    walk = [f"{NAMES[vid]} {pct} %" for vid, pct in lim.max_walk_pct.items() if pct > 0]
+    walk = [
+        f"{NAMES[venue_id]} {percent} %"
+        for venue_id, percent in lim.max_walk_pct.items()
+        if percent > 0
+    ]
     if not walk:
         return ""
     return f"recorre el book hasta {' · '.join(walk)} del mejor precio\n"
@@ -571,14 +582,14 @@ def _lead_text(lim: BotLimits) -> str:
 
 
 def _verdict(d: DoubleState, cancel_errors: dict[VenueId, str]) -> str | None:
-    for leg in d.legs:
-        if leg.status == "unknown":
-            return f"uncertain: {leg.label}: {leg.error}"
-    for leg in d.legs:
-        if leg.status == "rejected":
-            return f"rejected: {leg.label}: {leg.error or 'rechazada'}"
+    for order_leg in d.legs:
+        if order_leg.status == "unknown":
+            return f"uncertain: {order_leg.label}: {order_leg.error}"
+    for order_leg in d.legs:
+        if order_leg.status == "rejected":
+            return f"rejected: {order_leg.label}: {order_leg.error or 'rechazada'}"
     if not d.done:
-        open_legs = ", ".join(leg.label for leg in d.legs if not leg.done)
+        open_legs = ", ".join(order_leg.label for order_leg in d.legs if not order_leg.done)
         errors = "; ".join(f"{NAMES[v]}: {e}" for v, e in cancel_errors.items())
         return f"unsettled: {open_legs} sin cerrar" + (f" ({errors})" if errors else "")
     if d.buy.filled != d.sell.filled:

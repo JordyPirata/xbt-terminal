@@ -124,11 +124,14 @@ class TestBook:
         assert snap.bids[0] == Level(D("0.00721141"), D("0.0014"))
         assert snap.asks[0] == Level(D("0.00724756"), D("0.0014"))
         assert snap.bids[-1] == Level(D("0.00644898"), D("0.0162"))
-        assert not any(lv.amm for lv in snap.bids + snap.asks)
+        assert not any(price_level.amm for price_level in snap.bids + snap.asks)
 
     async def test_level_order(self, venue, api):
         snap = await venue.book_snapshot(20)
-        bids, asks = [lv.price for lv in snap.bids], [lv.price for lv in snap.asks]
+        bids, asks = (
+            [price_level.price for price_level in snap.bids],
+            [price_level.price for price_level in snap.asks],
+        )
         assert bids == sorted(bids, reverse=True)
         assert asks == sorted(asks)
 

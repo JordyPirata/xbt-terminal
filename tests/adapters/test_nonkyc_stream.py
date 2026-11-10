@@ -181,8 +181,14 @@ def expected_book() -> L2Book:
     book.apply(
         BookSnapshot(
             "nk",
-            tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in snap["bids"]),
-            tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in snap["asks"]),
+            tuple(
+                Level(D(price_level["price"]), D(price_level["quantity"]))
+                for price_level in snap["bids"]
+            ),
+            tuple(
+                Level(D(price_level["price"]), D(price_level["quantity"]))
+                for price_level in snap["asks"]
+            ),
             ts=0,
             seq=SEQ,
         )
@@ -191,8 +197,14 @@ def expected_book() -> L2Book:
         assert book.apply(
             BookDelta(
                 "nk",
-                tuple(Level(D(str(lv["price"])), D(str(lv["quantity"]))) for lv in p["bids"]),
-                tuple(Level(D(str(lv["price"])), D(str(lv["quantity"]))) for lv in p["asks"]),
+                tuple(
+                    Level(D(str(price_level["price"])), D(str(price_level["quantity"])))
+                    for price_level in p["bids"]
+                ),
+                tuple(
+                    Level(D(str(price_level["price"])), D(str(price_level["quantity"])))
+                    for price_level in p["asks"]
+                ),
                 ts=0,
                 seq=p["sequence"],
             )

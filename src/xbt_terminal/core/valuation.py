@@ -63,11 +63,11 @@ def sample(
     if inv.value is None:
         return None
     venues = []
-    for vid, item in sorted(inv.venues.items()):
-        mid = mids.get(vid)
+    for venue_id, item in sorted(inv.venues.items()):
+        mid = mids.get(venue_id)
         if item is None or item.value is None or mid is None:
             return None
-        venues.append(VenueValue(vid, item.btc, item.btcb2, mid, item.value))
+        venues.append(VenueValue(venue_id, item.btc, item.btcb2, mid, item.value))
     return ValueSample(ts, inv.value, every_ms, tuple(venues))
 
 
@@ -98,8 +98,8 @@ def _ms(stamp: str) -> int:
 def _parse(row: Mapping[str, Any]) -> ValueSample:
     data = row["data"]
     venues = tuple(
-        VenueValue(vid, _dec(v["btc"]), _dec(v["btcb2"]), _dec(v["mid"]), _dec(v["value"]))
-        for vid, v in sorted(data["venues"].items())
+        VenueValue(venue_id, _dec(v["btc"]), _dec(v["btcb2"]), _dec(v["mid"]), _dec(v["value"]))
+        for venue_id, v in sorted(data["venues"].items())
     )
     at = data.get("at")
     ts = at if isinstance(at, int) and not isinstance(at, bool) else _ms(row["ts"])

@@ -123,7 +123,7 @@ class Runner(Protocol):
     @property
     def fault_count(self) -> int: ...
 
-    def report_fault(self, where: str, exc: BaseException) -> Fault: ...
+    def report_fault(self, where: str, error: BaseException) -> Fault: ...
     def subscribe_faults(self, listener: Callable[[Fault], None]) -> None: ...
     def subscribe(self, listener: Callable[[Notice], None]) -> None: ...
     def services(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]: ...
@@ -338,14 +338,16 @@ class XbtApp(App[None]):
         if self.account is None:
             return
         views: dict[VenueId, AccountView | None] = {}
-        for vid in VENUES:
-            st = self.account.state.get(vid)
-            views[vid] = (
-                AccountView(st.balances, st.balances_at, st.error) if st is not None else None
+        for venue_id in VENUES:
+            state = self.account.state.get(venue_id)
+            views[venue_id] = (
+                AccountView(state.balances, state.balances_at, state.error)
+                if state is not None
+                else None
             )
         inv = inventory(
-            {vid: st.balances for vid, st in self.account.state.items()},
-            {vid: self.hub.state[vid].book.mid for vid in self.account.state},
+            {venue_id: state.balances for venue_id, state in self.account.state.items()},
+            {venue_id: self.hub.state[venue_id].book.mid for venue_id in self.account.state},
         )
         try:
             self.query_one(BalancesPanel).show(views, inv, self._clock())
@@ -356,10 +358,10 @@ class XbtApp(App[None]):
         if self.account is None:
             return []
         out: list[Order] = []
-        for vid in VENUES:
-            st = self.account.state.get(vid)
-            if st is not None:
-                out += sorted(st.orders.values(), key=lambda o: (o.ts, o.order_id))
+        for venue_id in VENUES:
+            state = self.account.state.get(venue_id)
+            if state is not None:
+                out += sorted(state.orders.values(), key=lambda o: (o.ts, o.order_id))
         return out
 
     def _flush_books(self) -> None:
@@ -372,11 +374,13 @@ class XbtApp(App[None]):
 
     def _draw_books(self) -> None:
         for venue in self._dirty_books:
-            st = self.hub.state[venue]
-            self.query_one(f"#book-{venue}", BookPanel).show(st.book, st.spec)
+            state = self.hub.state[venue]
+            self.query_one(f"#book-{venue}", BookPanel).show(state.book, state.spec)
         self._dirty_books.clear()
         notes = [
-            f"{VENUE_NAME[v]} con fee -{pct:f} %" for v, pct in self._fee_discounts.items() if pct
+            f"{VENUE_NAME[v]} con fee -{percent:f} %"
+            for v, percent in self._fee_discounts.items()
+            if percent
         ]
         self.query_one(CrossPanel).show(self._quote("nk"), self._quote("nx"), ", ".join(notes))
 
@@ -415,12 +419,12 @@ class XbtApp(App[None]):
 
     def _quote(self, venue: VenueId) -> Quote | None:
         """Best prices and taker fee of the venue; None without spec (no fee, no net)."""
-        st = self.hub.state[venue]
-        if st.spec is None:
+        state = self.hub.state[venue]
+        if state.spec is None:
             return None
         discount = self._fee_discounts.get(venue, Decimal(0))
-        taker = st.spec.taker_fee * (1 - discount / 100)
-        return Quote(venue, st.book.best_bid, st.book.best_ask, taker_fee=taker)
+        taker = state.spec.taker_fee * (1 - discount / 100)
+        return Quote(venue, state.book.best_bid, state.book.best_ask, taker_fee=taker)
 
     def _flush_charts(self) -> None:
         try:
@@ -500,11 +504,11 @@ class XbtApp(App[None]):
         self.notify(message, severity="error" if error else "information", timeout=8, markup=False)
 
     def action_command(self, prefix: str) -> None:
-        cmd = self.query_one(CommandLine)
-        if cmd.disabled:
+        command = self.query_one(CommandLine)
+        if command.disabled:
             return
-        cmd.value = prefix
-        cmd.place_cursor(len(prefix))
+        command.value = prefix
+        command.place_cursor(len(prefix))
 
     def action_release(self) -> None:
         self.set_focus(None)
@@ -653,14 +657,14 @@ class XbtApp(App[None]):
                 self.say(result.message, error=True)
                 return
             assert isinstance(result, DoubleSent)
-            st = result.state
-            self._shown_double = st.id
+            state = result.state
+            self._shown_double = state.id
             self._draw_legs()
-            legs = " · ".join(f"{leg.label}: {leg.status}" for leg in st.legs)
-            failed = any(leg.status in ("rejected", "unknown") for leg in st.legs)
-            if any(leg.status == "unknown" for leg in st.legs):
+            legs = " · ".join(f"{order_leg.label}: {order_leg.status}" for order_leg in state.legs)
+            failed = any(order_leg.status in ("rejected", "unknown") for order_leg in state.legs)
+            if any(order_leg.status == "unknown" for order_leg in state.legs):
                 self._draw_status()
-            self.say(f"orden doble {st.id} enviada: {legs}", error=failed)
+            self.say(f"orden doble {state.id} enviada: {legs}", error=failed)
 
         return callback
 
@@ -684,7 +688,7 @@ class XbtApp(App[None]):
         # with a daemon, the snapshot bringing it has not arrived: drawn on arrival
         if state is None:
             return
-        specs = {vid: self.hub.state[vid].spec for vid in VENUES}
+        specs = {venue_id: self.hub.state[venue_id].spec for venue_id in VENUES}
         try:
             self.query_one(LegsPanel).show(state, source.hanging.get(state.id), specs)
         except NoMatches:  # a notice may arrive while unmounting
@@ -776,10 +780,14 @@ class XbtApp(App[None]):
         if self.account is None:
             return "sin saldos: hace falta abrir la terminal con keys"
         balances = {
-            vid: st.balances if (st := self.account.state.get(vid)) is not None else None
-            for vid in VENUES
+            venue_id: (
+                state.balances if (state := self.account.state.get(venue_id)) is not None else None
+            )
+            for venue_id in VENUES
         }
-        return holdings(balances, {vid: self.hub.state[vid].book.mid for vid in VENUES})
+        return holdings(
+            balances, {venue_id: self.hub.state[venue_id].book.mid for venue_id in VENUES}
+        )
 
     async def copy_text(self, text: str) -> str | None:
         """OSC 52 always and, if present, the system tool, whose name it returns (D-52):
@@ -798,20 +806,20 @@ class XbtApp(App[None]):
         with text, just the price at the cursor."""
         price = f"{event.price:.{event.price_decimals}f}"
         self.run_worker(self.copy_text(price), group="copy")
-        cmd = self.query_one(CommandLine)
-        if cmd.disabled:
+        command = self.query_one(CommandLine)
+        if command.disabled:
             self.say(f"precio {price} copiado (solo lectura: sin órdenes)")
             return
-        if not cmd.value.strip():
+        if not command.value.strip():
             verb = "buy" if event.side == "ask" else "sell"
             qty = f"{event.qty:.{event.qty_decimals}f}"
-            cmd.value = f"{verb} {event.venue} {qty} {price}"
-            cmd.place_cursor(len(cmd.value))
+            command.value = f"{verb} {event.venue} {qty} {price}"
+            command.place_cursor(len(command.value))
             self.say(f"{verb} {qty} @ {price}: Enter para confirmar, o edítala")
             return
-        at = cmd.cursor_position
-        before, after = cmd.value[:at], cmd.value[at:]
+        at = command.cursor_position
+        before, after = command.value[:at], command.value[at:]
         sep = "" if not before or before.endswith(" ") else " "
-        cmd.value = before + sep + price + after
-        cmd.place_cursor(len(before + sep + price))
+        command.value = before + sep + price + after
+        command.place_cursor(len(before + sep + price))
         self.say(f"precio {price} en la orden")

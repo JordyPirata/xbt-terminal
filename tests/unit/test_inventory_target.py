@@ -53,10 +53,10 @@ class TestTarget:
 def totals(views, nk=("1", "50"), nx=("1", "1000"), mids=True):
     """Total BTC and BTCB2 and mid of each venue (NonKYC at ~26 % by default)."""
     out = dict(views)
-    for vid, (q, b) in (("nk", nk), ("nx", nx)):
-        v = out[vid]
+    for venue_id, (q, b) in (("nk", nk), ("nx", nx)):
+        v = out[venue_id]
         mid = (v.bids[0].price + v.asks[0].price) / 2 if mids else None
-        out[vid] = replace(v, quote_total=D(q), base_total=D(b), mid=mid)
+        out[venue_id] = replace(v, quote_total=D(q), base_total=D(b), mid=mid)
     return out
 
 

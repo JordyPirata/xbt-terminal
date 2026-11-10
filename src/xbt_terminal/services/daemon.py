@@ -77,7 +77,7 @@ async def run_daemon(
 def _open_orders_note(engine: Engine) -> None:
     if engine.mode != "live" or engine.account is None:
         return
-    n = sum(len(st.orders) for st in engine.account.state.values())
+    n = sum(len(state.orders) for state in engine.account.state.values())
     if n:
         what = "1 orden abierta" if n == 1 else f"{n} órdenes abiertas"
         text = f"daemon stopped con {what} en el exchange: siguen ahí (no se cancelan)"
@@ -90,5 +90,5 @@ def _record(engine: Engine, text: str) -> None:
         return
     try:
         engine.journal.write("notice", data={"text": text})
-    except (OSError, ValueError) as exc:  # disk full or journal closed: the log remains
-        log.error("notice not written to the journal: %s", exc)
+    except (OSError, ValueError) as error:  # disk full or journal closed: the log remains
+        log.error("notice not written to the journal: %s", error)

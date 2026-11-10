@@ -46,7 +46,7 @@ class Daemon:
         await until(lambda: self.remote.connected and self.remote.snapshot is not None)
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         self.task.cancel()
         await self.remote.aclose()
         await self.server.aclose()
@@ -101,7 +101,7 @@ class TestResultList:
     async def test_fill_reaches_client(self, tmp_path):
         async with Daemon(tmp_path) as d:
             seen = []
-            d.remote.account.subscribe(lambda vid, what: seen.append((vid, what)))
+            d.remote.account.subscribe(lambda venue_id, what: seen.append((venue_id, what)))
             d.engine.account = None  # the Rig has no account: notified by hand
             d.server._on_account("nk", "fill")
             await until(lambda: ("nk", "fill") in seen)

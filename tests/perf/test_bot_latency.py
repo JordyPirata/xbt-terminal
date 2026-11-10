@@ -105,9 +105,9 @@ async def test_from_cross_to_prepare_double(tmp_path):
         sent: list[float] = []
         real = rig.orders.prepare_double
 
-        async def timed(cmd):
+        async def timed(command):
             sent.append(time.perf_counter())
-            return await real(cmd)
+            return await real(command)
 
         rig.orders.prepare_double = timed
         rig.bot.arm()
@@ -122,8 +122,8 @@ async def test_from_cross_to_prepare_double(tmp_path):
                 "nx", side(D("0.00720000"), LEVELS, False), side(D("0.00730000"), LEVELS, True), now
             )
             t0 = time.perf_counter()
-            for vid, snap in (("nk", nk), ("nx", nx)):
-                rig.feeds[vid].push(ConnState(vid, "market", "ws", "up", 10.0, now), snap)
+            for venue_id, snap in (("nk", nk), ("nx", nx)):
+                rig.feeds[venue_id].push(ConnState(venue_id, "market", "ws", "up", 10.0, now), snap)
             await rig.until(lambda i=i: len(sent) > i, timeout=5)
             times.append((sent[i] - t0) * 1000)
             await rig.until(lambda: rig.bot.state.status == "cooldown", timeout=5)

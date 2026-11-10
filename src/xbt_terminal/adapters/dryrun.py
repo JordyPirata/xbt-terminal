@@ -121,12 +121,12 @@ class DryRunVenue:
         """All simulated ones, finished included (D-26)."""
         return list(self._orders.values())
 
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         spec = await self._market_spec()
-        if req.side == "buy":
-            asset, amount = spec.quote, req.notional * (1 + spec.taker_fee)
+        if order_request.side == "buy":
+            asset, amount = spec.quote, order_request.notional * (1 + spec.taker_fee)
         else:
-            asset, amount = spec.base, req.qty
+            asset, amount = spec.base, order_request.qty
         bal = (await self.balances(reuse=True)).get(asset) or Balance(asset, ZERO)
         if amount > bal.available:
             raise VenueError(
@@ -137,10 +137,10 @@ class DryRunVenue:
         order = Order(
             venue=self.id,
             order_id=f"dry-{self.id}-{next(self._ids)}",
-            client_id=req.client_id,
-            side=req.side,
-            price=req.price,
-            qty=req.qty,
+            client_id=order_request.client_id,
+            side=order_request.side,
+            price=order_request.price,
+            qty=order_request.qty,
             filled=ZERO,
             status="open",
             ts=self._clock(),

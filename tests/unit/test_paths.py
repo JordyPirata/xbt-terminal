@@ -75,9 +75,9 @@ def test_data_directory_0700(tmp_path):
 def test_second_instance_rejected(tmp_path):
     first = InstanceLock(tmp_path)
     first.acquire()
-    with pytest.raises(AlreadyRunningError, match=str(os.getpid())) as exc:
+    with pytest.raises(AlreadyRunningError, match=str(os.getpid())) as error:
         InstanceLock(tmp_path).acquire()
-    assert str(tmp_path) in str(exc.value)
+    assert str(tmp_path) in str(error.value)
     first.release()
     again = InstanceLock(tmp_path)
     again.acquire()  # once released, another can start

@@ -53,7 +53,7 @@ class TestMarketChannel:
         styles = [
             str(s.style) for s in rendered.spans if "caído" in rendered.plain[s.start : s.end]
         ]
-        assert any("red" in st for st in styles)
+        assert any("red" in state for state in styles)
 
     def test_no_state_yet(self):
         assert "conectando…" in part(text().plain, "Neoxa")

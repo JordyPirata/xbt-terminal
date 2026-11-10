@@ -111,7 +111,7 @@ class TestCatchUp:
     async def test_past_is_no_fill_for_anyone_else(self, tmp_path):
         async with Rig(tmp_path) as rig:
             seen = []
-            rig.account.subscribe_events(lambda vid, ev: seen.append(ev))
+            rig.account.subscribe_events(lambda venue_id, ev: seen.append(ev))
             await settled(rig)
             rig.venue.push(PastFill(trade()))
             await until(lambda: seen)

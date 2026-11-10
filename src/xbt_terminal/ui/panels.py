@@ -206,10 +206,10 @@ class BookPanel(Static):
         bid, ask, spread, mid = book.best_bid, book.best_ask, book.spread, book.mid
         if spread is None or mid is None:
             return Text("sin spread: falta un lado o el book está cruzado", style="yellow")
-        pct = spread / mid * HUNDRED
+        percent = spread / mid * HUNDRED
         return Text(
             f"bid {bid:.{pd}f} · ask {ask:.{pd}f} · spread {spread:.{pd}f} "
-            f"({sats(spread):.0f} sats · {pct:.2f} %)",
+            f"({sats(spread):.0f} sats · {percent:.2f} %)",
             style="bold",
         )
 
@@ -409,12 +409,12 @@ class AccountView:
     error: str | None
 
 
-def _ratio(pct: Decimal | None, target: InventoryTarget | None) -> Text:
+def _ratio(percent: Decimal | None, target: InventoryTarget | None) -> Text:
     """% of the value in BTCB2 (RF-27): green inside the band, yellow outside."""
-    if pct is None:
+    if percent is None:
         return Text(f"{BASE_LABEL} — %")
-    style = "" if target is None else "green" if target.in_band(pct) else "yellow"
-    return Text(f"{BASE_LABEL} {pct:.1f} %", style=style)
+    style = "" if target is None else "green" if target.in_band(percent) else "yellow"
+    return Text(f"{BASE_LABEL} {percent:.1f} %", style=style)
 
 
 def render_balances(
@@ -426,11 +426,11 @@ def render_balances(
     """(title, lines). One line per venue: available + in orders of each asset, its BTC
     value at the mid and the % in BTCB2; in the title, the total net inventory."""
     out = Text()
-    for i, vid in enumerate(("nk", "nx")):
+    for i, venue_id in enumerate(("nk", "nx")):
         if i:
             out.append("\n")
-        out.append(f" {VENUE_NAME[vid]:<7}", style="bold")
-        view = views.get(vid)
+        out.append(f" {VENUE_NAME[venue_id]:<7}", style="bold")
+        view = views.get(venue_id)
         if view is None:
             out.append("sin keys", style="dim")
             continue
@@ -440,7 +440,7 @@ def render_balances(
             # always 8 decimals: the balance may have more than the order lot
             out.append(f"BTC {_pair(view.balances.get('BTC'), 8)}")
             out.append(f" · {BASE_LABEL} {_pair(view.balances.get('BTCB2'), 8)}")
-            item = inv.venues.get(vid)
+            item = inv.venues.get(venue_id)
             value = item.value if item else None
             out.append(" · valor ")
             out.append(f"{value:.8f} BTC" if value is not None else "—")
@@ -500,22 +500,24 @@ LEG_SIDE = {"buy": "COMPRA", "sell": "VENTA"}
 VENUE_NAME: dict[VenueId, str] = {"nk": "NonKYC", "nx": "Neoxa"}
 
 
-def _leg_line(leg: Leg, spec: MarketSpec | None) -> Text:
-    req = leg.req
+def _leg_line(order_leg: Leg, spec: MarketSpec | None) -> Text:
+    order_request = order_leg.req
     qd = _decimals(spec.lot_size) if spec else None
     pd = _decimals(spec.tick_size) if spec else None
 
     def num(value: Decimal, d: int | None) -> str:
         return f"{value:.{d}f}" if d is not None else f"{value:f}"
 
-    label, color = LEG_STATUS[leg.status]
-    out = Text(f" {LEG_SIDE[req.side]:<6} {VENUE_NAME[req.venue]:<6} ", style="bold")
-    out.append(f"{num(req.qty, qd)} @ {num(req.price, pd)} · ")
+    label, color = LEG_STATUS[order_leg.status]
+    out = Text(
+        f" {LEG_SIDE[order_request.side]:<6} {VENUE_NAME[order_request.venue]:<6} ", style="bold"
+    )
+    out.append(f"{num(order_request.qty, qd)} @ {num(order_request.price, pd)} · ")
     out.append(label, style=color)
     # what filled (the amount asked is before the @); the order id is under `o` (D-67)
-    out.append(f" {num(leg.filled, qd)}")
-    if leg.error:
-        out.append(f" · {leg.error}", style="red")
+    out.append(f" {num(order_leg.filled, qd)}")
+    if order_leg.error:
+        out.append(f" · {order_leg.error}", style="red")
     return out
 
 
@@ -523,8 +525,8 @@ def render_legs(
     state: DoubleState, reason: str | None, specs: dict[VenueId, MarketSpec | None]
 ) -> Text:
     out = Text()
-    for leg in state.legs:
-        out.append_text(_leg_line(leg, specs.get(leg.req.venue)))
+    for order_leg in state.legs:
+        out.append_text(_leg_line(order_leg, specs.get(order_leg.req.venue)))
         out.append("\n")
     if reason:
         out.append(f" ⚠ PIERNA COLGADA: {reason}", style="bold white on red")
@@ -701,15 +703,15 @@ class ValueChart(PlotextPlot):
                 all_ys += ys
                 plt.plot(xs, ys, color="cyan", marker="braille")
                 continue
-            for i, vid in enumerate(v.venue for v in seg[0].venues):
-                base = bases.get(vid, ZERO)
+            for i, venue_id in enumerate(v.venue for v in seg[0].venues):
+                base = bases.get(venue_id, ZERO)
                 ys = [self._y(s.venues[i].value, base) for s in seg if len(s.venues) > i]
                 all_ys += ys
-                name = VENUE_NAME.get(vid, vid)
+                name = VENUE_NAME.get(venue_id, venue_id)
                 label = None if name in labelled else name
                 labelled.add(name)
                 plt.plot(
-                    xs[: len(ys)], ys, color=VENUE_COLOR.get(vid, "white"),
+                    xs[: len(ys)], ys, color=VENUE_COLOR.get(venue_id, "white"),
                     marker="braille", label=label,
                 )  # fmt: skip
         # axis fitted to the data; when flat, plotext would open it ±50 %

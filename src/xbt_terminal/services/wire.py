@@ -62,8 +62,8 @@ def dumps(message: dict[str, Any]) -> bytes:
 def loads(line: bytes) -> dict[str, Any]:
     try:
         message = json.loads(line)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"línea que no es JSON: {exc}") from None
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"línea que no es JSON: {error}") from None
     if not isinstance(message, dict):
         raise ValueError("un mensaje es un objeto JSON")
     return message
@@ -109,8 +109,8 @@ def _decode_union(tp: Any, data: Any) -> Any:
             continue
         try:
             return decode(arg, data)
-        except (TypeError, ValueError) as exc:
-            errors.append(str(exc))
+        except (TypeError, ValueError) as error:
+            errors.append(str(error))
     raise TypeError(f"{data!r} no encaja en {tp}: {'; '.join(errors)}")
 
 
@@ -247,7 +247,11 @@ def snapshot(engine: Engine) -> Snapshot:
         uncertain=[u.req for u in orders.uncertain.values()] if orders is not None else [],
         in_flight=orders.in_flight if orders is not None else 0,
         faults=engine.fault_count,
-        can_trade={vid: orders.can_trade(vid) for vid in VENUES} if orders is not None else {},
+        can_trade=(
+            {venue_id: orders.can_trade(venue_id) for venue_id in VENUES}
+            if orders is not None
+            else {}
+        ),
         deposit_venues=engine.deposits.venues if engine.deposits is not None else (),
         fee_venues=engine.rebalance.venues if engine.rebalance is not None else (),
         has_results=engine.results is not None,
@@ -268,15 +272,15 @@ class MarketView:
     error: str | None
 
 
-def market_view(st: VenueMarket, depth: int) -> MarketView:
+def market_view(state: VenueMarket, depth: int) -> MarketView:
     return MarketView(
-        spec=st.spec,
-        book=st.book.snapshot(depth),
-        candles={tf: builder.candles for tf, builder in st.candles.items()},
-        last_trade=st.last_trade,
-        conn=st.conn,
-        ready=st.ready,
-        error=st.error,
+        spec=state.spec,
+        book=state.book.snapshot(depth),
+        candles={tf: builder.candles for tf, builder in state.candles.items()},
+        last_trade=state.last_trade,
+        conn=state.conn,
+        ready=state.ready,
+        error=state.error,
     )
 
 

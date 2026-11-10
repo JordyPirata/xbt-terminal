@@ -38,7 +38,8 @@ class Rig:
         self.hub = MarketHub(self.feeds, history=50, retry_s=0.01, clock=lambda: self.now)
         bal = {"BTC": Balance("BTC", D("0.005")), "BTCB2": Balance("BTCB2", D("0.5"))}
         self.venues = {
-            vid: DryRunVenue(self.feeds[vid], bal, clock=lambda: self.now) for vid in ("nk", "nx")
+            venue_id: DryRunVenue(self.feeds[venue_id], bal, clock=lambda: self.now)
+            for venue_id in ("nk", "nx")
         }
         self.logs = tmp_path / "logs"
         journal = Journal(self.logs, "dry-run", Redactor([]))
@@ -58,12 +59,16 @@ class Rig:
         )
 
     def feed_books(self):
-        for vid, (bid, ask) in {
+        for venue_id, (bid, ask) in {
             "nk": ("0.00720000", "0.00730000"),
             "nx": ("0.00722000", "0.00732000"),
         }.items():
-            snap = BookSnapshot(vid, (Level(D(bid), D("1")),), (Level(D(ask), D("1")),), self.now)
-            self.feeds[vid].push(ConnState(vid, "market", "ws", "up", 100.0, self.now), snap)
+            snap = BookSnapshot(
+                venue_id, (Level(D(bid), D("1")),), (Level(D(ask), D("1")),), self.now
+            )
+            self.feeds[venue_id].push(
+                ConnState(venue_id, "market", "ws", "up", 100.0, self.now), snap
+            )
 
     def events(self):
         files = sorted(self.logs.glob("journal-*.jsonl"))
@@ -87,9 +92,9 @@ async def ready(rig, pilot):
 
 
 async def send_double(rig, pilot):
-    cmd = rig.app.query_one(CommandLine)
-    cmd.focus()
-    cmd.value = DBL
+    command = rig.app.query_one(CommandLine)
+    command.focus()
+    command.value = DBL
     await pilot.press("enter")
     await until(pilot, lambda: isinstance(rig.app.screen, ConfirmScreen))
 
@@ -124,9 +129,9 @@ class TestDoubleOrder:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            cmd = rig.app.query_one(CommandLine)
-            cmd.focus()
-            cmd.value = "dbl 0.6 nk 0.00725000 nx 0.00726000"  # > 25 % of the inventory
+            command = rig.app.query_one(CommandLine)
+            command.focus()
+            command.value = "dbl 0.6 nk 0.00725000 nx 0.00726000"  # > 25 % of the inventory
             await pilot.press("enter")
             await until(pilot, lambda: "no se envía ninguna pierna" in rig.app.last_message)
             assert not isinstance(rig.app.screen, ConfirmScreen)

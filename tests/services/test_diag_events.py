@@ -53,8 +53,8 @@ async def test_each_fault_with_traceback(caplog):
     caplog.set_level(logging.INFO, logger="xbt_terminal")
     try:
         raise KeyError("bug")
-    except KeyError as exc:
-        Faults().report("market", exc, venue="nx")
+    except KeyError as error:
+        Faults().report("market", error, venue="nx")
     (record,) = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert "fault in market (nx)" in record.getMessage() and record.exc_info is not None
 

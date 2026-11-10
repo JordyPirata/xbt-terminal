@@ -29,16 +29,16 @@ class TestRoundTrip:
         assert round_trip(Decimal, D("0.10")) == D("0.10")
 
     def test_bot_state(self):
-        st = BotState("halted", "pierna colgada", (1, 2), 20_000, D("0.0123"), 3, 2)
-        assert round_trip(BotState, st) == st
+        state = BotState("halted", "pierna colgada", (1, 2), 20_000, D("0.0123"), 3, 2)
+        assert round_trip(BotState, state) == state
 
     def test_double_with_legs(self):
         buy = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-1")
         sell = OrderRequest("nx", "sell", D("0.01"), D("0.00730"), "t-2")
-        st = DoubleState(
+        state = DoubleState(
             "d-1", Leg(buy, "filled", "o-1", D("0.01")), Leg(sell, "rejected", error="x"), 5, 7
         )
-        assert round_trip(DoubleState, st) == st
+        assert round_trip(DoubleState, state) == state
 
     def test_venue_account(self):
         conn = ConnState("nk", "private", "ws", "up", 12.5, 9)

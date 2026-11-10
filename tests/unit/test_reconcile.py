@@ -17,15 +17,17 @@ def order(oid="o-1", *, client_id=None, side="buy", qty="0.01", price="0.00725",
 @pytest.mark.spec("RNF-12")
 class TestByClientId:
     def test_only_same_client_id(self):
-        req = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-abc123")
+        order_request = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-abc123")
         mine = order("a", client_id="t-abc123", venue="nk", ts=SENT - 10 * WINDOW_MS)
         other = order("b", client_id=None, venue="nk")
-        assert candidates(req, [mine, other], SENT, frozenset(), by_client_id=True) == [mine]
+        assert candidates(order_request, [mine, other], SENT, frozenset(), by_client_id=True) == [
+            mine
+        ]
 
     def test_known_at_send_does_not_count(self):
-        req = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-abc123")
+        order_request = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-abc123")
         mine = order("a", client_id="t-abc123", venue="nk")
-        assert candidates(req, [mine], SENT, frozenset({"a"}), by_client_id=True) == []
+        assert candidates(order_request, [mine], SENT, frozenset({"a"}), by_client_id=True) == []
 
 
 @pytest.mark.spec("RNF-12")

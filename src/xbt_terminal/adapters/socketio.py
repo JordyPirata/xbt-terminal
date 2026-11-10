@@ -40,8 +40,8 @@ class Packet:
 def _json(text: str) -> Any:
     try:
         return json.loads(text, parse_float=Decimal)
-    except json.JSONDecodeError as exc:
-        raise ProtocolError(f"JSON inválido: {text[:80]!r}") from exc
+    except json.JSONDecodeError as error:
+        raise ProtocolError(f"JSON inválido: {text[:80]!r}") from error
 
 
 def decode(frame: str) -> Packet:

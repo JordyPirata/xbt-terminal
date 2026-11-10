@@ -79,7 +79,7 @@ class RestHarness(Harness):
         self.read_only = self.build(self.http)
         return self
 
-    async def __aexit__(self, *exc: object) -> None:
+    async def __aexit__(self, *error: object) -> None:
         await self.http.aclose()
         self.mock.stop()
 

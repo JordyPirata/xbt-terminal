@@ -33,11 +33,11 @@ class DaemonRig:
         await self.server.start()
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         await self.server.aclose()
 
     async def open_orders(self):
-        return {vid: await v.open_orders() for vid, v in self.s.venues.items()}
+        return {venue_id: await v.open_orders() for venue_id, v in self.s.venues.items()}
 
 
 def client_app(rig) -> XbtApp:

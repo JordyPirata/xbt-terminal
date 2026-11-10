@@ -410,19 +410,19 @@ class TestUncertainSend:
     not, VenueError or the connection error as is."""
 
     @pytest.mark.parametrize(
-        "exc", [httpx.ReadTimeout("t"), httpx.RemoteProtocolError("x"), httpx.ReadError("r")]
+        "error", [httpx.ReadTimeout("t"), httpx.RemoteProtocolError("x"), httpx.ReadError("r")]
     )
-    async def test_network_failure_after_connecting(self, venue, api, exc):
-        api.post(f"{REST_URL}/createorder").mock(side_effect=exc)
+    async def test_network_failure_after_connecting(self, venue, api, error):
+        api.post(f"{REST_URL}/createorder").mock(side_effect=error)
         with pytest.raises(UncertainError):
             await venue.place_limit(req())
 
     @pytest.mark.parametrize(
-        "exc", [httpx.ConnectError("c"), httpx.ConnectTimeout("c"), httpx.PoolTimeout("p")]
+        "error", [httpx.ConnectError("c"), httpx.ConnectTimeout("c"), httpx.PoolTimeout("p")]
     )
-    async def test_unconnected_is_not_uncertain(self, venue, api, exc):
-        api.post(f"{REST_URL}/createorder").mock(side_effect=exc)
-        with pytest.raises(type(exc)):
+    async def test_unconnected_is_not_uncertain(self, venue, api, error):
+        api.post(f"{REST_URL}/createorder").mock(side_effect=error)
+        with pytest.raises(type(error)):
             await venue.place_limit(req())
 
     async def test_5xx(self, venue, api):

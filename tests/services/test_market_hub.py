@@ -26,7 +26,7 @@ class Hub:
         self.task = asyncio.create_task(self.hub.run())
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         self.task.cancel()
         await asyncio.gather(self.task, return_exceptions=True)
 
@@ -42,8 +42,8 @@ class TestStartup:
         async with Hub() as h:
             await h.until(lambda: all(s.ready for s in h.hub.state.values()))
             for venue, feed in h.feeds.items():
-                st = h.hub.state[venue]
-                assert st.spec.venue == venue
+                state = h.hub.state[venue]
+                assert state.spec.venue == venue
                 assert feed.calls[:6] == [
                     "market",
                     "candles:1m:50",
@@ -52,7 +52,7 @@ class TestStartup:
                     "candles:4h:50",
                     "candles:1d:50",
                 ]
-                assert {tf: len(b.candles) for tf, b in st.candles.items()} == {
+                assert {tf: len(b.candles) for tf, b in state.candles.items()} == {
                     "1m": 5,
                     "5m": 5,
                     "1h": 5,
@@ -73,9 +73,9 @@ class TestStartup:
         feeds = {"nk": FakeFeed("nk", fail_market=10**6), "nx": FakeFeed("nx")}
         async with Hub(**feeds) as h:
             await h.until(lambda: h.hub.state["nk"].conn is not None)
-            st = h.hub.state["nk"]
-            assert (st.conn.source, st.conn.status) == ("rest", "down")
-            assert "sin red" in st.error and not st.ready
+            state = h.hub.state["nk"]
+            assert (state.conn.source, state.conn.status) == ("rest", "down")
+            assert "sin red" in state.error and not state.ready
 
 
 @pytest.mark.spec("RF-01", "RF-02")

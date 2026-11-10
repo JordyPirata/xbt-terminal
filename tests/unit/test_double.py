@@ -134,9 +134,9 @@ class TestHanging:
 
 
 def test_leg_is_immutable():
-    leg = Leg(OrderRequest("nk", "buy", D("1"), D("1"), "t"))
+    order_leg = Leg(OrderRequest("nk", "buy", D("1"), D("1"), "t"))
     with pytest.raises(AttributeError):
-        leg.status = "open"  # type: ignore[misc]
+        order_leg.status = "open"  # type: ignore[misc]
 
 
 @pytest.mark.spec("RF-07", "RF-20", "RF-21")

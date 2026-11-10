@@ -109,7 +109,7 @@ class Journal:
     def __enter__(self) -> Journal:
         return self
 
-    def __exit__(self, *exc: object) -> None:
+    def __exit__(self, *error: object) -> None:
         self.close()
 
     def _open_for(self, now: datetime) -> IO[str]:

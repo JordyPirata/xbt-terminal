@@ -49,7 +49,7 @@ def ctx(**kw) -> RiskContext:
     return RiskContext(**fields)
 
 
-def req(side="buy", qty="0.01", price="1000", venue="nk") -> OrderRequest:
+def order_request(side="buy", qty="0.01", price="1000", venue="nk") -> OrderRequest:
     return OrderRequest(venue=venue, side=side, qty=D(qty), price=D(price), client_id="t-1")
 
 
@@ -64,61 +64,62 @@ def codes(request, context=None, limits=LIMITS) -> list[str]:
 @pytest.mark.spec("RF-10", "CA-04")
 class TestEachRule:
     def test_valid_order_violates_nothing(self):
-        assert codes(req("buy")) == []
-        assert codes(req("sell")) == []
+        assert codes(order_request("buy")) == []
+        assert codes(order_request("sell")) == []
 
     def test_order_size(self):
         """15 % of 400 = 60: the exact limit is allowed."""
-        assert codes(req(qty="0.06", price="1000")) == []
+        assert codes(order_request(qty="0.06", price="1000")) == []
         assert codes(
-            req(qty="0.05", price="1200.01"), limits=replace(LIMITS, max_mid_deviation_pct=D("50"))
+            order_request(qty="0.05", price="1200.01"),
+            limits=replace(LIMITS, max_mid_deviation_pct=D("50")),
         ) == ["order_size"]
 
     def test_order_size_follows_inventory(self):
-        assert codes(req(qty="0.06", price="1000"), ctx(inventory_value=D("399.99"))) == [
+        assert codes(order_request(qty="0.06", price="1000"), ctx(inventory_value=D("399.99"))) == [
             "order_size"
         ]
-        assert codes(req(qty="0.06", price="1000"), ctx(inventory_value=D("800"))) == []
+        assert codes(order_request(qty="0.06", price="1000"), ctx(inventory_value=D("800"))) == []
 
     def test_without_computable_inventory_rejected(self):
         """Fail closed: without balances or a venue's mid there is no cap to apply."""
-        assert codes(req(), ctx(inventory_value=None)) == ["order_size"]
+        assert codes(order_request(), ctx(inventory_value=None)) == ["order_size"]
 
     def test_zero_inventory(self):
-        assert codes(req(), ctx(inventory_value=D("0"))) == ["order_size"]
+        assert codes(order_request(), ctx(inventory_value=D("0"))) == ["order_size"]
 
     def test_mid_deviation(self):
-        assert codes(req(price="950")) == []  # exactly 5 %: allowed
-        assert codes(req(price="949.99")) == ["mid_deviation"]
-        assert codes(req("sell", price="1050.01")) == ["mid_deviation"]
+        assert codes(order_request(price="950")) == []  # exactly 5 %: allowed
+        assert codes(order_request(price="949.99")) == ["mid_deviation"]
+        assert codes(order_request("sell", price="1050.01")) == ["mid_deviation"]
 
     def test_tick_setting(self):
-        assert codes(req(price="1000.005")) == ["tick"]
+        assert codes(order_request(price="1000.005")) == ["tick"]
 
     def test_lot(self):
-        assert codes(req(qty="0.01005")) == ["lot"]
+        assert codes(order_request(qty="0.01005")) == ["lot"]
 
     def test_min_qty(self):
         m = replace(MARKET, min_notional=D("0.5"))
-        assert codes(req(qty="0.0009"), ctx(market=m)) == ["min_qty"]
+        assert codes(order_request(qty="0.0009"), ctx(market=m)) == ["min_qty"]
 
     def test_min_notional(self):
         m = replace(MARKET, min_notional=D("20"))
-        assert codes(req(qty="0.01", price="1000"), ctx(market=m)) == ["min_notional"]
+        assert codes(order_request(qty="0.01", price="1000"), ctx(market=m)) == ["min_notional"]
 
     def test_insufficient_balance_buy_includes_fee(self):
         # 0.05 × 1000 = 50 USDT + 0.2 % fee = 50.1 > 50.05
         poco = {"USDT": Balance("USDT", D("50.05")), "BTCB2": Balance("BTCB2", D("0"))}
-        assert codes(req(qty="0.05"), ctx(balances=poco)) == ["insufficient_balance"]
+        assert codes(order_request(qty="0.05"), ctx(balances=poco)) == ["insufficient_balance"]
 
     def test_insufficient_balance_sell(self):
         assert codes(
-            req("sell", qty="0.05"),
+            order_request("sell", qty="0.05"),
             ctx(balances={"USDT": Balance("USDT", D("300")), "BTCB2": Balance("BTCB2", D("0.04"))}),
         ) == ["insufficient_balance"]
 
     def test_no_asset_balance_counts_zero(self):
-        assert codes(req("sell"), ctx(balances={"USDT": Balance("USDT", D("300"))})) == [
+        assert codes(order_request("sell"), ctx(balances={"USDT": Balance("USDT", D("300"))})) == [
             "insufficient_balance"
         ]
 
@@ -127,31 +128,34 @@ class TestEachRule:
             "USDT": Balance("USDT", D("5"), locked=D("295")),
             "BTCB2": Balance("BTCB2", D("0.1")),
         }
-        assert codes(req(qty="0.01"), ctx(balances=bal)) == ["insufficient_balance"]
+        assert codes(order_request(qty="0.01"), ctx(balances=bal)) == ["insufficient_balance"]
 
 
 @pytest.mark.spec("RF-10", "CA-04")
 class TestOwnOrderCross:
     def test_buy_reaching_my_ask(self):
-        assert codes(req("buy", price="1000"), ctx(open_orders=(own("sell", "1000"),))) == [
-            "self_cross"
-        ]
+        assert codes(
+            order_request("buy", price="1000"), ctx(open_orders=(own("sell", "1000"),))
+        ) == ["self_cross"]
 
     def test_buy_below_my_ask_does_not_cross(self):
-        assert codes(req("buy", price="999.99"), ctx(open_orders=(own("sell", "1000"),))) == []
+        assert (
+            codes(order_request("buy", price="999.99"), ctx(open_orders=(own("sell", "1000"),)))
+            == []
+        )
 
     def test_sell_reaching_my_bid(self):
-        assert codes(req("sell", price="1000"), ctx(open_orders=(own("buy", "1000.5"),))) == [
-            "self_cross"
-        ]
+        assert codes(
+            order_request("sell", price="1000"), ctx(open_orders=(own("buy", "1000.5"),))
+        ) == ["self_cross"]
 
     def test_compares_with_lowest_ask(self):
         mine = (own("sell", "1030"), own("sell", "1010"))
-        assert codes(req("buy", price="1015"), ctx(open_orders=mine)) == ["self_cross"]
+        assert codes(order_request("buy", price="1015"), ctx(open_orders=mine)) == ["self_cross"]
 
     def test_other_venue_or_finished_orders_do_not_count(self):
         mine = (own("sell", "1000", venue="nx"), own("sell", "990", status="filled"))
-        assert codes(req("buy", price="1000"), ctx(open_orders=mine)) == []
+        assert codes(order_request("buy", price="1000"), ctx(open_orders=mine)) == []
 
 
 @pytest.mark.spec("RF-10", "CA-04")
@@ -160,41 +164,45 @@ class TestVenueExposure:
 
     def test_already_above_cap(self):
         rico = {"USDT": Balance("USDT", D("450")), "BTCB2": Balance("BTCB2", D("0.06"))}
-        assert codes(req(), ctx(balances=rico)) == ["venue_exposure"]
+        assert codes(order_request(), ctx(balances=rico)) == ["venue_exposure"]
 
     def test_counts_what_is_locked_in_orders(self):
         bal = {
             "USDT": Balance("USDT", D("300"), locked=D("200")),
             "BTCB2": Balance("BTCB2", D("0.01")),
         }
-        assert codes(req(), ctx(balances=bal)) == ["venue_exposure"]
+        assert codes(order_request(), ctx(balances=bal)) == ["venue_exposure"]
 
     def test_evaluated_after_the_order(self):
         # before: 499 USDT; buying 0.05 at 950 (mid 1000) adds 0.05 × 50 = 2.5 → 501.5
         bal = {"USDT": Balance("USDT", D("399")), "BTCB2": Balance("BTCB2", D("0.1"))}
-        assert codes(req(qty="0.05", price="950"), ctx(balances=bal)) == ["venue_exposure"]
-        assert codes(req("sell", qty="0.05", price="950"), ctx(balances=bal)) == []
+        assert codes(order_request(qty="0.05", price="950"), ctx(balances=bal)) == [
+            "venue_exposure"
+        ]
+        assert codes(order_request("sell", qty="0.05", price="950"), ctx(balances=bal)) == []
 
 
 @pytest.mark.spec("RF-10", "CA-04")
 class TestStaleData:
     def test_no_mid(self):
-        assert "stale_data" in codes(req(), ctx(best_ask=None))
+        assert "stale_data" in codes(order_request(), ctx(best_ask=None))
 
     def test_stale_book(self):
-        assert codes(req(), ctx(book_ts=NOW - 15_001)) == ["stale_data"]
-        assert codes(req(), ctx(book_ts=NOW - 15_000)) == []
+        assert codes(order_request(), ctx(book_ts=NOW - 15_001)) == ["stale_data"]
+        assert codes(order_request(), ctx(book_ts=NOW - 15_000)) == []
 
     def test_without_book(self):
-        assert "stale_data" in codes(req(), ctx(best_bid=None, best_ask=None, book_ts=None))
+        assert "stale_data" in codes(
+            order_request(), ctx(best_bid=None, best_ask=None, book_ts=None)
+        )
 
     def test_crossed_book(self):
-        assert "stale_data" in codes(req(), ctx(best_bid=D("1002"), best_ask=D("1001")))
+        assert "stale_data" in codes(order_request(), ctx(best_bid=D("1002"), best_ask=D("1001")))
 
 
 @pytest.mark.spec("RF-10", "CA-04")
 def test_returns_all_violations():
-    r = req("buy", qty="0.10005", price="1100.001")
+    r = order_request("buy", qty="0.10005", price="1100.001")
     poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
     got = codes(r, ctx(open_orders=(own("sell", "1050"),), balances=poco))
     assert set(got) == {
@@ -209,17 +217,17 @@ def test_returns_all_violations():
 
 @pytest.mark.spec("RF-10")
 def test_readable_messages():
-    (v,) = check(req(qty="0.0601", price="1000"), ctx(), LIMITS)
+    (v,) = check(order_request(qty="0.0601", price="1000"), ctx(), LIMITS)
     assert v.message == (
         "nocional 60.10000000 > 15 % del inventario total (400.00000000 USDT) = 60.00000000"
     )
-    (v,) = check(req(), ctx(inventory_value=None), LIMITS)
+    (v,) = check(order_request(), ctx(inventory_value=None), LIMITS)
     assert "inventario total" in v.message and "no se puede calcular" in v.message
 
 
 def test_other_venue_request_is_programming_error():
     with pytest.raises(ValueError):
-        check(req(venue="nx"), ctx(), LIMITS)
+        check(order_request(venue="nx"), ctx(), LIMITS)
 
 
 @pytest.mark.spec("RF-10", "CA-04")
@@ -229,7 +237,7 @@ class TestViolationOrderAndText:
     def test_buy_with_almost_everything_wrong(self):
         poco = {"USDT": Balance("USDT", D("100")), "BTCB2": Balance("BTCB2", D("0.1"))}
         context = ctx(book_ts=NOW - 20_000, open_orders=(own("sell", "1050"),), balances=poco)
-        got = check(req("buy", qty="0.10005", price="1100.001"), context, LIMITS)
+        got = check(order_request("buy", qty="0.10005", price="1100.001"), context, LIMITS)
         assert [(v.code, v.message) for v in got] == [
             ("stale_data", "book sin actualizar hace más de 15 s"),
             (
@@ -248,7 +256,7 @@ class TestViolationOrderAndText:
         rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
         market = replace(MARKET, min_qty=D("0.2"), min_notional=D("300"))
         context = ctx(market=market, open_orders=(own("buy", "950"),), balances=rico)
-        got = check(req("sell", qty="0.15005", price="900.005"), context, LIMITS)
+        got = check(order_request("sell", qty="0.15005", price="900.005"), context, LIMITS)
         assert [(v.code, v.message) for v in got] == [
             (
                 "order_size",
@@ -269,7 +277,7 @@ class TestViolationOrderAndText:
         """Without a mid neither deviation nor exposure is looked at."""
         rico = {"USDT": Balance("USDT", D("600")), "BTCB2": Balance("BTCB2", D("0.1"))}
         context = ctx(best_ask=None, inventory_value=None, balances=rico)
-        got = check(req("buy", qty="0.01"), context, LIMITS)
+        got = check(order_request("buy", qty="0.01"), context, LIMITS)
         assert [(v.code, v.message) for v in got] == [
             ("stale_data", "sin mid fiable (book vacío, incompleto o cruzado)"),
             ("order_size", "no se puede calcular el inventario total para el tope del 15 %"),

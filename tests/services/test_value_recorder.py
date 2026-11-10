@@ -35,7 +35,10 @@ class Rig:
         )
         mids = {"nk": D("0.005"), "nx": D(nx_mid) if nx_mid else None}
         self.hub = SimpleNamespace(
-            state={vid: SimpleNamespace(book=SimpleNamespace(mid=m)) for vid, m in mids.items()}
+            state={
+                venue_id: SimpleNamespace(book=SimpleNamespace(mid=m))
+                for venue_id, m in mids.items()
+            }
         )
         self.dir = tmp_path
         self.journal = Journal(

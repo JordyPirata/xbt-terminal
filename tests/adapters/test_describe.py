@@ -17,10 +17,10 @@ class TestDescribe:
         )
 
     @pytest.mark.parametrize(
-        "exc", [httpx.ConnectTimeout(""), httpx.ReadTimeout(""), TimeoutError()]
+        "error", [httpx.ConnectTimeout(""), httpx.ReadTimeout(""), TimeoutError()]
     )
-    def test_no_text_is_the_type(self, exc):
-        assert describe(exc) == type(exc).__name__
+    def test_no_text_is_the_type(self, error):
+        assert describe(error) == type(error).__name__
 
     def test_only_spaces_counts_as_empty(self):
         assert describe(VenueError("  ")) == "VenueError"

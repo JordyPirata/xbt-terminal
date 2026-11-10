@@ -181,11 +181,11 @@ def _volatile(views: Mapping[VenueId, VenueView], limits: BotLimits) -> Skip | N
     cap = limits.max_move_pct
     if cap is None:
         return None
-    for vid in sorted(views):
-        move = views[vid].move_pct
+    for venue_id in sorted(views):
+        move = views[venue_id].move_pct
         if move is not None and move > cap:
             window = limits.move_window_ms / 1000
-            return Skip("volatile", f"{vid}: mid {move:.2f} % en {window:g} s > {cap} %")
+            return Skip("volatile", f"{venue_id}: mid {move:.2f} % en {window:g} s > {cap} %")
     return None
 
 
@@ -238,16 +238,24 @@ def _route(
     limits: BotLimits,
     budget: Decimal,
 ) -> Fire | _Miss:
-    for vid, v in ((buy, a), (sell, b)):
+    for venue_id, v in ((buy, a), (sell, b)):
         if v is not None and v.blocked:
-            return _Miss(Skip("blocked", f"{vid}: {v.blocked}"), None)
+            return _Miss(Skip("blocked", f"{venue_id}: {v.blocked}"), None)
     if a is None or b is None or not a.asks or not b.bids:
         return _Miss(Skip("no_quotes", f"{buy}→{sell}: falta el ask o el bid"), None)
 
     walk_a = limits.max_walk_pct.get(buy, ZERO) / HUNDRED
     walk_b = limits.max_walk_pct.get(sell, ZERO) / HUNDRED
-    refs_a = [lv.price for lv in a.asks if lv.price <= a.asks[0].price * (1 + walk_a)]
-    refs_b = [lv.price for lv in b.bids if lv.price >= b.bids[0].price * (1 - walk_b)]
+    refs_a = [
+        price_level.price
+        for price_level in a.asks
+        if price_level.price <= a.asks[0].price * (1 + walk_a)
+    ]
+    refs_b = [
+        price_level.price
+        for price_level in b.bids
+        if price_level.price >= b.bids[0].price * (1 - walk_b)
+    ]
     asks, bids = _Side(a.asks, up=True), _Side(b.bids, up=False)
     # the first one, at the best prices, alone: without a cross nothing else is prepared
     first = _Pairs(a, b, buy, sell, limits, budget, refs_a[:1], refs_b[:1], asks, bids).pair(0, 0)
@@ -274,12 +282,12 @@ class _Side:
 
     def __init__(self, levels: tuple[Level, ...], up: bool) -> None:
         self._levels, self._up = levels, up  # up: asks, low to high
-        prices = [lv.price for lv in levels]
+        prices = [price_level.price for price_level in levels]
         self.ordered = all((p <= q) if up else (p >= q) for p, q in pairwise(prices))
         self._keys = prices if up else [-p for p in prices]
         cum, acc = [ZERO], ZERO
-        for lv in levels:  # same summing order as before: same Decimal
-            acc += lv.qty
+        for price_level in levels:  # same summing order as before: same Decimal
+            acc += price_level.qty
             cum.append(acc)
         self._cum = cum
 
@@ -287,7 +295,9 @@ class _Side:
         """What there is up to `price`: asks at or below it, bids at or above it."""
         if not self.ordered:
             ok = (lambda p: p <= price) if self._up else (lambda p: p >= price)
-            return sum((lv.qty for lv in self._levels if ok(lv.price)), ZERO)
+            return sum(
+                (price_level.qty for price_level in self._levels if ok(price_level.price)), ZERO
+            )
         key = price if self._up else -price
         return self._cum[bisect_right(self._keys, key)]
 
@@ -453,7 +463,7 @@ def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarg
         (fire.buy_venue, a, qty, -qty * fire.buy_price * (1 + a.spec.taker_fee), fire.buy_price),
         (fire.sell_venue, b, -qty, qty * fire.sell_price * (1 - b.spec.taker_fee), fire.sell_price),
     )
-    for vid, v, d_base, d_quote, limit in legs:
+    for venue_id, v, d_base, d_quote, limit in legs:
         price = v.mid if v.mid is not None else limit
         before = base_pct(v.quote_total, v.base_total, price)
         after = base_pct(v.quote_total + d_quote, v.base_total + d_base, price)
@@ -461,7 +471,7 @@ def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarg
             continue  # venue with nothing to value
         if target.worsens(before, after):
             return (
-                f"{vid}: {BASE_LABEL} {before:.1f} % → {after:.1f} %, fuera de "
+                f"{venue_id}: {BASE_LABEL} {before:.1f} % → {after:.1f} %, fuera de "
                 f"{target.low}-{target.high} %"
             )
     return None

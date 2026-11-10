@@ -4,13 +4,17 @@ from xbt_terminal.core.book import BookRow, L2Book
 from xbt_terminal.core.models import BookDelta, BookSnapshot, D, Level
 
 
-def lv(price: str, qty: str, amm: bool = False) -> Level:
+def price_level(price: str, qty: str, amm: bool = False) -> Level:
     return Level(D(price), D(qty), amm)
 
 
 def snap(seq=10, ts=1_000, bids=None, asks=None) -> BookSnapshot:
-    bids = bids if bids is not None else (lv("999", "1"), lv("998", "2"), lv("997", "3"))
-    asks = asks if asks is not None else (lv("1001", "0.5"), lv("1002", "1.5"))
+    bids = (
+        bids
+        if bids is not None
+        else (price_level("999", "1"), price_level("998", "2"), price_level("997", "3"))
+    )
+    asks = asks if asks is not None else (price_level("1001", "0.5"), price_level("1002", "1.5"))
     return BookSnapshot("nk", tuple(bids), tuple(asks), ts, seq)
 
 
@@ -38,12 +42,12 @@ class TestSnapshot:
         assert b.best_bid is None and b.mid is None and b.top(5) == ((), ())
 
     def test_snapshot_replaces_everything(self, book):
-        book.apply(snap(seq=50, bids=(lv("900", "1"),), asks=(lv("910", "1"),)))
+        book.apply(snap(seq=50, bids=(price_level("900", "1"),), asks=(price_level("910", "1"),)))
         assert book.best_bid == D("900") and book.depth == (1, 1)
 
     def test_snapshot_ignores_zero_levels(self):
         b = L2Book("nk")
-        b.apply(snap(bids=(lv("999", "0"), lv("998", "1"))))
+        b.apply(snap(bids=(price_level("999", "0"), price_level("998", "1"))))
         assert b.best_bid == D("998")
 
     def test_wrong_venue(self, book):
@@ -69,7 +73,7 @@ class TestTopWithCumulative:
 
     def test_amm_levels_marked(self):
         b = L2Book("nk")
-        b.apply(snap(asks=(lv("1001", "0.5"), lv("1003", "4", amm=True))))
+        b.apply(snap(asks=(price_level("1001", "0.5"), price_level("1003", "4", amm=True))))
         assert [r.amm for r in b.top(5)[1]] == [False, True]
 
 
@@ -78,18 +82,18 @@ class TestBestLevels:
     """The book's own levels, without the cumulative: what the bot reads (T-92)."""
 
     def test_same_order_and_levels_as_top(self, book):
-        book.apply(delta(11, asks=[lv("1003", "4", amm=True)]))
+        book.apply(delta(11, asks=[price_level("1003", "4", amm=True)]))
         bids, asks = book.best_levels(2)
         top_bids, top_asks = book.top(2)
-        assert [(lv.price, lv.qty, lv.amm) for lv in bids] == [
+        assert [(price_level.price, price_level.qty, price_level.amm) for price_level in bids] == [
             (r.price, r.qty, r.amm) for r in top_bids
         ]
-        assert [(lv.price, lv.qty, lv.amm) for lv in asks] == [
+        assert [(price_level.price, price_level.qty, price_level.amm) for price_level in asks] == [
             (r.price, r.qty, r.amm) for r in top_asks
         ]
 
     def test_are_the_applied_levels_not_copies(self, book):
-        level = lv("1000.5", "7")
+        level = price_level("1000.5", "7")
         book.apply(delta(11, asks=[level]))
         assert book.best_levels(1)[1][0] is level
 
@@ -102,7 +106,11 @@ class TestBestLevels:
 class TestDeltas:
     def test_updates_adds_and_deletes(self, book):
         assert book.apply(
-            delta(11, bids=(lv("999", "5"), lv("999.5", "1")), asks=(lv("1001", "0"),))
+            delta(
+                11,
+                bids=(price_level("999", "5"), price_level("999.5", "1")),
+                asks=(price_level("1001", "0"),),
+            )
         )
         assert book.best_bid == D("999.5")
         assert book.best_ask == D("1002")
@@ -110,7 +118,7 @@ class TestDeltas:
         assert book.ts == 2_000 and book.seq == 11
 
     def test_deleting_missing_level_does_not_fail(self, book):
-        assert book.apply(delta(11, bids=(lv("500", "0"),)))
+        assert book.apply(delta(11, bids=(price_level("500", "0"),)))
 
     def test_seq_gap_invalidates_until_new_snapshot(self, book):
         assert not book.apply(delta(12))  # 11 is missing
@@ -121,15 +129,15 @@ class TestDeltas:
         assert book.valid and book.apply(delta(21))
 
     def test_old_or_duplicate_delta_ignored(self, book):
-        assert book.apply(delta(11, bids=(lv("999", "5"),)))
-        assert book.apply(delta(11, bids=(lv("999", "7"),)))
-        assert book.apply(delta(9, bids=(lv("999", "8"),)))
+        assert book.apply(delta(11, bids=(price_level("999", "5"),)))
+        assert book.apply(delta(11, bids=(price_level("999", "7"),)))
+        assert book.apply(delta(9, bids=(price_level("999", "8"),)))
         assert book.top(1)[0][0].qty == D("5")
 
     def test_no_seq_always_applies(self):
         b = L2Book("nk")
         b.apply(snap(seq=None))
-        assert b.apply(delta(None, asks=(lv("1000.5", "1"),)))
+        assert b.apply(delta(None, asks=(price_level("1000.5", "1"),)))
         assert b.best_ask == D("1000.5")
 
     def test_delta_before_snapshot(self):
@@ -138,7 +146,7 @@ class TestDeltas:
         assert b.needs_snapshot
 
     def test_crossed_book_has_no_mid(self, book):
-        book.apply(delta(11, bids=(lv("1001.5", "1"),)))
+        book.apply(delta(11, bids=(price_level("1001.5", "1"),)))
         assert book.mid is None and book.spread is None
 
 
@@ -148,7 +156,7 @@ class TestArrivalTime:
         b = L2Book("nk")
         b.apply(snap(ts=1_000), received_at=50_000)
         assert (b.ts, b.received_at) == (1_000, 50_000)
-        b.apply(delta(11, bids=[lv("999", "4")], ts=2_000), received_at=51_000)
+        b.apply(delta(11, bids=[price_level("999", "4")], ts=2_000), received_at=51_000)
         assert (b.ts, b.received_at) == (2_000, 51_000)
 
     def test_old_delta_does_not_move_it(self, book):

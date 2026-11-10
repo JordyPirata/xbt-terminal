@@ -100,13 +100,19 @@ def parse_market(payload: dict[str, Any], symbol: str) -> MarketSpec:
 
 def _levels(raw: Iterable[dict[str, Any]], reverse: bool) -> tuple[Level, ...]:
     merged: dict[Decimal, Level] = {}
-    for lv in raw:
-        price, qty, amm = D(lv["price"]), D(lv["quantity"]), bool(lv.get("isAmm"))
+    for price_level in raw:
+        price, qty, amm = (
+            D(price_level["price"]),
+            D(price_level["quantity"]),
+            bool(price_level.get("isAmm")),
+        )
         prev = merged.get(price)
         if prev is not None:
             qty, amm = prev.qty + qty, prev.amm or amm
         merged[price] = Level(price, qty, amm=amm)
-    return tuple(sorted(merged.values(), key=lambda lv: lv.price, reverse=reverse))
+    return tuple(
+        sorted(merged.values(), key=lambda price_level: price_level.price, reverse=reverse)
+    )
 
 
 def parse_book(payload: dict[str, Any], ts: int) -> BookSnapshot:
@@ -226,11 +232,11 @@ def parse_withdrawal_fee(payload: dict[str, Any], asset: str, chain: str) -> Wit
     raise VenueError(f"Neoxa: {asset} en {chain} sin comisión de retiro")
 
 
-def order_body(symbol: str, req: OrderRequest) -> str:
+def order_body(symbol: str, order_request: OrderRequest) -> str:
     """JSON with price and quantity as numbers written exactly like the Decimal."""
     return (
-        f'{{"pair":{json.dumps(symbol)},"side":{json.dumps(req.side)},'
-        f'"quantity":{req.qty:f},"price":{req.price:f}}}'
+        f'{{"pair":{json.dumps(symbol)},"side":{json.dumps(order_request.side)},'
+        f'"quantity":{order_request.qty:f},"price":{order_request.price:f}}}'
     )
 
 
@@ -390,11 +396,13 @@ class NeoxaVenue(StreamingVenue):
                 return self.parsing(parse_order, raw, None, self._clock())
         return None
 
-    async def place_limit(self, req: OrderRequest) -> Order:
-        body = order_body(self.symbol, req)
+    async def place_limit(self, order_request: OrderRequest) -> Order:
+        body = order_body(self.symbol, order_request)
         order = await self.sending(
             self._request("POST", "/exchange/order", kind="order", body=body, auth=True),
-            lambda payload: parse_order(payload.get("order") or {}, req.client_id, self._clock()),
+            lambda payload: parse_order(
+                payload.get("order") or {}, order_request.client_id, self._clock()
+            ),
         )
         self._tracker.remember(order)
         return order
@@ -421,8 +429,8 @@ class NeoxaVenue(StreamingVenue):
         for order in await self.open_orders():
             try:
                 await self.cancel(order.order_id)
-            except (VenueError, httpx.HTTPError) as exc:
-                failed.append(f"{order.order_id}: {describe(exc)}")
+            except (VenueError, httpx.HTTPError) as error:
+                failed.append(f"{order.order_id}: {describe(error)}")
         if failed:
             raise VenueError("Neoxa: no se pudieron cancelar " + "; ".join(failed))
 
@@ -461,8 +469,8 @@ class NeoxaVenue(StreamingVenue):
                 frame = await asyncio.wait_for(ws.recv(), timeout)
                 try:
                     p = sio.decode(frame)
-                except sio.ProtocolError as exc:
-                    raise VenueError(f"Neoxa WS: {exc}") from exc
+                except sio.ProtocolError as error:
+                    raise VenueError(f"Neoxa WS: {error}") from error
                 if p.kind == "ping":
                     await ws.send(sio.PONG)
                 elif p.kind in ("close", "disconnect", "connect_error"):

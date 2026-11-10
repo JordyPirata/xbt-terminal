@@ -58,15 +58,15 @@ class ValueRecorder:
             await self._sleep((at - now) / 1000)
             try:
                 self.record(at)
-            except Exception as exc:  # a bug or a full disk do not stop sampling
+            except Exception as error:  # a bug or a full disk do not stop sampling
                 if self._faults is None:
                     raise
-                self._faults.report("value", exc)
+                self._faults.report("value", error)
 
     def record(self, at: int) -> ValueSample | None:
         """Write the `at` sample if there is one."""
-        balances = {vid: st.balances for vid, st in self._account.state.items()}
-        mids = {vid: self._hub.state[vid].book.mid for vid in balances}
+        balances = {venue_id: state.balances for venue_id, state in self._account.state.items()}
+        mids = {venue_id: self._hub.state[venue_id].book.mid for venue_id in balances}
         s = sample(inventory(balances, mids), mids, at, self._every_ms)
         if s is not None:
             self._journal.write("value", data=sample_data(s))

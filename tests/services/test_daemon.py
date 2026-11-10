@@ -75,9 +75,9 @@ class TestStopping:
         gate = asyncio.Event()
         real = s.venue.place_limit
 
-        async def slow(req):
+        async def slow(order_request):
             await gate.wait()
-            return await real(req)
+            return await real(order_request)
 
         s.venue.place_limit = slow
         stop = asyncio.Event()

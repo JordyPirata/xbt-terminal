@@ -35,8 +35,8 @@ class Setup:
         feeds = {"nk": FakeFeed("nk"), "nx": FakeFeed("nx")}
         self.hub_now = NOW  # hub local time: the book's arrival time (RNF-16)
         self.hub = MarketHub(feeds, clock=lambda: self.hub_now)
-        for vid in feeds:
-            self.hub.state[vid].spec = spec(vid)
+        for venue_id in feeds:
+            self.hub.state[venue_id].spec = spec(venue_id)
         self.book("nk", "0.00720000", "0.00730000", ts=book_ts)
         balances = {"BTC": Balance("BTC", D(btc)), "BTCB2": Balance("BTCB2", D(btcb2))}
         self.venue = DryRunVenue(feeds["nk"], balances, clock=lambda: NOW)
@@ -110,7 +110,7 @@ class TestValidOrder:
     async def test_venue_error_stays_as_order_error(self, tmp_path):
         s = Setup(tmp_path)
 
-        async def boom(req):
+        async def boom(order_request):
             raise VenueError("venue caído")
 
         s.venue.place_limit = boom
@@ -129,13 +129,13 @@ def codes(result):
 class TestRejections:
     """Each RF-10 rule rejects in dry-run, leaves `reject_local` and sends nothing."""
 
-    async def check(self, s, cmd, code):
-        result = await s.orders.prepare(cmd)
+    async def check(self, s, command, code):
+        result = await s.orders.prepare(command)
         assert code in codes(result)
         last = s.lines()[-1]
-        assert last["event"] == "reject_local" and last["venue"] == cmd.venue
+        assert last["event"] == "reject_local" and last["venue"] == command.venue
         assert code in {v["code"] for v in last["data"]["violations"]}
-        assert last["data"]["price"] == str(cmd.price)
+        assert last["data"]["price"] == str(command.price)
         return result
 
     async def test_order_size(self, tmp_path):
@@ -254,13 +254,13 @@ class TestUnreadableAccount:
     """D-16: if balances or orders cannot be read when validating, it rejects (no raise)."""
 
     @pytest.mark.parametrize(
-        "exc", [VenueError("NonKYC: HTTP 429: Too many requests"), httpx.ConnectError("sin red")]
+        "error", [VenueError("NonKYC: HTTP 429: Too many requests"), httpx.ConnectError("sin red")]
     )
-    async def test_unreadable_balances(self, tmp_path, exc):
+    async def test_unreadable_balances(self, tmp_path, error):
         s = Setup(tmp_path)
 
         async def boom():
-            raise exc
+            raise error
 
         s.venue.balances = boom
         result = await s.orders.prepare(buy())
@@ -302,10 +302,10 @@ def cached(tmp_path, *, age_ms=0, btc="0.005", orders=()):
 
     s = Setup(tmp_path)
     account = AccountService({"nk": s.venue}, clock=lambda: NOW)
-    st = account.state["nk"]
-    st.balances = {"BTC": Balance("BTC", D(btc)), "BTCB2": Balance("BTCB2", D("0.5"))}
-    st.balances_at = NOW - age_ms
-    st.orders = {o.order_id: o for o in orders}
+    state = account.state["nk"]
+    state.balances = {"BTC": Balance("BTC", D(btc)), "BTCB2": Balance("BTCB2", D("0.5"))}
+    state.balances_at = NOW - age_ms
+    state.orders = {o.order_id: o for o in orders}
     ids = iter(f"t-{i:06d}" for i in range(1, 100))
     s.orders = OrderService(
         s.hub, {"nk": s.venue}, s.journal, LIMITS, clock=lambda: NOW,

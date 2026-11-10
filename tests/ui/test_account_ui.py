@@ -15,20 +15,20 @@ from .test_double_ui import Rig, ready, until
 
 
 async def place(rig, venue, side="buy", price="0.00725000", qty="0.01"):
-    req = OrderRequest(venue, side, D(qty), D(price), f"t-{venue}{side}")
-    return await rig.venues[venue].place_limit(req)
+    order_request = OrderRequest(venue, side, D(qty), D(price), f"t-{venue}{side}")
+    return await rig.venues[venue].place_limit(order_request)
 
 
 async def command(rig, pilot, text):
-    cmd = rig.app.query_one(CommandLine)
-    cmd.focus()
-    cmd.value = text
+    command_line = rig.app.query_one(CommandLine)
+    command_line.focus()
+    command_line.value = text
     rig.app.last_message = ""
     await pilot.press("enter")
 
 
 def total_open(rig):
-    return sum(len(st.orders) for st in rig.account.state.values())
+    return sum(len(state.orders) for state in rig.account.state.values())
 
 
 @pytest.mark.spec("RF-05")
@@ -210,8 +210,8 @@ async def test_d_starts_a_double_order(tmp_path):
     rig = Rig(tmp_path)
     async with rig.app.run_test(size=(160, 45)) as pilot:
         await pilot.press("d")
-        cmd = rig.app.query_one(CommandLine)
-        await until(pilot, lambda: cmd.has_focus and cmd.value == "dbl ")
+        command = rig.app.query_one(CommandLine)
+        await until(pilot, lambda: command.has_focus and command.value == "dbl ")
 
 
 @pytest.mark.spec("RF-06", "RF-08")

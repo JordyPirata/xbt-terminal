@@ -41,16 +41,16 @@ class Rig(Setup):
         """The next send loses its response; with `create`, the order is created."""
         real = self.venue.place_limit
 
-        async def lost(req):
+        async def lost(order_request):
             self.venue.place_limit = real
             if create:
-                await real(req)
+                await real(order_request)
             raise UncertainError("NonKYC: sin respuesta (ReadTimeout)")
 
         self.venue.place_limit = lost
 
-    async def send(self, cmd):
-        return await self.orders.confirm(await self.orders.prepare(cmd))
+    async def send(self, command):
+        return await self.orders.confirm(await self.orders.prepare(command))
 
     def events(self):
         return [ln["event"] for ln in self.lines()]
@@ -71,7 +71,7 @@ class TestUncertainSend:
     async def test_clear_rejection_stays_a_failure(self, tmp_path):
         s = Rig(tmp_path)
 
-        async def boom(req):
+        async def boom(order_request):
             raise VenueError("Insufficient funds")
 
         s.venue.place_limit = boom
@@ -179,13 +179,13 @@ class TestDoubleOrder:
         s = double.Setup(tmp_path)
         real = s.venues["nx"].place_limit
 
-        async def lost(req):
-            await real(req)
+        async def lost(order_request):
+            await real(order_request)
             raise UncertainError("Neoxa: sin respuesta (ReadTimeout)")
 
         s.venues["nx"].place_limit = lost
-        cmd = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
-        result = await s.orders.confirm_double(await s.orders.prepare_double(cmd))
+        command = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
+        result = await s.orders.confirm_double(await s.orders.prepare_double(command))
         assert isinstance(result, DoubleSent)
         assert (result.state.buy.status, result.state.sell.status) == ("open", "unknown")
         assert "ReadTimeout" in result.state.sell.error
@@ -193,20 +193,20 @@ class TestDoubleOrder:
         assert unknown["data"]["double"] == "d-000001"
         (r,) = await s.orders.reconcile()
         assert r.outcome == "found"
-        leg = s.orders.doubles["d-000001"].sell
-        assert (leg.status, leg.order_id, leg.error) == ("open", "dry-nx-1", None)
+        order_leg = s.orders.doubles["d-000001"].sell
+        assert (order_leg.status, order_leg.order_id, order_leg.error) == ("open", "dry-nx-1", None)
         ack = s.lines()[-1]
         assert ack["event"] == "order_ack" and ack["data"]["double"] == "d-000001"
 
     async def test_missing_leg_is_rejected(self, tmp_path):
         s = double.Setup(tmp_path)
 
-        async def lost(req):
+        async def lost(order_request):
             raise UncertainError("Neoxa: sin respuesta (ReadTimeout)")
 
         s.venues["nx"].place_limit = lost
-        cmd = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
-        await s.orders.confirm_double(await s.orders.prepare_double(cmd))
+        command = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
+        await s.orders.confirm_double(await s.orders.prepare_double(command))
         s.now = NOW + 61_000
         (r,) = await s.orders.reconcile()
         assert r.outcome == "missing"

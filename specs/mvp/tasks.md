@@ -274,3 +274,37 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 - Tests: `best_bid`/`best_ask`/`mid` iguales a los de hoy en una secuencia
   aleatoria de snapshots y deltas con semilla fija; sin clientes no se llama a
   `snapshot`, y al conectarse uno recibe el book en su `market_init`.
+
+## M20 — Nombres descriptivos (D-83)
+
+### T-98 Renombrar identificadores abreviados · `todo` · RNF-21 · D-83
+- Renombrar locales, parámetros, atributos privados y funciones internas
+  abreviadas (`vid`, `req`, `qty`, `pct`, `st`, `lv`, `leg`, `ts`, `cmd`, `exc`, y
+  letras sueltas donde no sean índices triviales) por nombres completos, según el
+  glosario de D-83. Fuera de alcance: lo que D-83 enumera como frontera.
+- Orden: `core/` → `adapters/` → `services/` → `ui/` → top-level → `tests/` → `tools/`,
+  con los tests en verde al cerrar cada paquete.
+- Test: `tests/unit/test_english.py` (o uno nuevo, `@pytest.mark.spec("RNF-21")`)
+  falla ante identificadores de una letra fuera de una lista corta y justificada.
+- Cierre: `uv run pytest`, `uv run ruff check .`, `uv run python tools/spec_trace.py`;
+  `git diff` sin cambios en `tests/fixtures/`, `config.example.toml` ni `docs/`.
+- **Estado (2026-11-09), sin cerrar:** hechos `vid`, `exc`, `cmd`, `st`, `lv`, `leg`,
+  `pct` y `req` en `src/`, `tests/` y `tools/`. Verificado: AST idéntico salvo
+  nombres (solo cambian los cinco `"exc"` de `parametrize` a `"error"`, a propósito),
+  atributos y keywords intactos, campos de clase intactos, ruff limpio, 1736 tests
+  en verde. Hechos a mano, por colisión con un nombre ya usado en la función: `cmd` en
+  `tests/ui/test_account_ui.py` (pasa a `command_line`, porque la función se llama
+  `command`), y los helpers de módulo `req` (tests) y `lv` (test_book), que el
+  renombrado por tokens saltaba por ser `def` a nivel de módulo.
+  Pendiente: `exc` en 41 sitios donde la función ya usa `error` (p. ej. `except ... as exc`
+  en `services/control.py`); `qty`, `ts` y `tp` (usos como keyword: hay que distinguir
+  campos de dataclass de parámetros por llamada); letras sueltas; el test de guarda de
+  abreviaturas, que se escribe al final. Excepción: `leg` en `core/double.py` se
+  conserva, es el término del dominio (`DoubleState.leg(side)`).
+
+### T-99 Quitar comentarios que repiten el código · `todo` · RNF-21 · D-83 · dep T-98
+- Revisar `#` y docstrings de `src/`, `tests/` y `tools/`. Se borran los que
+  repiten lo que dice el código. Se conservan los del porqué, las referencias
+  `Spec: RF-xx · Task: T-xx` y las notas de seguridad (p. ej. RNF-18 en
+  `core/journal.py`).
+- Sin cambio de comportamiento: mismos tests, mismo `spec_trace`, mismo ruff.

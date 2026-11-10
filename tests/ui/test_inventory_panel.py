@@ -14,7 +14,7 @@ BAL = {
 
 
 def render(target):
-    views = {vid: AccountView(b, 0, None) for vid, b in BAL.items()}
+    views = {venue_id: AccountView(b, 0, None) for venue_id, b in BAL.items()}
     inv = inventory(BAL, {"nk": D("0.01"), "nx": D("0.01")})
     return render_balances(views, inv, 0, target)
 

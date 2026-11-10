@@ -85,10 +85,10 @@ class Engine:
 
     # -- faults (RNF-14, D-78) ----------------------------------------------------
 
-    def report_fault(self, where: str, exc: BaseException) -> Fault:
+    def report_fault(self, where: str, error: BaseException) -> Fault:
         """Note a fault in the main registry: the orders' if any, else the account's, else
         the hub's (there is always one)."""
-        return self._main_faults.report(where, exc)
+        return self._main_faults.report(where, error)
 
     @property
     def _main_faults(self) -> Faults:
@@ -138,8 +138,8 @@ class Engine:
             await asyncio.sleep(self._reconcile_every_s)
             try:
                 await self.reconcile()
-            except Exception as exc:  # a bug here cannot stop the search
-                self.report_fault("reconcile", exc)
+            except Exception as error:  # a bug here cannot stop the search
+                self.report_fault("reconcile", error)
 
     # -- hanging legs (RF-07) -------------------------------------------------
 

@@ -148,7 +148,7 @@ class CancelPlan:
             ((venue, _),) = self.orders.items()
             what = f"{what} en {NAMES[venue]}"
         else:
-            per = ", ".join(f"{len(v)} en {NAMES[vid]}" for vid, v in self.orders.items())
+            per = ", ".join(f"{len(v)} en {NAMES[venue_id]}" for venue_id, v in self.orders.items())
             what = f"{what} ({per})"
         return (
             f"cancelar {what}: todas las abiertas del par, "
@@ -173,13 +173,13 @@ class CancelResult:
     @property
     def message(self) -> str:
         parts = []
-        for vid, n in self.remaining.items():
-            if vid in self.errors:
-                parts.append(f"{NAMES[vid]}: error: {self.errors[vid]}")
+        for venue_id, n in self.remaining.items():
+            if venue_id in self.errors:
+                parts.append(f"{NAMES[venue_id]}: error: {self.errors[venue_id]}")
             elif n == 1:
-                parts.append(f"{NAMES[vid]}: queda 1 abierta")
+                parts.append(f"{NAMES[venue_id]}: queda 1 abierta")
             elif n:
-                parts.append(f"{NAMES[vid]}: quedan {n} abiertas")
+                parts.append(f"{NAMES[venue_id]}: quedan {n} abiertas")
         if not parts:
             return "cancelado · quedan 0 abiertas de las que se querían cancelar"
         return "cancelar: " + " · ".join(parts)

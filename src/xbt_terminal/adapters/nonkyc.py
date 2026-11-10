@@ -149,8 +149,8 @@ def parse_token_price(payload: dict[str, Any], symbol: str) -> Decimal:
 
 
 def _levels(raw: Iterable[dict[str, Any]], reverse: bool) -> tuple[Level, ...]:
-    levels = [Level(D(lv["price"]), D(lv["quantity"])) for lv in raw]
-    return tuple(sorted(levels, key=lambda lv: lv.price, reverse=reverse))
+    levels = [Level(D(price_level["price"]), D(price_level["quantity"])) for price_level in raw]
+    return tuple(sorted(levels, key=lambda price_level: price_level.price, reverse=reverse))
 
 
 def parse_book(payload: dict[str, Any], ts: int, seq: int | None) -> BookSnapshot:
@@ -167,8 +167,14 @@ def parse_delta(params: dict[str, Any], ts: int) -> BookDelta:
     """`quantity` comes as a string, or as number 0 when deleting a level."""
     return BookDelta(
         venue="nk",
-        bids=tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in params.get("bids") or []),
-        asks=tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in params.get("asks") or []),
+        bids=tuple(
+            Level(D(price_level["price"]), D(price_level["quantity"]))
+            for price_level in params.get("bids") or []
+        ),
+        asks=tuple(
+            Level(D(price_level["price"]), D(price_level["quantity"]))
+            for price_level in params.get("asks") or []
+        ),
         ts=ts,
         seq=int(params["sequence"]),
     )
@@ -537,16 +543,16 @@ class NonKYCVenue(StreamingVenue):
         payload = await self._signed("GET", f"/getorder/{order_id}", kind="private")
         return self.parsing(parse_order, payload, self._clock())
 
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         """`strictValidate`: if price or quantity do not fit the grid, the venue rejects
         instead of truncating (RiskCheck already checked)."""
         body = {
             "symbol": self.symbol,
-            "side": req.side,
+            "side": order_request.side,
             "type": "limit",
-            "quantity": f"{req.qty:f}",
-            "price": f"{req.price:f}",
-            "userProvidedId": req.client_id,
+            "quantity": f"{order_request.qty:f}",
+            "price": f"{order_request.price:f}",
+            "userProvidedId": order_request.client_id,
             "strictValidate": True,
         }
         order = await self.sending(

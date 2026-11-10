@@ -28,12 +28,12 @@ class RebalanceService:
 
     async def load(self) -> dict[tuple[VenueId, str], FeeInfo]:
         """Fee or error by (venue, asset); requests go in parallel."""
-        keys = [(vid, asset) for vid in self.venues for asset in ASSETS]
-        got = await asyncio.gather(*(self._fee(vid, asset) for vid, asset in keys))
+        keys = [(venue_id, asset) for venue_id in self.venues for asset in ASSETS]
+        got = await asyncio.gather(*(self._fee(venue_id, asset) for venue_id, asset in keys))
         return dict(zip(keys, got, strict=True))
 
     async def _fee(self, venue: VenueId, asset: str) -> FeeInfo:
         try:
             return await self._venues[venue].withdrawal_fee(asset)
-        except (VenueError, httpx.HTTPError) as exc:
-            return describe(exc)
+        except (VenueError, httpx.HTTPError) as error:
+            return describe(error)

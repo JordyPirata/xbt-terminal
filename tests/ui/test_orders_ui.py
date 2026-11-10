@@ -69,9 +69,9 @@ async def ready(rig, pilot):
 
 
 async def type_command(pilot, app, text):
-    cmd = app.query_one(CommandLine)
-    cmd.focus()
-    cmd.value = text
+    command = app.query_one(CommandLine)
+    command.focus()
+    command.value = text
     await pilot.press("enter")
 
 
@@ -154,8 +154,8 @@ class TestOtherCommands:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.press(key)
-            cmd = rig.app.query_one(CommandLine)
-            await until(pilot, lambda: cmd.has_focus and cmd.value == prefix)
+            command = rig.app.query_one(CommandLine)
+            await until(pilot, lambda: command.has_focus and command.value == prefix)
 
     async def test_typing_after_shortcut_keeps_prefix(self, tmp_path):
         """Textual's select_on_focus replaced "buy " with the first key (D-18)."""
@@ -169,12 +169,12 @@ class TestOtherCommands:
     async def test_click_on_line_with_text_and_typing_keeps_it(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
-            cmd = rig.app.query_one(CommandLine)
-            cmd.value = "buy nk 0.01"
+            command = rig.app.query_one(CommandLine)
+            command.value = "buy nk 0.01"
             await pilot.click("#cmd")
             await pilot.pause()
             await pilot.press("end", "space", "1")
-            await until(pilot, lambda: cmd.value == "buy nk 0.01 1")
+            await until(pilot, lambda: command.value == "buy nk 0.01 1")
 
     async def test_escape_releases_field_and_shortcuts_return(self, tmp_path):
         rig = Rig(tmp_path)
@@ -191,11 +191,11 @@ class TestReadOnly:
         rig = Rig(tmp_path, mode="read-only")
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await pilot.pause()
-            cmd = rig.app.query_one(CommandLine)
-            assert cmd.disabled and "solo lectura" in cmd.placeholder
+            command = rig.app.query_one(CommandLine)
+            assert command.disabled and "solo lectura" in command.placeholder
             await pilot.press("b")
             await pilot.pause()
-            assert not cmd.has_focus and cmd.value == ""
+            assert not command.has_focus and command.value == ""
 
 
 @pytest.mark.spec("RF-03")
@@ -240,10 +240,10 @@ def lose_reply(venue, *, create=True):
     """The next send loses its response (RNF-12); with `create`, the order exists."""
     real = venue.place_limit
 
-    async def lost(req):
+    async def lost(order_request):
         venue.place_limit = real
         if create:
-            await real(req)
+            await real(order_request)
         raise UncertainError("NonKYC: sin respuesta (ReadTimeout)")
 
     venue.place_limit = lost

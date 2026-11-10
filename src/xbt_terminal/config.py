@@ -245,18 +245,18 @@ def load_config(path: Path) -> AppConfig:
         raw = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise ConfigError(f"{path}: no existe (copiar config.example.toml)") from None
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"{path}: TOML inválido: {exc}") from None
+    except tomllib.TOMLDecodeError as error:
+        raise ConfigError(f"{path}: TOML inválido: {error}") from None
 
     root = _Section(raw, "")
 
     venues_sec = root.section("venues")
     _venue_ids(venues_sec)
     venues: dict[VenueId, VenueConfig] = {}
-    for vid in VENUE_IDS:
-        v = venues_sec.section(vid)
-        venues[vid] = VenueConfig(
-            id=vid,
+    for venue_id in VENUE_IDS:
+        v = venues_sec.section(venue_id)
+        venues[venue_id] = VenueConfig(
+            id=venue_id,
             name=v.str("name"),
             symbol=_btc_symbol(v),
             maker_fee=v.decimal("maker_fee", positive=False),
@@ -438,7 +438,11 @@ def _fee_token(v: _Section) -> dict[str, Any]:
 
 
 def _walk(s: _Section) -> dict[VenueId, Decimal]:
-    walk = {vid: _percent(s, vid, positive=False) for vid in VENUE_IDS if vid in s.data}
+    walk = {
+        venue_id: _percent(s, venue_id, positive=False)
+        for venue_id in VENUE_IDS
+        if venue_id in s.data
+    }
     s.done()
     return walk
 
@@ -453,14 +457,17 @@ def _percent(sec: _Section, key: str, *, positive: bool = True) -> Decimal:
 def load_credentials(env: Mapping[str, str | None]) -> dict[VenueId, Credentials]:
     """Key and secret of each venue. Empty = absent; only one of the two = error."""
     creds: dict[VenueId, Credentials] = {}
-    for vid in VENUE_IDS:
-        key_name, secret_name = f"{ENV_PREFIX[vid]}_API_KEY", f"{ENV_PREFIX[vid]}_API_SECRET"
+    for venue_id in VENUE_IDS:
+        key_name, secret_name = (
+            f"{ENV_PREFIX[venue_id]}_API_KEY",
+            f"{ENV_PREFIX[venue_id]}_API_SECRET",
+        )
         key, secret = (env.get(key_name) or "").strip(), (env.get(secret_name) or "").strip()
         if bool(key) != bool(secret):
             missing = secret_name if key else key_name
             raise ConfigError(f".env: falta {missing}")
         if key:
-            creds[vid] = Credentials(api_key=Secret(key), api_secret=Secret(secret))
+            creds[venue_id] = Credentials(api_key=Secret(key), api_secret=Secret(secret))
     return creds
 
 

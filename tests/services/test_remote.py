@@ -28,7 +28,7 @@ class Daemon:
         await self.server.start()
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         await self.server.aclose()
 
 
@@ -90,12 +90,12 @@ class TestState:
             remote = RemoteEngine(d.path, has_bot=True, retry_s=0.02)
             task = asyncio.create_task(remote.run())
             heard = []
-            remote.account.subscribe(lambda vid, what: heard.append((vid, what)))
+            remote.account.subscribe(lambda venue_id, what: heard.append((venue_id, what)))
             await until(lambda: "nk" in remote.account.state)
             await until(lambda: remote.account.state["nk"].balances is not None)
-            st = remote.account.state["nk"]
-            assert st.balances["BTC"] == Balance("BTC", D("0.001"))
-            assert list(st.orders) == ["o-1"]
+            state = remote.account.state["nk"]
+            assert state.balances["BTC"] == Balance("BTC", D("0.001"))
+            assert list(state.orders) == ["o-1"]
             assert ("nk", "balances") in heard and ("nk", "orders") in heard
             task.cancel()
             runner.cancel()

@@ -49,7 +49,7 @@ class Daemon:
         await self.server.start()
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         await self.server.aclose()
 
 
@@ -64,7 +64,7 @@ class Linked:
         await until(lambda: self.remote.connected and self.remote.snapshot is not None)
         return self.remote
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         self.task.cancel()
         await self.remote.aclose()
 
@@ -141,8 +141,8 @@ class TestDoubleOrder:
         async with Daemon(tmp_path, setup=s) as d, Linked(d) as remote:
             seen = []
             remote.orders.subscribe_doubles(seen.append)
-            cmd = DoubleOrder(D("0.01"), "nk", D("0.00730000"), "nx", D("0.00722000"))
-            pending = await remote.orders.prepare_double(cmd)
+            command = DoubleOrder(D("0.01"), "nk", D("0.00730000"), "nx", D("0.00722000"))
+            pending = await remote.orders.prepare_double(command)
             assert isinstance(pending, PendingDouble) and pending.id == "d-000001"
             sent = await remote.orders.confirm_double(pending)
             assert isinstance(sent, DoubleSent) and len(sent.state.legs) == 2
@@ -151,8 +151,8 @@ class TestDoubleOrder:
 
     async def test_rejected_by_daemon(self, tmp_path):
         async with Daemon(tmp_path) as d, Linked(d) as remote:  # nx without keys
-            cmd = DoubleOrder(D("0.01"), "nk", D("0.00730000"), "nx", D("0.00722000"))
-            rejected = await remote.orders.prepare_double(cmd)
+            command = DoubleOrder(D("0.01"), "nk", D("0.00730000"), "nx", D("0.00722000"))
+            rejected = await remote.orders.prepare_double(command)
             assert isinstance(rejected, DoubleRejected) and rejected.codes
 
 
@@ -180,9 +180,9 @@ class TestWithoutDaemon:
             gate = asyncio.Event()
             real = d.s.orders.prepare
 
-            async def slow(cmd):
+            async def slow(command):
                 await gate.wait()
-                return await real(cmd)
+                return await real(command)
 
             d.s.orders.prepare = slow
             asking = asyncio.create_task(remote.orders.prepare(buy()))

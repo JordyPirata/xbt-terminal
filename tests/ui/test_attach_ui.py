@@ -44,8 +44,8 @@ class AttachRig:
         await self.daemon.__aenter__()
         return self
 
-    async def __aexit__(self, *exc):
-        await self.daemon.__aexit__(*exc)
+    async def __aexit__(self, *error):
+        await self.daemon.__aexit__(*error)
 
 
 def bar(app):

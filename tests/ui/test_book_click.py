@@ -24,10 +24,10 @@ BID_CUM_X, ASK_CUM_X = 5, 65
 
 async def ready(rig, pilot):
     """FakeFeed books with two levels per side and the spec loaded."""
-    for vid in ("nk", "nx"):
-        rig.feeds[vid].push(
-            ConnState(vid, "market", "ws", "up", 100.0, rig.now),
-            book(vid, "0.00720000", "0.00730000", ts=rig.now),
+    for venue_id in ("nk", "nx"):
+        rig.feeds[venue_id].push(
+            ConnState(venue_id, "market", "ws", "up", 100.0, rig.now),
+            book(venue_id, "0.00720000", "0.00730000", ts=rig.now),
         )
     await until(pilot, lambda: all(rig.hub.state[v].ready for v in ("nk", "nx")))
     panel = rig.app.query_one("#book-nk", BookPanel)
@@ -86,9 +86,9 @@ class TestClick:
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
             await click(pilot, "nx", ASK_X, 1)
-            cmd = rig.app.query_one(CommandLine)
-            assert cmd.value == "buy nx 0.50000000 0.00730000"
-            assert cmd.has_focus and cmd.cursor_position == len(cmd.value)
+            command = rig.app.query_one(CommandLine)
+            assert command.value == "buy nx 0.50000000 0.00730000"
+            assert command.has_focus and command.cursor_position == len(command.value)
             assert copied == ["0.00730000"]
             assert "0.00730000" in rig.app.last_message
 
@@ -142,27 +142,27 @@ class TestClick:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            cmd = rig.app.query_one(CommandLine)
-            cmd.focus()
-            cmd.value = "dbl 0.01 nk"
-            cmd.cursor_position = len(cmd.value)
+            command = rig.app.query_one(CommandLine)
+            command.focus()
+            command.value = "dbl 0.01 nk"
+            command.cursor_position = len(command.value)
             await click(pilot, "nk", ASK_X, 1)
-            assert cmd.value == "dbl 0.01 nk 0.00730000"
-            cmd.value += " nx"
-            cmd.cursor_position = len(cmd.value)
+            assert command.value == "dbl 0.01 nk 0.00730000"
+            command.value += " nx"
+            command.cursor_position = len(command.value)
             await click(pilot, "nx", BID_X, 1)
-            assert cmd.value == "dbl 0.01 nk 0.00730000 nx 0.00720000"
+            assert command.value == "dbl 0.01 nk 0.00730000 nx 0.00720000"
 
     async def test_no_double_space(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            cmd = rig.app.query_one(CommandLine)
-            cmd.focus()
-            cmd.value = "buy nk 0.01 "
-            cmd.cursor_position = len(cmd.value)
+            command = rig.app.query_one(CommandLine)
+            command.focus()
+            command.value = "buy nk 0.01 "
+            command.cursor_position = len(command.value)
             await click(pilot, "nk", BID_X, 1)
-            assert cmd.value == "buy nk 0.01 0.00720000"
+            assert command.value == "buy nk 0.01 0.00720000"
 
     async def test_click_off_a_level_does_nothing(self, tmp_path):
         rig = Rig(tmp_path)

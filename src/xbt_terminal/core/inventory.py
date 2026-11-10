@@ -49,8 +49,8 @@ class InventoryTarget:
     def high(self) -> Decimal:
         return min(HUNDRED, self.target_pct + self.band_pct)
 
-    def in_band(self, pct: Decimal) -> bool:
-        return self.low <= pct <= self.high
+    def in_band(self, percent: Decimal) -> bool:
+        return self.low <= percent <= self.high
 
     def worsens(self, before: Decimal, after: Decimal) -> bool:
         """Outside the band and further from the target than before."""
@@ -92,13 +92,15 @@ def inventory(
     mids: Mapping[VenueId, Decimal | None],
 ) -> Inventory:
     venues: dict[VenueId, VenueInventory | None] = {}
-    for vid, bal in balances.items():
+    for venue_id, bal in balances.items():
         if bal is None:
-            venues[vid] = None
+            venues[venue_id] = None
             continue
         btc, btcb2 = _total(bal, QUOTE), _total(bal, BASE)
-        mid = mids.get(vid)
-        venues[vid] = VenueInventory(btc, btcb2, btc + btcb2 * mid if mid is not None else None)
+        mid = mids.get(venue_id)
+        venues[venue_id] = VenueInventory(
+            btc, btcb2, btc + btcb2 * mid if mid is not None else None
+        )
     known = [v for v in venues.values() if v is not None]
     complete = len(known) == len(venues)
     values = [v.value for v in known]

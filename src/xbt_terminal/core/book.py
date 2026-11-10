@@ -51,8 +51,12 @@ class L2Book:
             raise ValueError(f"evento de {event.venue} aplicado al book de {self.venue}")
 
         if isinstance(event, BookSnapshot):
-            self._bids = {lv.price: lv for lv in event.bids if lv.qty > 0}
-            self._asks = {lv.price: lv for lv in event.asks if lv.qty > 0}
+            self._bids = {
+                price_level.price: price_level for price_level in event.bids if price_level.qty > 0
+            }
+            self._asks = {
+                price_level.price: price_level for price_level in event.asks if price_level.qty > 0
+            }
             self.seq, self.ts, self.valid = event.seq, event.ts, True
             self.received_at = at
             return True
@@ -66,11 +70,11 @@ class L2Book:
                 self.valid = False
                 return False
         for side, levels in ((self._bids, event.bids), (self._asks, event.asks)):
-            for lv in levels:
-                if lv.qty > 0:
-                    side[lv.price] = lv
+            for price_level in levels:
+                if price_level.qty > 0:
+                    side[price_level.price] = price_level
                 else:
-                    side.pop(lv.price, None)
+                    side.pop(price_level.price, None)
         self.seq = event.seq if event.seq is not None else self.seq
         self.ts, self.received_at = event.ts, at
         return True
@@ -133,14 +137,14 @@ class L2Book:
         return BookSnapshot(self.venue, tuple(bids), tuple(asks), self.ts, self.seq)
 
 
-def _price(lv: Level) -> Decimal:
-    return lv.price
+def _price(price_level: Level) -> Decimal:
+    return price_level.price
 
 
 def _rows(levels: list[Level]) -> tuple[BookRow, ...]:
     total = ZERO
     rows = []
-    for lv in levels:
-        total += lv.qty
-        rows.append(BookRow(lv.price, lv.qty, total, lv.amm))
+    for price_level in levels:
+        total += price_level.qty
+        rows.append(BookRow(price_level.price, price_level.qty, total, price_level.amm))
     return tuple(rows)

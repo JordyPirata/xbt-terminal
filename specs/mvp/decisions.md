@@ -92,6 +92,7 @@ dicen en su propia nota.
 | D-80 | 2026-11-04 | Banco de pruebas: grabación aparte del journal, venues simulados y tiempo virtual (requirements v0.31, T-87) |
 | D-81 | 2026-11-04 | El código va todo en inglés; en español, lo que ve el usuario, los docs y la spec (T-91) |
 | D-82 | 2026-11-04 | Contrato de venue: documento público, batería común y una variante rota por cláusula (requirements v0.32, T-88) |
+| D-83 | 2026-11-09 | Nombres que dicen qué son; comentarios solo para el porqué (T-98, T-99) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -2066,3 +2067,26 @@ y operaría en live sin medir el desfase ni recuperar un book malo.
   excepción si el fixture o su test lo dicen.
 **Toca:** RF-36, CA-21, RNF-09, design.md §4 y §10, `docs/contrato-venue.md`,
 `CONTRIBUTING.md`, T-88.
+
+## D-83 · 2026-11-09 · Nombres que dicen qué son; comentarios solo para el porqué (T-98, T-99)
+**Contexto:** el código ya va en inglés (D-81), pero sobran abreviaturas que obligan
+a leer el contexto o un comentario: `vid` (venue id, ~350 usos), `req`, `qty`, `pct`,
+`st`, `lv`, `leg`, `ts`, `cmd`, `exc`, y letras sueltas (`a`, `b`, `d`, `v`, `r`)
+en funciones largas. Objetivo: entender qué hace cada nombre sin comentario.
+**Decisión:**
+- Renombrar identificadores internos a nombres completos: `vid`→`venue_id`,
+  `req`→`order_request`, `qty`→`quantity`, `pct`→`percent`, `ts`→`timestamp`,
+  `cmd`→`command`, `exc`→`error`, `st`→`state`, `lv`→`price_level`, `px`→`price`,
+  `sz`→`size`. Los de una letra se deciden caso a caso, leyendo la función; no hay
+  sustitución global.
+- **Fuera de alcance** (la frontera, cambiarla es otra decisión): campos de dataclasses
+  que `services/wire.py` serializa, claves del journal (`EVENTS`, `_on_{event}`,
+  `buy`/`sell`), claves TOML y variables de entorno, flags de CLI, ids de venue
+  `"nk"`/`"nx"`, payloads de los venues y `tests/fixtures/`, ids y clases de widgets
+  Textual, `BINDINGS`, `on_*`/`action_*`/`watch_*`/`compose`, nombres de módulos y
+  marcas `@pytest.mark.spec`, y atributos accedidos por `getattr`.
+- **Comentarios:** se borran los que repiten el código. Se conservan los que explican
+  el porqué, las referencias `Spec: RF-xx · Task: T-xx` y las notas de seguridad.
+- Renombrar no cambia comportamiento: el criterio de cierre es que los tests, el
+  `spec_trace` y el ruff sigan igual, y que `git diff` no toque literales de las fronteras.
+**Toca:** T-98, T-99, `CLAUDE.md` (regla de comentarios, ya vigente).

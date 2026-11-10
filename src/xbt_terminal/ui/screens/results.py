@@ -130,8 +130,8 @@ class ResultsScreen(ModalScreen[None]):
     def reload(self) -> None:
         try:
             report = self._source.load(self.range)
-        except OSError as exc:
-            self._on_error(f"resultados: no se pudo leer el journal ({exc})")
+        except OSError as error:
+            self._on_error(f"resultados: no se pudo leer el journal ({error})")
             return
         self._show(report)
 
@@ -241,12 +241,12 @@ class ResultsScreen(ModalScreen[None]):
         fmt = "%m-%d %H:%M"
         since = datetime.fromtimestamp(s.since / 1000, UTC).strftime(fmt)
         until = datetime.fromtimestamp(s.until / 1000, UTC).strftime(fmt)
-        pct = f" ({s.change_pct:+.2f} %)" if s.change_pct is not None else ""
+        percent = f" ({s.change_pct:+.2f} %)" if s.change_pct is not None else ""
         venues = " · ".join(
             f"{VENUE_NAME.get(v.venue, v.venue)} {v.value:.8f}" for v in values[-1].venues
         )
         return "\n".join([
-            f"ahora {s.last:.8f} BTC ({venues}) · cambio {s.change:+.8f} BTC{pct} "
+            f"ahora {s.last:.8f} BTC ({venues}) · cambio {s.change:+.8f} BTC{percent} "
             f"desde {s.first:.8f}",
             f"máx {s.high:.8f} · mín {s.low:.8f} · {s.count} muestras de {since} a {until} UTC",
             *self._stretch_text(),

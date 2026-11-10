@@ -21,9 +21,9 @@ def slow(venue, gate: asyncio.Event):
     """`place_limit` waits for `gate` before creating the order: a send in flight."""
     real = venue.place_limit
 
-    async def held(req):
+    async def held(order_request):
         await gate.wait()
-        return await real(req)
+        return await real(order_request)
 
     venue.place_limit = held
 
@@ -100,8 +100,8 @@ class TestDifferentVenues:
             s.orders.confirm(await s.orders.prepare(sell(venue="nx", price="0.00727000")))
         )
         await settle()
-        cmd = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
-        pending = await s.orders.prepare_double(cmd)
+        command = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
+        pending = await s.orders.prepare_double(command)
         task = asyncio.create_task(s.orders.confirm_double(pending))
         await settle()
         assert not task.done()

@@ -29,9 +29,9 @@ class Rig:
             self.feeds, history=50, retry_s=0.01, clock=lambda: self.now,
             journal=self.journal, book_check_s=book_check_s,
         )  # fmt: skip
-        for vid in self.feeds:
-            self.hub.state[vid].spec = spec(vid)
-            self.hub.state[vid].ready = True
+        for venue_id in self.feeds:
+            self.hub.state[venue_id].spec = spec(venue_id)
+            self.hub.state[venue_id].ready = True
         self.hub.apply("nk", book("nk", "0.00720000", "0.00730000"))
 
     def events(self, name):
@@ -49,8 +49,8 @@ class TestBookCheck:
         rig = Rig(tmp_path)
         rig.now += 300_000  # five minutes without changes
         assert await rig.hub.check_book("nk") is True
-        st = rig.hub.state["nk"]
-        assert st.checked_at == rig.now and not st.suspect
+        state = rig.hub.state["nk"]
+        assert state.checked_at == rig.now and not state.suspect
         assert "resync" not in rig.feeds["nk"].calls and rig.events("book_resync") == []
 
     async def test_only_top_counts(self, tmp_path):
@@ -117,16 +117,18 @@ class TestBookCheck:
 
         feed.book_snapshot = racing
         assert await rig.hub.check_book("nk") is None
-        st = rig.hub.state["nk"]
-        assert st.checked_at is None and not st.suspect and rig.events("book_resync") == []
+        state = rig.hub.state["nk"]
+        assert state.checked_at is None and not state.suspect and rig.events("book_resync") == []
 
-    @pytest.mark.parametrize("exc", [VenueError("NonKYC: HTTP 502"), httpx.ConnectError("sin red")])
-    async def test_failed_rest_does_not_confirm(self, tmp_path, exc):
+    @pytest.mark.parametrize(
+        "error", [VenueError("NonKYC: HTTP 502"), httpx.ConnectError("sin red")]
+    )
+    async def test_failed_rest_does_not_confirm(self, tmp_path, error):
         rig = Rig(tmp_path)
-        rig.feeds["nk"].rest_book = exc
+        rig.feeds["nk"].rest_book = error
         assert await rig.hub.check_book("nk") is None
-        st = rig.hub.state["nk"]
-        assert st.checked_at is None and not st.suspect
+        state = rig.hub.state["nk"]
+        assert state.checked_at is None and not state.suspect
 
     async def test_without_book_no_check(self, tmp_path):
         rig = Rig(tmp_path)

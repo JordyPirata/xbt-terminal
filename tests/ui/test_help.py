@@ -21,9 +21,9 @@ class TestHelp:
     async def test_help_command_opens(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
-            cmd = rig.app.query_one(CommandLine)
-            cmd.focus()
-            cmd.value = "help"
+            command = rig.app.query_one(CommandLine)
+            command.focus()
+            command.value = "help"
             await pilot.press("enter")
             await until(pilot, lambda: isinstance(rig.app.screen, HelpScreen))
 
@@ -61,11 +61,11 @@ class TestHelp:
     async def test_inside_the_line_it_types(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
-            cmd = rig.app.query_one(CommandLine)
-            cmd.focus()
+            command = rig.app.query_one(CommandLine)
+            command.focus()
             await pilot.press("question_mark")
             await pilot.pause()
-            assert cmd.value == "?" and not isinstance(rig.app.screen, HelpScreen)
+            assert command.value == "?" and not isinstance(rig.app.screen, HelpScreen)
 
     async def test_placeholder_mentions_it(self, tmp_path):
         rig = Rig(tmp_path)

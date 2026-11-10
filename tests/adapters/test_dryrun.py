@@ -20,7 +20,7 @@ def make(**kw):
     return DryRunVenue(FakeFeed("nk"), balances(**kw), clock=lambda: 1_000)
 
 
-def req(side="buy", qty="0.01", price="0.00730000", cid="t-abc123"):
+def order_request(side="buy", qty="0.01", price="0.00730000", cid="t-abc123"):
     return OrderRequest("nk", side, D(qty), D(price), cid)
 
 
@@ -40,7 +40,7 @@ class TestInterface:
 class TestOrders:
     async def test_buy_opens_order_and_locks_btc_with_fee(self):
         venue = make()
-        order = await venue.place_limit(req())
+        order = await venue.place_limit(order_request())
         assert order == Order(
             "nk", "dry-nk-1", "t-abc123", "buy", D("0.00730000"), D("0.01"), D("0"), "open", 1_000
         )
@@ -52,26 +52,26 @@ class TestOrders:
 
     async def test_sell_locks_btcb2(self):
         venue = make()
-        await venue.place_limit(req("sell", qty="0.2"))
+        await venue.place_limit(order_request("sell", qty="0.2"))
         bal = await venue.balances()
         assert (bal["BTCB2"].available, bal["BTCB2"].locked) == (D("0.3"), D("0.2"))
         assert bal["BTC"].locked == 0
 
     async def test_sequential_ids(self):
         venue = make()
-        a = await venue.place_limit(req(cid="t-1"))
-        b = await venue.place_limit(req(cid="t-2"))
+        a = await venue.place_limit(order_request(cid="t-1"))
+        b = await venue.place_limit(order_request(cid="t-2"))
         assert (a.order_id, b.order_id) == ("dry-nk-1", "dry-nk-2")
 
     async def test_no_simulated_balance_rejected(self):
         venue = make(btc="0.00001")
         with pytest.raises(VenueError, match="saldo insuficiente"):
-            await venue.place_limit(req())
+            await venue.place_limit(order_request())
         assert await venue.open_orders() == []
 
     async def test_cancelling_releases_balance(self):
         venue = make()
-        order = await venue.place_limit(req())
+        order = await venue.place_limit(order_request())
         await venue.cancel(order.order_id)
         assert await venue.open_orders() == []
         bal = await venue.balances()
@@ -83,8 +83,8 @@ class TestOrders:
 
     async def test_cancel_every_order(self):
         venue = make()
-        await venue.place_limit(req(cid="t-1"))
-        await venue.place_limit(req("sell", cid="t-2"))
+        await venue.place_limit(order_request(cid="t-1"))
+        await venue.place_limit(order_request("sell", cid="t-2"))
         await venue.cancel_all()
         assert await venue.open_orders() == []
         assert all(b.locked == 0 for b in (await venue.balances()).values())
@@ -92,7 +92,7 @@ class TestOrders:
     async def test_initial_balances_not_shared(self):
         initial = balances()
         venue = DryRunVenue(FakeFeed("nk"), initial, clock=lambda: 1)
-        await venue.place_limit(req())
+        await venue.place_limit(order_request())
         assert initial["BTC"].locked == 0
 
 
@@ -107,7 +107,7 @@ async def test_private_stream_reports_each_change():
 
     task = asyncio.create_task(read())
     await asyncio.sleep(0)
-    order = await venue.place_limit(req())
+    order = await venue.place_limit(order_request())
     await venue.cancel(order.order_id)
     await asyncio.sleep(0.01)
     task.cancel()
@@ -120,7 +120,7 @@ class TestSimulatedFill:
 
     async def test_partial_and_complete_buy(self):
         venue = make()
-        order = await venue.place_limit(req(qty="0.01", price="0.00730000"))
+        order = await venue.place_limit(order_request(qty="0.01", price="0.00730000"))
         partial = await venue.simulate_fill(order.order_id, D("0.004"))
         assert (partial.status, partial.filled) == ("partial", D("0.004"))
         bal = await venue.balances()
@@ -135,7 +135,7 @@ class TestSimulatedFill:
 
     async def test_sell_collects_btc_minus_fee(self):
         venue = make()
-        order = await venue.place_limit(req("sell", qty="0.2"))
+        order = await venue.place_limit(order_request("sell", qty="0.2"))
         await venue.simulate_fill(order.order_id, D("0.2"))
         bal = await venue.balances()
         assert bal["BTCB2"] == Balance("BTCB2", D("0.3"), D("0"))
@@ -151,7 +151,7 @@ class TestSimulatedFill:
 
         task = asyncio.create_task(read())
         await asyncio.sleep(0)
-        order = await venue.place_limit(req())
+        order = await venue.place_limit(order_request())
         await venue.simulate_fill(order.order_id, D("0.01"))
         await asyncio.sleep(0.01)
         task.cancel()
@@ -166,7 +166,7 @@ class TestSimulatedFill:
 
     async def test_cannot_fill_beyond_pending(self):
         venue = make()
-        order = await venue.place_limit(req())
+        order = await venue.place_limit(order_request())
         with pytest.raises(VenueError, match="queda"):
             await venue.simulate_fill(order.order_id, D("0.02"))
 
@@ -200,7 +200,7 @@ class TestRealBalances:
     async def test_simulated_order_locks_over_real(self):
         inner = RealAccount()
         venue = DryRunVenue(inner, clock=lambda: 1)
-        await venue.place_limit(req(qty="0.01", price="0.00730000"))
+        await venue.place_limit(order_request(qty="0.01", price="0.00730000"))
         lock = D("0.01") * D("0.00730000") * D("1.002")
         bal = await venue.balances()
         assert bal["BTC"] == Balance("BTC", D("0.003") - lock, D("0.001") + lock)
@@ -210,7 +210,7 @@ class TestRealBalances:
     async def test_real_changes_are_seen(self):
         inner = RealAccount()
         venue = DryRunVenue(inner, clock=lambda: 1)
-        await venue.place_limit(req("sell", qty="0.1"))
+        await venue.place_limit(order_request("sell", qty="0.1"))
         inner.real["BTCB2"] = Balance("BTCB2", D("0.7"))  # e.g. a deposit
         bal = await venue.balances()
         assert bal["BTCB2"] == Balance("BTCB2", D("0.6"), D("0.1"))
@@ -219,12 +219,12 @@ class TestRealBalances:
         inner = RealAccount()
         venue = DryRunVenue(inner, clock=lambda: 1)
         with pytest.raises(VenueError, match="saldo insuficiente"):
-            await venue.place_limit(req("sell", qty="0.3"))
+            await venue.place_limit(order_request("sell", qty="0.3"))
 
     async def test_cancelling_returns_to_the_real_balance(self):
         inner = RealAccount()
         venue = DryRunVenue(inner, clock=lambda: 1)
-        order = await venue.place_limit(req())
+        order = await venue.place_limit(order_request())
         await venue.cancel(order.order_id)
         assert await venue.balances() == inner.real
 
@@ -243,13 +243,13 @@ class TestNoWaiting:
     async def test_uses_hub_spec(self):
         inner = RealAccount()
         venue = DryRunVenue(inner, spec=lambda: spec("nk"), clock=lambda: 1)
-        await venue.place_limit(req())
+        await venue.place_limit(order_request())
         assert "market" not in inner.calls
 
     async def test_no_hub_spec_asks_for_it(self):
         inner = RealAccount()
         venue = DryRunVenue(inner, spec=lambda: None, clock=lambda: 1)
-        await venue.place_limit(req())
+        await venue.place_limit(order_request())
         assert inner.calls == ["market"]
 
     async def test_reuses_last_balance_read(self):
@@ -266,8 +266,8 @@ class TestNoWaiting:
         venue = DryRunVenue(inner, spec=lambda: spec("nk"), clock=lambda: now["t"])
         await venue.balances()  # what AccountService does every ≤ 10 s
         now["t"] += 29_000
-        await venue.place_limit(req())
+        await venue.place_limit(order_request())
         assert reads == [1_000]
         now["t"] += 2_000  # 31 s since the read: read again
-        await venue.place_limit(req(cid="t-2"))
+        await venue.place_limit(order_request(cid="t-2"))
         assert reads == [1_000, 32_000]

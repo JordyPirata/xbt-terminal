@@ -165,9 +165,9 @@ class Report:
     values: tuple[ValueSample, ...] = ()
 
 
-def _part(leg: _Leg, qty: Decimal) -> Decimal:
+def _part(order_leg: _Leg, qty: Decimal) -> Decimal:
     """What `qty` of the leg paid or collected, at its average price."""
-    return leg.cost if qty == leg.filled else qty * leg.cost / leg.filled
+    return order_leg.cost if qty == order_leg.filled else qty * order_leg.cost / order_leg.filled
 
 
 def _add_fee(d: _Double, fee: Decimal, asset: str | None, price: Decimal) -> None:
@@ -254,8 +254,8 @@ class _Builder:
             self._close(row["client_id"])
 
     def _on_bot_fire(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
-        pct = data.get("net_pct")
-        self.fired[data["double"]] = _dec(pct) if pct is not None else None
+        percent = data.get("net_pct")
+        self.fired[data["double"]] = _dec(percent) if percent is not None else None
 
     def _on_hanging_leg(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
         self.hanging.add(data["double"])
@@ -279,9 +279,9 @@ class _Builder:
         if order.double is None:
             return
         d = self.doubles[order.double]
-        leg = getattr(d, order.side)
-        leg.filled += qty
-        leg.cost += qty * price
+        order_leg = getattr(d, order.side)
+        order_leg.filled += qty
+        order_leg.cost += qty * price
         asset = data.get("fee_asset")
         _add_fee(d, fee, asset, price)
         self.fill_fees[key] = (d, price, fee, asset)
@@ -345,12 +345,12 @@ class _Builder:
             status = "hanging"
         else:
             status = "closed"
-        result = pct = None
+        result = percent = None
         if status == "closed":
             # with the whole leg matched, its exact cost: the average carries a division
             paid, got = _part(buy, matched), _part(sell, matched)
             result = got - paid - d.fees - token_fees
-            pct = result / paid * 100
+            percent = result / paid * 100
         return DoubleResult(
             id=d.id,
             origin="bot" if d.id in self.fired else "manual",
@@ -367,7 +367,7 @@ class _Builder:
             mismatch=mismatch,
             status=status,
             result=result,
-            result_pct=pct,
+            result_pct=percent,
             expected_pct=self.fired.get(d.id),
             token_fees=token_fees,
         )

@@ -28,22 +28,22 @@ def candles(n=3, price="0.00725"):
     return [Candle(T0 + i * MIN, p, p, p, p, D("1")) for i in range(n)]
 
 
-def trade(vid, price, ts, qty="0.5"):
-    return Trade(vid, D(price), D(qty), "buy", ts)
+def trade(venue_id, price, ts, qty="0.5"):
+    return Trade(venue_id, D(price), D(qty), "buy", ts)
 
 
-def book(vid, bids, asks, ts=NOW, seq=None):
-    lv = lambda rows: tuple(Level(D(p), D(q)) for p, q in rows)  # noqa: E731
-    return BookSnapshot(vid, lv(bids), lv(asks), ts, seq)
+def book(venue_id, bids, asks, ts=NOW, seq=None):
+    price_level = lambda rows: tuple(Level(D(p), D(q)) for p, q in rows)  # noqa: E731
+    return BookSnapshot(venue_id, price_level(bids), price_level(asks), ts, seq)
 
 
 class Daemon:
     def __init__(self, tmp_path, book_depth=50):
         self.s = Rig(tmp_path)
         self.hub = self.s.hub
-        for st in self.hub.state.values():
-            st.candles["1m"].load(candles())
-            st.ready, st.loaded_at = True, T0
+        for state in self.hub.state.values():
+            state.candles["1m"].load(candles())
+            state.ready, state.loaded_at = True, T0
         self.engine = Engine(self.hub, mode="dry-run", orders=self.s.orders, journal=self.s.journal)
         self.path = tmp_path / "m.sock"
         self.server = ControlServer(
@@ -54,7 +54,7 @@ class Daemon:
         await self.server.start()
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         await self.server.aclose()
 
 
@@ -77,8 +77,8 @@ def same_book(a, b, n=50):
 class TestSnapshotOnConnect:
     async def test_spec_book_candles_and_connection(self, linked):
         daemon, remote = linked
-        for vid in ("nk", "nx"):
-            mine, theirs = remote.market.state[vid], daemon.hub.state[vid]
+        for venue_id in ("nk", "nx"):
+            mine, theirs = remote.market.state[venue_id], daemon.hub.state[venue_id]
             assert mine.spec == theirs.spec
             assert same_book(mine.book, theirs.book)
             assert mine.book.valid == theirs.book.valid
@@ -103,7 +103,7 @@ class TestSnapshotOnConnect:
             d.hub.state["nx"].ready = False
             remote = RemoteEngine(d.path, has_bot=False, retry_s=0.02)
             seen = []
-            remote.market.subscribe(lambda vid, what: seen.append((vid, what)))
+            remote.market.subscribe(lambda venue_id, what: seen.append((venue_id, what)))
             task = asyncio.create_task(remote.run())
             await until(lambda: remote.market.state["nk"].ready)
             d.hub.state["nx"].ready = True
@@ -119,7 +119,7 @@ class TestEvents:
     async def test_new_book(self, linked):
         daemon, remote = linked
         seen = []
-        remote.market.subscribe(lambda vid, what: seen.append((vid, what)))
+        remote.market.subscribe(lambda venue_id, what: seen.append((venue_id, what)))
         daemon.hub.apply("nx", book("nx", [("0.0071", "2"), ("0.0070", "3")], [("0.0074", "1")]))
         await until(lambda: remote.market.state["nx"].book.mid == daemon.hub.state["nx"].book.mid)
         assert same_book(remote.market.state["nx"].book, daemon.hub.state["nx"].book)

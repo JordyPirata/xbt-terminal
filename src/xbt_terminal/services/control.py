@@ -192,8 +192,8 @@ class ControlServer:
         """Called by the hub: a forwarding bug cannot take its venue down (RNF-14)."""
         try:
             work()
-        except Exception as exc:
-            self._engine.report_fault("control", exc)
+        except Exception as error:
+            self._engine.report_fault("control", error)
 
     def _forward(self, venue: VenueId, event: MarketEvent) -> None:
         if isinstance(event, Trade):
@@ -243,8 +243,8 @@ class ControlServer:
     def _state(self) -> dict[str, Any] | None:
         try:
             return {"type": "state", "state": snapshot(self._engine)}
-        except Exception as exc:  # a bug here cannot take the daemon down (RNF-14)
-            self._engine.report_fault("control", exc)
+        except Exception as error:  # a bug here cannot take the daemon down (RNF-14)
+            self._engine.report_fault("control", error)
             return None
 
     def _line(self, message: dict[str, Any]) -> bytes:
@@ -312,17 +312,17 @@ class ControlServer:
             msg = loads(line)
         except ValueError as exc:
             return {"type": "error", "error": str(exc)}
-        cmd, rid = msg.get("cmd"), msg.get("id")
-        head: dict[str, Any] = {"type": "reply", "cmd": cmd}
+        command, rid = msg.get("cmd"), msg.get("id")
+        head: dict[str, Any] = {"type": "reply", "cmd": command}
         if rid is not None:
             head["id"] = rid
-        if cmd == "ping":
+        if command == "ping":
             return {"type": "pong"} if rid is None else {**head, "kind": "pong", "value": None}
-        if cmd in ("bot_on", "bot_off"):
-            return {**head, "error": self._bot(cmd)}
-        work = self._commands.get(cmd) if isinstance(cmd, str) else None
+        if command in ("bot_on", "bot_off"):
+            return {**head, "error": self._bot(command)}
+        work = self._commands.get(command) if isinstance(command, str) else None
         if work is None:
-            error = {"type": "error", "error": f"orden no admitida: {cmd!r}"}
+            error = {"type": "error", "error": f"orden no admitida: {command!r}"}
             return error if rid is None else {**error, "id": rid}
         args = msg.get("args") or {}
         try:
@@ -341,11 +341,11 @@ class ControlServer:
             reply["token"] = token
         return reply
 
-    def _bot(self, cmd: str) -> str | None:
+    def _bot(self, command: str) -> str | None:
         bot = self._engine.bot
         if bot is None:
             return "no hay [bot] en la config"
-        if cmd == "bot_on":
+        if command == "bot_on":
             error = bot.arm()
             log.info("bot on from a client%s", f": {error}" if error else "")
         else:
@@ -441,4 +441,6 @@ class ControlServer:
         if rebalance is None or not rebalance.venues:
             raise RefusedError("reequilibrio: el daemon no tiene keys de ningún venue")
         fees = await rebalance.load()
-        return Fees(tuple(FeeRow(vid, asset, fee) for (vid, asset), fee in fees.items())), None
+        return Fees(
+            tuple(FeeRow(venue_id, asset, fee) for (venue_id, asset), fee in fees.items())
+        ), None

@@ -233,8 +233,8 @@ class StreamingVenue:
             return fn(*args)
         except VenueError:
             raise
-        except PARSE_ERRORS as exc:
-            raise VenueError(f"{self.name}: respuesta inesperada ({exc!r})") from exc
+        except PARSE_ERRORS as error:
+            raise VenueError(f"{self.name}: respuesta inesperada ({error!r})") from error
 
     async def sending(self, request: Awaitable[Any], parse: Callable[[Any], T]) -> T:
         """Await a send that creates something on the venue and read the reply with `parse`.
@@ -245,20 +245,20 @@ class StreamingVenue:
             payload = await request
         except NOT_SENT:
             raise
-        except httpx.HTTPError as exc:
-            detail = f"{type(exc).__name__} {exc}".strip()
-            raise UncertainError(f"{self.name}: sin respuesta clara ({detail})") from exc
+        except httpx.HTTPError as error:
+            detail = f"{type(error).__name__} {error}".strip()
+            raise UncertainError(f"{self.name}: sin respuesta clara ({detail})") from error
         except UncertainError:
             raise
-        except VenueError as exc:
-            status = exc.status
-            if status is not None and (status >= 500 or (exc.unreadable and status < 400)):
-                raise UncertainError(str(exc), status=status) from exc
+        except VenueError as error:
+            status = error.status
+            if status is not None and (status >= 500 or (error.unreadable and status < 400)):
+                raise UncertainError(str(error), status=status) from error
             raise
         try:
             return parse(payload)
-        except (*PARSE_ERRORS, VenueError) as exc:
-            raise UncertainError(f"{self.name}: respuesta al envío ilegible ({exc})") from exc
+        except (*PARSE_ERRORS, VenueError) as error:
+            raise UncertainError(f"{self.name}: respuesta al envío ilegible ({error})") from error
 
     async def recent_trades(self, limit: int) -> list[Trade]:
         """Most recent trades in chronological order. Marks them as seen."""
@@ -302,8 +302,8 @@ class StreamingVenue:
                 await work
             except asyncio.CancelledError:
                 raise
-            except BaseException as exc:
-                queue.put_nowait(_Crash(exc))
+            except BaseException as error:
+                queue.put_nowait(_Crash(error))
 
         def spawn(work: Awaitable[None]) -> asyncio.Task[None]:
             return asyncio.create_task(guarded(work))
@@ -343,8 +343,8 @@ class StreamingVenue:
                                     log.info("%s: end of fallback REST polling", self.name)
                                 emit(self.state("ws", "up"))
                             emit(event)
-                except WS_ERRORS as exc:
-                    cause = f"{type(exc).__name__}: {exc}"
+                except WS_ERRORS as error:
+                    cause = f"{type(error).__name__}: {error}"
                 failures += 1
                 delay = self._backoff.delay(failures)
                 log.warning(
@@ -374,10 +374,10 @@ class StreamingVenue:
                     limit = min(FALLBACK_TRADES, self.max_trades)
                     events += self.fresh(await self._fetch_trades(limit))
                 new_status: ConnStatus = "up"
-            except (httpx.HTTPError, VenueError) as exc:
+            except (httpx.HTTPError, VenueError) as error:
                 events, new_status = [], "down"
                 if status != "down":
-                    log.warning("%s: fallback REST down: %s", self.name, describe(exc))
+                    log.warning("%s: fallback REST down: %s", self.name, describe(error))
             if new_status != status:
                 if new_status == "up":
                     log.info("%s: fallback REST has data", self.name)

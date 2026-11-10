@@ -71,9 +71,13 @@ class BotRig:
         bal = {"BTC": Balance("BTC", D("1")), "BTCB2": Balance("BTCB2", D("1000"))}
         own = {"nk": bal | (nk_extra or {}), "nx": bal}
         self.venues = {
-            vid: DryRunVenue(feed, own[vid], spec=lambda vid=vid: self.hub.state[vid].spec,
-                             clock=self.clock)
-            for vid, feed in self.feeds.items()
+            venue_id: DryRunVenue(
+                feed,
+                own[venue_id],
+                spec=lambda venue_id=venue_id: self.hub.state[venue_id].spec,
+                clock=self.clock,
+            )
+            for venue_id, feed in self.feeds.items()
         }  # fmt: skip
         self.account = AccountService(
             self.venues, journal=self.journal, retry_s=0.01, clock=self.clock, faults=self.faults
@@ -102,7 +106,7 @@ class BotRig:
         await self.until(lambda: all(s.balances for s in self.account.state.values()))
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         for task in self.tasks:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
@@ -115,11 +119,13 @@ class BotRig:
 
     def books(self, nk=("0.00690000", "0.00700000"), nx=("0.00720000", "0.00730000")):
         """They cross by default: buy on NonKYC at 0.007 and sell on Neoxa at 0.0072."""
-        for vid, (bid, ask) in (("nk", nk), ("nx", nx)):
+        for venue_id, (bid, ask) in (("nk", nk), ("nx", nx)):
             snap = BookSnapshot(
-                vid, (Level(D(bid), D("50")),), (Level(D(ask), D("50")),), self.clock.now
+                venue_id, (Level(D(bid), D("50")),), (Level(D(ask), D("50")),), self.clock.now
             )
-            self.feeds[vid].push(ConnState(vid, "market", "ws", "up", 10.0, self.clock.now), snap)
+            self.feeds[venue_id].push(
+                ConnState(venue_id, "market", "ws", "up", 10.0, self.clock.now), snap
+            )
 
     def events(self, name=None):
         rows = [
@@ -130,7 +136,7 @@ class BotRig:
         return [r for r in rows if name is None or r["event"] == name]
 
     async def open_orders(self):
-        return {vid: await v.open_orders() for vid, v in self.venues.items()}
+        return {venue_id: await v.open_orders() for venue_id, v in self.venues.items()}
 
 
 @pytest.fixture
@@ -153,7 +159,7 @@ class TestFire:
         assert (double.sell.req.venue, double.sell.req.price) == ("nx", D("0.00718560"))
         assert double.buy.req.qty == D("10")  # max_qty
         # dry-run does not fill: both are cancelled at fill_timeout_ms
-        assert {leg.status for leg in double.legs} == {"cancelled"}
+        assert {order_leg.status for order_leg in double.legs} == {"cancelled"}
         assert await rig.open_orders() == {"nk": [], "nx": []}
         (fire,) = rig.events("bot_fire")
         assert fire["data"]["double"] == double.id and D(fire["data"]["qty"]) == 10
@@ -176,9 +182,9 @@ class TestFire:
         rig.books()
         await rig.until(lambda: rig.orders.doubles)
         (double,) = rig.orders.doubles.values()
-        await rig.until(lambda: all(leg.order_id for leg in double.legs))
-        for leg in double.legs:
-            await rig.venues[leg.req.venue].simulate_fill(leg.order_id, D("10"))
+        await rig.until(lambda: all(order_leg.order_id for order_leg in double.legs))
+        for order_leg in double.legs:
+            await rig.venues[order_leg.req.venue].simulate_fill(order_leg.order_id, D("10"))
         await rig.until(lambda: rig.bot.state.status == "cooldown")
         assert rig.events("cancel_sent") == []
 
@@ -213,8 +219,8 @@ class TestBlocks:
         rig.books()
         await rig.until(lambda: rig.hub.state["nx"].book.valid)
         rig.clock.now += 16_000
-        for vid in ("nk", "nx"):  # connection heartbeat: no longer gives freshness
-            rig.hub.apply(vid, ConnState(vid, "market", "ws", "up", 10.0, rig.clock.now))
+        for venue_id in ("nk", "nx"):  # connection heartbeat: no longer gives freshness
+            rig.hub.apply(venue_id, ConnState(venue_id, "market", "ws", "up", 10.0, rig.clock.now))
         rig.feeds["nx"].rest_book = BookSnapshot(
             "nx", (Level(D("0.00720000"), D("50")),), (Level(D("0.00730000"), D("50")),), NOW
         )
@@ -320,7 +326,7 @@ async def test_confirmation_shows_book_walk(tmp_path):
 @pytest.mark.spec("RF-21", "CA-09")
 class TestStop:
     async def test_leg_rejected_by_venue(self, rig):
-        async def refuse(req):
+        async def refuse(order_request):
             raise VenueError("Neoxa: [400] rechazada")
 
         rig.venues["nx"].place_limit = refuse
@@ -335,7 +341,7 @@ class TestStop:
     async def test_unconnected_leg_says_not_sent(self, rig):
         """D-51: unconnected, the order never left; the stop must not say "rechazada"."""
 
-        async def offline(req):
+        async def offline(order_request):
             raise httpx.ConnectTimeout("")
 
         rig.venues["nx"].place_limit = offline
@@ -349,7 +355,7 @@ class TestStop:
         )
 
     async def test_uncertain_leg(self, rig):
-        async def unclear(req):
+        async def unclear(order_request):
             raise UncertainError("Neoxa: sin respuesta clara (ReadTimeout)")
 
         rig.venues["nx"].place_limit = unclear
@@ -486,7 +492,7 @@ async def test_turning_off_while_firing_leaves_it_off(tmp_path):
 
 @pytest.mark.spec("RF-21")
 async def test_turned_off_while_firing_and_ending_badly_stays_halted(tmp_path):
-    async def refuse(req):
+    async def refuse(order_request):
         await asyncio.sleep(0.05)  # gives time to turn it off with the double in flight
         raise VenueError("Neoxa: [400] rechazada")
 
@@ -622,8 +628,8 @@ def fills_on_place(venue, qty):
     """The venue matches on receipt, like Neoxa: fills `qty` before the ack."""
     place = venue.place_limit
 
-    async def placed(req):
-        order = await place(req)
+    async def placed(order_request):
+        order = await place(order_request)
         if qty > 0:
             order = await venue.simulate_fill(order.order_id, qty)
         return order
@@ -708,7 +714,7 @@ class TestFirstLeg:
             await rig.__aexit__(None, None, None)
 
     async def test_rejected_other_stays(self, tmp_path):
-        async def refuse(req):
+        async def refuse(order_request):
             raise VenueError("Neoxa: [400] rechazada")
 
         rig = BotRig(tmp_path, limits=LEAD)

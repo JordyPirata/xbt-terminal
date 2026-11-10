@@ -69,14 +69,14 @@ def scenario(path):
     before the order arrives (`bot_miss`), one where the other leg falls (hanging) and
     another good one."""
     rows = ['{"format":1}\n']
-    for vid in ("nk", "nx"):
-        rows.append(line(T0, vid, "market", spec(vid)))
-        rows.append(line(T0, vid, "conn", ConnState(vid, "market", "ws", "up", None, T0)))
-        rows.append(line(T0, vid, "book", snap(vid, *QUIET[vid], T0)))
+    for venue_id in ("nk", "nx"):
+        rows.append(line(T0, venue_id, "market", spec(venue_id)))
+        rows.append(line(T0, venue_id, "conn", ConnState(venue_id, "market", "ws", "up", None, T0)))
+        rows.append(line(T0, venue_id, "book", snap(venue_id, *QUIET[venue_id], T0)))
 
-    def at(s, vid, bid, ask, qty="1"):
+    def at(s, venue_id, bid, ask, qty="1"):
         t = T0 + int(s * 1000)
-        rows.append(line(t, vid, "book", snap(vid, bid, ask, t, qty)))
+        rows.append(line(t, venue_id, "book", snap(venue_id, bid, ask, t, qty)))
 
     cross, calm = ("0.0095", "0.0096"), QUIET["nx"]
     at(10, "nx", *cross)  # good
@@ -120,12 +120,12 @@ class TestReplayStream:
     def test_same_events_in_order_with_their_times(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         loop, _, feeds = venues_on_virtual(tmp_path, recording)
-        got = {vid: [] for vid in feeds}
+        got = {venue_id: [] for venue_id in feeds}
 
-        async def drain(vid):
-            async with aclosing(feeds[vid].market_stream()) as stream:
+        async def drain(venue_id):
+            async with aclosing(feeds[venue_id].market_stream()) as stream:
                 async for event in stream:
-                    got[vid].append((loop.now_ms(), event))
+                    got[venue_id].append((loop.now_ms(), event))
                     if isinstance(event, ConnState) and event.status == "down":
                         return
 
@@ -136,15 +136,15 @@ class TestReplayStream:
             loop.run_until_complete(both())
         finally:
             loop.close()
-        for vid in feeds:
+        for venue_id in feeds:
             want = [
                 (r.t, r.event)
                 for r in read_recording(recording)
-                if r.venue == vid and r.event != spec(vid)
+                if r.venue == venue_id and r.event != spec(venue_id)
             ]
-            assert got[vid][:-1] == want
-            assert got[vid][-1][1].status == "down"
-            assert got[vid][-1][0] == T0 + 90_000  # both, when the recording ends
+            assert got[venue_id][:-1] == want
+            assert got[venue_id][-1][1].status == "down"
+            assert got[venue_id][-1][0] == T0 + 90_000  # both, when the recording ends
 
     def test_another_origin_shifts_times_equally(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
@@ -182,8 +182,8 @@ async def sim_on(tmp_path, books, *, competitor="0", latency=0):
     """A SimVenue with the `books` book already loaded."""
     recording = tmp_path / "r.jsonl"
     rows = ['{"format":1}\n']
-    for vid in ("nk", "nx"):
-        rows.append(line(T0, vid, "market", spec(vid)))
+    for venue_id in ("nk", "nx"):
+        rows.append(line(T0, venue_id, "market", spec(venue_id)))
     rows.append(line(T0, "nk", "book", books))
     recording.write_text("".join(rows))
     settings = load_settings(config(tmp_path, competitor=competitor), tmp_path / "no.env",

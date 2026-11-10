@@ -52,7 +52,7 @@ class TestFailures:
     async def test_bug_on_prepare_does_not_close_terminal(self, tmp_path):
         rig = Rig(tmp_path)
 
-        async def boom(cmd):
+        async def boom(command):
             raise RuntimeError("bug al preparar")
 
         rig.app.orders.prepare = boom
