@@ -279,18 +279,4 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 
 ### T-98 Renombrar identificadores abreviados · `done` · RNF-21 · D-83
 
-### T-99 Quitar comentarios que repiten el código · `todo` · RNF-21 · D-83 · dep T-98
-- Revisar `#` y docstrings de `src/`, `tests/` y `tools/`. Se borran los que
-  repiten lo que dice el código. Se conservan los del porqué, las referencias
-  `Spec: RF-xx · Task: T-xx` y las notas de seguridad (p. ej. RNF-18 en
-  `core/journal.py`).
-- Sin cambio de comportamiento: mismos tests, mismo `spec_trace`, mismo ruff.
-
-- **Estado (2026-11-09), en curso.** Hecho en `src/`: quitados los 41 banners de
-  sección sin referencia a la spec y cuatro notas que repetían la línea de al lado.
-  Se conservan, por criterio: `# fmt:`, `# type:`, `# noqa` (directivas); referencias
-  `RF-`, `RNF-`, `D-`, `T-`, `PA-` (trazabilidad, también en banners como `# -- mid
-  move (RF-19, D-71) --`); unidades de los campos (`# BTC`, `# high to low`); y los
-  porqués y casos límite. Pendiente de decidir: si se quitan también las unidades y las
-  etiquetas de paso en `tests/` (`# subscribe`, `# arrives`), y si los docstrings de
-  funciones cuentan como comentario (hoy se conservan).
+### T-99 Quitar comentarios que repiten el código · `done` · RNF-21 · D-83 · dep T-98

@@ -180,7 +180,6 @@ async def candles_every_timeframe(harness: Harness) -> None:
             assert candle.volume >= 0
 
 
-# --- market stream -------------------------------------------------------------
 
 
 def outside(task: asyncio.Task[Any]) -> bool:
@@ -274,7 +273,6 @@ async def clock_skew_from_date(harness: Harness) -> None:
     assert abs(skew - SKEW_MS) <= 1_000, skew
 
 
-# --- private -------------------------------------------------------------------
 
 
 @check
@@ -471,7 +469,6 @@ async def secrets_stay_out(harness: Harness) -> None:
         assert not any(secret in text for text in texts), "un secreto en un texto"
 
 
-# --- optional ------------------------------------------------------------------
 
 
 @check(needs=Depositor)

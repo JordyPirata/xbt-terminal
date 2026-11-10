@@ -92,7 +92,6 @@ class FakeVenue:
         if not self.keys:
             raise ReadOnlyError("fake: sin keys")
 
-    # -- public --------------------------------------------------------------
 
     async def market(self) -> MarketSpec:
         await self.hit("market")
@@ -141,7 +140,6 @@ class FakeVenue:
     async def aclose(self) -> None:
         pass
 
-    # -- private -------------------------------------------------------------
 
     async def balances(self) -> dict[str, Balance]:
         self.need_keys()
@@ -211,7 +209,6 @@ class FakeVenue:
                     del known[oid]
                     yield replace(order, status="cancelled")
 
-    # -- optional ------------------------------------------------------------
 
     async def deposit_address(self, asset: str) -> DepositAddress:
         self.need_keys()

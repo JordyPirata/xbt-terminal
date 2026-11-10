@@ -87,7 +87,7 @@ class TestRecorder:
         rig.recorder.record(T0)
         (row,) = rig.rows()
         assert row["event"] == "value" and row["mode"] == "live"
-        assert json.dumps(row["data"]["value"]) == '"0.334"'  # Decimal as string
+        assert json.dumps(row["data"]["value"]) == '"0.334"'
 
     async def test_no_mid_is_skipped(self, tmp_path):
         rig = Rig(tmp_path, nx_mid=None)

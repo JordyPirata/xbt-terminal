@@ -27,7 +27,7 @@ FIRE_BUDGET_MS = 50.0
 
 
 def median_ms(work, runs: int = 30) -> float:
-    work()  # warm up
+    work()
     times = []
     for _ in range(runs):
         t0 = time.perf_counter()

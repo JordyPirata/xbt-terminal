@@ -1270,3 +1270,15 @@ ni los textos que ve el usuario.
   dataclass del formato de grabación).
 - Guarda: `tests/unit/test_names.py` falla ante cualquier nombre de una letra fuera de
   la lista permitida, excepto los campos de clase y el oráculo.
+
+### T-99 Quitar comentarios que repiten el código · `done` · RNF-21 · D-83 · dep T-98
+- Criterio (elegido por el dueño): quitar solo los comentarios que repiten el código.
+  Se conservan directivas (`# fmt:`, `# type:`, `# noqa`), referencias a la spec
+  (RF/RNF/CA/PA/D/T), unidades de los campos, porqués, escenarios y ejemplos numéricos.
+- Hecho: 41 banners de sección sin spec en `src/` y `tests/`; cinco notas que repetían
+  la línea de al lado (`src/`); y etiquetas de paso (`# subscribe`, `# pong`,
+  `# venue time`, `# warm up`, `# previous`, `# restart`, `# 40/exchange,`) y dos
+  comentarios que repetían el assert (`# Decimal as string`, `# starts with the date`).
+- Revisado: los 313 comentarios de texto libre de `src/` y los de `tests/` y `tools/`
+  cortos o con cifras; los más largos de `tests/` se repasaron en listado.
+- Sin cambio de comportamiento: tests, ruff y `spec_trace` iguales.

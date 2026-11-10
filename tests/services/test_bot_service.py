@@ -468,7 +468,7 @@ class TestDailyCap:
             await rig.until(lambda: rig.bot.state.status == "cooldown")
             rig.bot.disarm()
             rig.clock.now += 60_000
-            again = rig.new_bot(limits=replace(BOT, max_daily_btc=D("0.05")))  # restart
+            again = rig.new_bot(limits=replace(BOT, max_daily_btc=D("0.05")))
             rig.tasks.append(asyncio.create_task(again.run()))
             assert again.arm() is None
             rig.books()

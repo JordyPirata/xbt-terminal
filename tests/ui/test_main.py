@@ -236,7 +236,6 @@ async def test_rebalance_with_venues_with_keys(tmp_path, live):
     await engine.hub.aclose()
 
 
-# -- xbt daemon -------------------------------------------------------------------------
 
 
 @pytest.fixture

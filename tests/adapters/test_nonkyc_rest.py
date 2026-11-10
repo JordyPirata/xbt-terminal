@@ -126,7 +126,7 @@ class TestBook:
         snap = await venue.book_snapshot(20)
         params = api.calls.last.request.url.params
         assert (params["symbol"], params["limit"]) == ("BTCB2/BTC", "20")
-        assert (snap.venue, snap.ts) == ("nk", 1792508949688)  # venue time
+        assert (snap.venue, snap.ts) == ("nk", 1792508949688)
         assert snap.seq is None  # the REST sequence is not the WS one (D-10)
         assert len(snap.bids) == 20 and len(snap.asks) == 20
         assert snap.bids[0] == Level(D("0.00721141"), D("0.0014"))

@@ -92,7 +92,7 @@ class FakeNonKYC:
         if script == "resync":  # the book freezes and the venue restarts its sequence
             await ws.send(FRAMES["updateTrades"])
             await expect("subscribeOrderbook")  # asked by `resync()` (D-76)
-            await ws.send(update_book(LAST_SEQ + 1, bids=[("0.0070", "1")]))  # previous
+            await ws.send(update_book(LAST_SEQ + 1, bids=[("0.0070", "1")]))
             await ws.send(RESET_SNAPSHOT)
             await ws.send(update_book(6, bids=[("0.0071", "2")]))
             await ws.send(LAST_TRADE)

@@ -302,9 +302,9 @@ class NeoxaHarness(RestHarness):
         async def handler(ws: Any) -> None:
             sessions["n"] += 1
             await ws.send(frames["open"])
-            await ws.recv()  # namespace connect
+            await ws.recv()
             await ws.send(frames["connect"])
-            await ws.recv()  # subscribe
+            await ws.recv()
             await ws.send(frames["orderbook"])
             await ws.send(frames["trades"])
             if not (drop and sessions["n"] == 1):

@@ -50,9 +50,9 @@ class FakeNeoxa:
         if script == "silent":
             await ws.wait_closed()
             return
-        got.append(await ws.recv())  # 40/exchange,
+        got.append(await ws.recv())
         await ws.send(FRAMES["connect"])
-        got.append(await ws.recv())  # subscribe
+        got.append(await ws.recv())
         if script == "error":
             await ws.send('42/exchange,["exchange:error",{"message":"Invalid trading pair"}]')
             await ws.wait_closed()
@@ -60,9 +60,9 @@ class FakeNeoxa:
         for frame in (FRAMES["orderbook"], OTHER_PAIR, POOL, FRAMES["trades"], LIVE_TRADE):
             await ws.send(frame)
         await ws.send("2")
-        got.append(await ws.recv())  # pong
+        got.append(await ws.recv())
         if script == "drop":
-            return  # closes the connection
+            return
         await ws.send(LAST_TRADE)  # marks the end of the script
         await ws.wait_closed()
 

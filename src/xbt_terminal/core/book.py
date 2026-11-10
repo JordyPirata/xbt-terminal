@@ -65,7 +65,7 @@ class L2Book:
             return False
         if event.seq is not None and self.seq is not None:
             if event.seq <= self.seq:
-                return True  # old or duplicate
+                return True
             if event.seq != self.seq + 1:
                 self.valid = False
                 return False

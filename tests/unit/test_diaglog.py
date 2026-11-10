@@ -40,7 +40,7 @@ def test_format_with_time_level_and_module(diag):
     log.warning("ws down")
     (line,) = diag.read_text().splitlines()
     assert "WARNING" in line and "xbt_terminal.prueba" in line and line.endswith("ws down")
-    assert line[:4].isdigit()  # starts with the date
+    assert line[:4].isdigit()
 
 
 @pytest.mark.spec("RNF-19", "RNF-18")
