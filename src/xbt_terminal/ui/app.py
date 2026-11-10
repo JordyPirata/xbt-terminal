@@ -105,7 +105,7 @@ from .screens.results import ResultsScreen
 from .status import StatusBar, VenueLink
 
 MIN_SIZE = (160, 45)  # RNF-02
-VENUES: tuple[VenueId, ...] = ("nk", "nx")  # left, right
+VENUES: tuple[VenueId, ...] = ("nk", "nx")
 BOOK_EVERY_S = 0.1
 CHART_EVERY_S = 1.0
 STATUS_EVERY_S = 1.0  # state age; changes are drawn on arrival
@@ -496,7 +496,6 @@ class XbtApp(App[None]):
         except Exception as exception:
             self.engine.report_fault(where, exception)
 
-    # -- commands ---------------------------------------------------------------
 
     def say(self, message: str, *, error: bool = False) -> None:
         self.last_message, self.last_error = message, error
@@ -555,7 +554,6 @@ class XbtApp(App[None]):
         else:
             await self._cancel(command)
 
-    # -- bot (phase 2) -----------------------------------------------------------
 
     def _bot_command(self, command: BotCommand) -> None:
         if self.bot is None:
@@ -632,7 +630,6 @@ class XbtApp(App[None]):
 
         return callback
 
-    # -- double order ------------------------------------------------------------
 
     async def _double(self, command: DoubleOrder) -> None:
         if self.orders is None:
@@ -710,7 +707,6 @@ class XbtApp(App[None]):
         )
         self._draw_status()
 
-    # -- open orders and cancelling ---------------------------------------------
 
     def action_orders(self) -> None:
         self._show_orders(None)
@@ -753,7 +749,6 @@ class XbtApp(App[None]):
 
         return callback
 
-    # -- help and click on the book -------------------------------------------------
 
     def action_results(self) -> None:
         self._show_results("dia")

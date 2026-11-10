@@ -325,8 +325,6 @@ class OrderService:
             self._just_sent.setdefault(order_request.venue, {})[order.order_id] = order
         return Sent(order)
 
-    # -- double order ------------------------------------------------------------
-
     def subscribe_doubles(self, listener: Callable[[str], None]) -> None:
         self._double_listeners.append(listener)
 
@@ -558,8 +556,6 @@ class OrderService:
         msg = f"orden incierta {order_request.client_id}: {error}; no se creó"
         return Reconciled(order_request.client_id, order_request.venue, "missing", msg)
 
-    # -- cancelling ---------------------------------------------------------------
-
     async def plan_cancel(
         self, command: CancelOrder | CancelVenue | CancelAll
     ) -> CancelPlan | CancelRefused:
@@ -667,8 +663,6 @@ class OrderService:
             data={"scope": scope, "remaining": left},
         )
         return venue_id, left, None
-
-    # -- validation -------------------------------------------------------------
 
     async def _validate(
         self,

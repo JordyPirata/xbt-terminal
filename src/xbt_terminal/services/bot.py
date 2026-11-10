@@ -153,8 +153,6 @@ class BotService:
         if account is not None:
             account.subscribe(self._on_change)
 
-    # -- control ----------------------------------------------------------------
-
     def subscribe(self, listener: Listener) -> None:
         self._listeners.append(listener)
 
@@ -218,8 +216,6 @@ class BotService:
 
     async def run(self) -> None:
         await supervised(self._loop, self._crash, retry_s=self._tick_s)
-
-    # -- loop --------------------------------------------------------------------
 
     def _on_change(self, venue: VenueId, what: str) -> None:
         if what == "book":
@@ -387,8 +383,6 @@ class BotService:
                 return "reloj desfasado o sin medir"
         return None
 
-    # -- firing ------------------------------------------------------------------
-
     async def _fire(self, fire: Fire, move: Mapping[VenueId, Decimal | None]) -> None:
         now = self._clock()
         self._set(fired(self.state, fire, now))
@@ -483,8 +477,6 @@ class BotService:
                 break
             await asyncio.sleep(POLL_S)
         return _verdict(self._orders.doubles[double_id], cancel.errors)
-
-    # -- state and journal ---------------------------------------------------------
 
     def _set(self, state: BotState) -> None:
         old, self.state = self.state, state

@@ -159,8 +159,6 @@ class RemoteMarket:
     async def aclose(self) -> None:
         pass
 
-    # -- from the socket ------------------------------------------------------------
-
     def _init(self, venue_id: VenueId, view: MarketView) -> None:
         state = _fresh(venue_id)
         state.spec, state.ready, state.error = view.spec, view.ready, view.error
@@ -346,8 +344,6 @@ class RemoteOrders:
         self._tokens: dict[int, tuple[object, str]] = {}  # id(proposal) → (proposal, token)
         self._listeners: list[Callable[[str], None]] = []
 
-    # -- what the app reads ---------------------------------------------------------
-
     @property
     def doubles(self) -> dict[str, DoubleState]:
         return self._link.doubles
@@ -372,8 +368,6 @@ class RemoteOrders:
             if before.get(did) != state:
                 for listener in self._listeners:
                     listener(did)
-
-    # -- requests ------------------------------------------------------------------
 
     async def _ask(self, command: str, args: dict[str, Any]) -> Any:
         kind, raw, token = await self._link.request(command, args)
@@ -443,7 +437,6 @@ class RemoteEngine:
         self._waiting: dict[int, asyncio.Future[tuple[str, Any, str | None]]] = {}
         self._listeners: list[Callable[[Notice], None]] = []
         self._link_listeners: list[Callable[[bool], None]] = []
-        # what to do with each daemon message type (`_handle`)
         self._handlers: dict[Any, Callable[[dict[str, Any]], None]] = {
             "hello": self._on_hello,
             "state": self._on_state,
@@ -457,8 +450,6 @@ class RemoteEngine:
             "reply": self._on_reply,
             "error": self._on_error,
         }
-
-    # -- what the app reads -------------------------------------------------------
 
     @property
     def doubles(self) -> dict[str, DoubleState]:
@@ -496,8 +487,6 @@ class RemoteEngine:
         notice = Notice(text, error)
         for listener in self._listeners:
             listener(notice)
-
-    # -- connection ------------------------------------------------------------------
 
     def send(self, command: str) -> None:
         if self._writer is None or not self.connected:

@@ -72,9 +72,6 @@ STATUSES: dict[str, OrderStatus] = {
 }
 
 
-# --- pure parsing --------------------------------------------------------------
-
-
 def parse_market(payload: dict[str, Any], symbol: str) -> MarketSpec:
     pair = next((row for row in payload.get("pairs") or [] if row.get("pair") == symbol), None)
     if pair is None:
@@ -240,9 +237,6 @@ def order_body(symbol: str, order_request: OrderRequest) -> str:
     )
 
 
-# --- adapter -------------------------------------------------------------------
-
-
 class NeoxaVenue(StreamingVenue):
     id = "nx"
     name = "Neoxa"
@@ -276,8 +270,6 @@ class NeoxaVenue(StreamingVenue):
 
     async def aclose(self) -> None:
         await self._http.aclose()
-
-    # -- REST ------------------------------------------------------------------
 
     async def _request(
         self,
@@ -346,8 +338,6 @@ class NeoxaVenue(StreamingVenue):
 
     def _parse_trades(self, raws: Iterable[dict[str, Any]]) -> list[tuple[str, Trade]]:
         return self.parsing(lambda rs: [parse_trade(row) for row in rs], list(raws))
-
-    # -- private ---------------------------------------------------------------
 
     async def _private(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         return await self._request("GET", path, kind="private", params=params, auth=True)
@@ -458,8 +448,6 @@ class NeoxaVenue(StreamingVenue):
         async with aclosing(fan_in(start)) as events:
             async for event in events:
                 yield event
-
-    # -- WS --------------------------------------------------------------------
 
     async def _ws_events(self) -> AsyncIterator[MarketEvent]:
         async with self.ws_connect() as ws:

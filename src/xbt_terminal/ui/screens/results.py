@@ -158,7 +158,7 @@ class ResultsScreen(ModalScreen[None]):
             selected = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
         table.clear()
         priced = {token for token, _ in self.report.summary.prices}
-        for double in reversed(self.report.doubles):  # most recent on top
+        for double in reversed(self.report.doubles):
             table.add_row(*self._cells(double, priced), key=double.id)
         if selected is not None and selected in table.rows:
             table.move_cursor(row=table.get_row_index(selected), animate=False)

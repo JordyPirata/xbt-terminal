@@ -68,8 +68,6 @@ class DryRunVenue:
         self._last_base: tuple[int, dict[str, Balance]] | None = None  # (time, balances)
         self._listeners: list[asyncio.Queue[PrivateEvent]] = []
 
-    # -- market: delegated ---------------------------------------------------------
-
     async def market(self) -> MarketSpec:
         self._spec = await self.inner.market()
         return self._spec
@@ -85,8 +83,6 @@ class DryRunVenue:
 
     def market_stream(self) -> AsyncIterator[MarketEvent]:
         return self.inner.market_stream()
-
-    # -- private: simulated --------------------------------------------------------
 
     async def _base(self, *, reuse: bool = False) -> dict[str, Balance]:
         """Real (or fixed) balances. With `reuse`, the last recent read will do."""

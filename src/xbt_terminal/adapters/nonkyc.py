@@ -94,9 +94,6 @@ def _side(raw: Any) -> str:
     return side
 
 
-# --- signature -----------------------------------------------------------------
-
-
 def sign(key: str, secret: str, url: str, body: str, nonce: str) -> str:
     return hmac.new(
         secret.encode(), f"{key}{url}{body}{nonce}".encode(), hashlib.sha256
@@ -107,9 +104,6 @@ def login_frame(key: str, secret: str, nonce: str, req_id: int) -> str:
     signature = hmac.new(secret.encode(), nonce.encode(), hashlib.sha256).hexdigest()
     params = {"algo": "HS256", "pKey": key, "nonce": nonce, "signature": signature}
     return json.dumps({"method": "login", "params": params, "id": req_id})
-
-
-# --- pure parsing --------------------------------------------------------------
 
 
 def parse_market(
@@ -345,9 +339,6 @@ def candles_from_trades(trades: list[Trade], limit: int, truncated: bool) -> lis
     return candles[-limit:]
 
 
-# --- adapter -------------------------------------------------------------------
-
-
 class NonKYCVenue(StreamingVenue):
     id = "nk"
     name = "NonKYC"
@@ -393,8 +384,6 @@ class NonKYCVenue(StreamingVenue):
 
     async def aclose(self) -> None:
         await self._http.aclose()
-
-    # -- REST ------------------------------------------------------------------
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         await self._limiter.acquire("market")
@@ -489,8 +478,6 @@ class NonKYCVenue(StreamingVenue):
             "firstDataRequest": 1,
         }
         return self.parsing(parse_candles, await self._get("/market/candles", params))
-
-    # -- private ---------------------------------------------------------------
 
     async def balances(self) -> dict[str, Balance]:
         payload = await self._signed("GET", "/balances", kind="private")
@@ -665,8 +652,6 @@ class NonKYCVenue(StreamingVenue):
                     raise VenueError(f"NonKYC WS privado: {err.get('code')} {err.get('message')}")
                 if msg.get("method") in ("activeOrders", "report"):
                     yield None
-
-    # -- WS --------------------------------------------------------------------
 
     async def resync(self) -> None:
         """Ask for the book again on the same WS, as on a gap (D-76). What arrives until the

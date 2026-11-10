@@ -108,8 +108,6 @@ class Engine:
         for listener in self._listeners:
             listener(notice)
 
-    # -- tasks -------------------------------------------------------------------
-
     def services(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]:
         """Market, account, bot and value sampling, each named; each service isolates its
         faults (RNF-14), so whoever runs them does not supervise them."""

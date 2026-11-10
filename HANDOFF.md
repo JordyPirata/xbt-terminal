@@ -9,9 +9,9 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 - **M20 — Nombres descriptivos (D-83), rama `t-98-descriptive-names` (PR abierta):**
   T-98 hecha: nombres completos en `src/`, `tests/` y `tools/`, con dos excepciones
   (`tests/unit/bot_reference.py`, oráculo congelado, y el campo `t` de
-  `services/recording.py`). Guarda en `tests/unit/test_names.py`. Siguiente: **T-99**,
-  quitar los comentarios que repiten el código (los del porqué, las referencias
-  `Spec: … Task: …` y las notas de seguridad se quedan).
+  `services/recording.py`). Guarda en `tests/unit/test_names.py`. T-99 en curso: quitados
+  los banners de sección sin spec y cuatro notas redundantes; falta decidir el criterio
+  para las unidades y etiquetas de paso en `tests/` (ver el cuerpo de T-99).
 - **Test de timing intermitente:** `tests/ui/test_orders_ui.py::test_dialog_does_not_wait_for_network`
   (umbral de 0,3 s) falló una vez en la suite completa con carga; en aislado pasa
   3 de 3. No tiene relación con los renombrados.

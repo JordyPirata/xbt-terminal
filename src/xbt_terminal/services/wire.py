@@ -192,7 +192,6 @@ _DECODERS: tuple[tuple[Callable[[Any, Any], bool], Callable[[Any, Any], Any]], .
 )
 
 
-# -- daemon messages ----------------------------------------------------------
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

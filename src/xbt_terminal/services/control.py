@@ -163,8 +163,6 @@ class ControlServer:
         await server.wait_closed()
         self.path.unlink(missing_ok=True)
 
-    # -- from the engine to the clients -------------------------------------------------
-
     def _subscribe(self) -> None:
         if self._subscribed:  # services have no unsubscribe: once per server
             return
@@ -271,8 +269,6 @@ class ControlServer:
             self._clients.discard(client)
             client.close()
 
-    # -- from the clients to the engine -------------------------------------------------
-
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         # the initial snapshot (hello, state, one market_init per venue) does not count in the queue
         client = _Client(writer, self._queue_max + 2 + len(self._engine.hub.state))
@@ -354,8 +350,6 @@ class ControlServer:
             log.info("bot off from a client")
         self._dirty.set()
         return error
-
-    # -- orders: proposal with a reference, confirmation with the reference --------
 
     @property
     def _commands(self) -> dict[str, Callable[[dict[str, Any]], Awaitable[tuple[Any, str | None]]]]:

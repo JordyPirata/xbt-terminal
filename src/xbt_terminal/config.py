@@ -142,9 +142,6 @@ class Settings:
         return self.mode != "read-only" and venue in self.credentials
 
 
-# --- reading values ------------------------------------------------------------
-
-
 class _Section:
     """View of a TOML table remembering its path and which keys were read."""
 
@@ -235,9 +232,6 @@ def _venue_ids(sec: _Section) -> None:
     if set(sec.data) != set(VENUE_IDS):
         found = ", ".join(sorted(sec.data)) or "ninguno"
         raise ConfigError(f"{sec.path}: se esperan {', '.join(VENUE_IDS)}; hay {found}")
-
-
-# --- loading -------------------------------------------------------------------
 
 
 def load_config(path: Path) -> AppConfig:

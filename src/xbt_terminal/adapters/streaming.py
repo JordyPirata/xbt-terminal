@@ -177,8 +177,6 @@ class StreamingVenue:
         self._current: ConnState | None = None
         self.clock_skew_ms: int | None = None  # venue - local, from the last `Date` (RNF-16)
 
-    # -- to implement by each venue -----------------------------------------
-
     async def book_snapshot(self, depth: int) -> BookSnapshot:
         raise NotImplementedError
 
@@ -198,8 +196,6 @@ class StreamingVenue:
         if ws is not None:
             log.warning("%s: book differs from REST; reconnecting the WS", self.name)
             await ws.close()
-
-    # -- helpers for the venues --------------------------------------------
 
     @asynccontextmanager
     async def ws_connect(self) -> AsyncIterator[Any]:
@@ -273,8 +269,6 @@ class StreamingVenue:
             (trade for i, trade in trades if self._seen.add(i)), key=lambda trade: trade.ts
         )
 
-    # -- state and latency -----------------------------------------------------
-
     def _latency_ms(self, source: Source) -> float | None:
         if source == "ws":
             if self._ws is not None:
@@ -285,8 +279,6 @@ class StreamingVenue:
     def state(self, source: Source, status: ConnStatus) -> ConnState:
         latency = self._latency_ms(source) if status == "up" else None
         return ConnState(self.id, "market", source, status, latency, since=self._clock())
-
-    # -- supervisor --------------------------------------------------------------
 
     async def market_stream(self) -> AsyncIterator[MarketEvent]:
         """Market events from whichever source is alive, with `ConnState` on state changes
