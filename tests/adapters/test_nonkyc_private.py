@@ -98,8 +98,8 @@ def expected_sign(url: str, body: str, nonce: str) -> str:
     ).hexdigest()
 
 
-def req(side="buy", qty="0.0100", price="0.00725000"):
-    return OrderRequest("nk", side, D(qty), D(price), "t-abc123")
+def req(side="buy", quantity="0.0100", price="0.00725000"):
+    return OrderRequest("nk", side, D(quantity), D(price), "t-abc123")
 
 
 @pytest.mark.spec("RF-12")

@@ -288,19 +288,23 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
   falla ante identificadores de una letra fuera de una lista corta y justificada.
 - Cierre: `uv run pytest`, `uv run ruff check .`, `uv run python tools/spec_trace.py`;
   `git diff` sin cambios en `tests/fixtures/`, `config.example.toml` ni `docs/`.
-- **Estado (2026-11-09), sin cerrar:** hechos `vid`, `exc`, `cmd`, `st`, `lv`, `leg`,
-  `pct` y `req` en `src/`, `tests/` y `tools/`. Verificado: AST idéntico salvo
-  nombres (solo cambian los cinco `"exc"` de `parametrize` a `"error"`, a propósito),
-  atributos y keywords intactos, campos de clase intactos, ruff limpio, 1736 tests
-  en verde. Hechos a mano, por colisión con un nombre ya usado en la función: `cmd` en
-  `tests/ui/test_account_ui.py` (pasa a `command_line`, porque la función se llama
-  `command`), y los helpers de módulo `req` (tests) y `lv` (test_book), que el
-  renombrado por tokens saltaba por ser `def` a nivel de módulo.
-  Pendiente: `exc` en 41 sitios donde la función ya usa `error` (p. ej. `except ... as exc`
-  en `services/control.py`); `qty`, `ts` y `tp` (usos como keyword: hay que distinguir
-  campos de dataclass de parámetros por llamada); letras sueltas; el test de guarda de
-  abreviaturas, que se escribe al final. Excepción: `leg` en `core/double.py` se
-  conserva, es el término del dominio (`DoubleState.leg(side)`).
+- **Estado (2026-11-09), sin cerrar.** Hechos en `src/`, `tests/` y `tools/`:
+  `vid`, `exc`, `cmd`, `st`, `lv`, `leg`, `pct`, `req`, `qty`, `ts` y `tp`. Verificado
+  contra el commit: AST idéntico salvo nombres; los únicos literales de cadena que
+  cambian son los nombres de `parametrize` que siguen a un parámetro renombrado y el
+  docstring de `decode`; atributos, keywords (`qty=`, `ts=`) y campos de clase intactos;
+  ruff limpio; 1736 tests en verde.
+  - `cmd` en `tests/ui/test_account_ui.py` pasa a `command_line` (la función se llama
+    `command`); `exc` pasa a `exception` donde la función ya usa `error`.
+  - Los helpers de módulo `req` y `lv` en los tests se renombran a mano (un `def` a
+    nivel de módulo no lo renombra el renombrado por función).
+  - Las llamadas con keyword se conservan: `qty=`, `ts=` y `tp=` son campos de dataclass
+    o parámetros de helpers; las funciones que reciben esos keywords no se renombran
+    (renombrado por tokens que excluye los nodos `keyword`).
+  - `leg` en `core/double.py` se conserva: es el término del dominio (`DoubleState.leg`).
+  Pendiente: **letras sueltas** (unos 5 900 usos en 145 ficheros, `D` incluido), que
+  piden decidir por función. Sin ellas no se puede cerrar T-98 ni escribir el test de
+  guarda contra abreviaturas.
 
 ### T-99 Quitar comentarios que repiten el código · `todo` · RNF-21 · D-83 · dep T-98
 - Revisar `#` y docstrings de `src/`, `tests/` y `tools/`. Se borran los que

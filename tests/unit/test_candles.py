@@ -7,8 +7,8 @@ MIN = 60_000
 T0 = 1_759_996_800_000  # exact multiple of 1 h
 
 
-def trade(ts: int, price: str, qty: str = "0.1") -> Trade:
-    return Trade("nk", D(price), D(qty), "buy", ts)
+def trade(ts: int, price: str, quantity: str = "0.1") -> Trade:
+    return Trade("nk", D(price), D(quantity), "buy", ts)
 
 
 def candle(ts_open: int, o: str, h: str, low: str, c: str, v: str) -> Candle:

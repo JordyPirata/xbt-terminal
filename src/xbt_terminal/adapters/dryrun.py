@@ -165,29 +165,29 @@ class DryRunVenue:
             await self.cancel(order.order_id)
 
     async def simulate_fill(
-        self, order_id: str, qty: Decimal, *, price: Decimal | None = None
+        self, order_id: str, quantity: Decimal, *, price: Decimal | None = None
     ) -> Order:
         """Fill `qty` of an open order with taker fee, at `price` or, without it, at its
         limit price. When fully filled, what was over-locked comes back."""
         order = self._orders.get(order_id)
         if order is None or order.is_done:
             raise VenueError(f"dry-run: no hay orden abierta {order_id}")
-        if qty <= 0 or qty > order.remaining:
-            raise VenueError(f"dry-run: a {order_id} le queda {order.remaining:f}, no {qty:f}")
+        if quantity <= 0 or quantity > order.remaining:
+            raise VenueError(f"dry-run: a {order_id} le queda {order.remaining:f}, no {quantity:f}")
         spec = await self._market_spec()
         price = order.price if price is None else price
-        gross = qty * price
+        gross = quantity * price
         fee = gross * spec.taker_fee
         lock_asset, locked = self._locks[order_id]
         if order.side == "buy":
             used = gross + fee
             self._move(lock_asset, locked=-used)
-            self._move(spec.base, available=qty)
+            self._move(spec.base, available=quantity)
         else:
-            used = qty
+            used = quantity
             self._move(lock_asset, locked=-used)
             self._move(spec.quote, available=gross - fee)
-        filled = order.filled + qty
+        filled = order.filled + quantity
         status = "filled" if filled == order.qty else "partial"
         updated = replace(order, filled=filled, status=status, ts=self._clock())
         self._orders[order_id] = updated
@@ -200,7 +200,7 @@ class DryRunVenue:
         self._publish(updated)
         trade_id = f"dry-fill-{next(self._fill_ids)}"
         self._publish(
-            Fill(self.id, trade_id, order_id, order.side, price, qty, fee, spec.quote,
+            Fill(self.id, trade_id, order_id, order.side, price, quantity, fee, spec.quote,
                  self._clock())
         )  # fmt: skip
         return updated

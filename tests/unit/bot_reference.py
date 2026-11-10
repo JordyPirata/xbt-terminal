@@ -160,26 +160,38 @@ def _pair(
         "day_cap": budget / buy_price,
     }
     binding = min(terms, key=lambda k: terms[k])
-    qty = b.spec.quantize_qty(a.spec.quantize_qty(terms[binding]))
-    if a.spec.quantize_qty(qty) != qty:  # lots that do not fit each other
-        return _Miss(Skip("lot_mismatch", f"{qty} no es múltiplo del lote de {buy}"), net_pct)
-    if qty <= 0 or qty < max(a.spec.min_qty, b.spec.min_qty):
+    quantity = b.spec.quantize_qty(a.spec.quantize_qty(terms[binding]))
+    if a.spec.quantize_qty(quantity) != quantity:  # lots that do not fit each other
+        return _Miss(Skip("lot_mismatch", f"{quantity} no es múltiplo del lote de {buy}"), net_pct)
+    if quantity <= 0 or quantity < max(a.spec.min_qty, b.spec.min_qty):
         detail = f"{buy}→{sell}: {terms[binding]:f} {BASE_LABEL} no llega al lote"
         return _Miss(Skip(binding, detail), net_pct)
-    if qty * buy_price < a.spec.min_notional or qty * sell_price < b.spec.min_notional:
-        detail = f"{buy}→{sell}: {qty} {BASE_LABEL} bajo el mínimo"
+    if quantity * buy_price < a.spec.min_notional or quantity * sell_price < b.spec.min_notional:
+        detail = f"{buy}→{sell}: {quantity} {BASE_LABEL} bajo el mínimo"
         return _Miss(Skip("min_notional", detail), net_pct)
-    return Fire(buy, sell, buy_price, sell_price, qty, unit * qty, net_pct)
+    return Fire(buy, sell, buy_price, sell_price, quantity, unit * quantity, net_pct)
 
 
 def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarget) -> str | None:
     """Why the double worsens some venue's ratio (RF-26), or None. Buys on `a` and sells
     on `b`, with each one's taker fee; valued at the venue mid or, without one, at its
     leg's limit price."""
-    qty = fire.qty
+    quantity = fire.qty
     legs = (
-        (fire.buy_venue, a, qty, -qty * fire.buy_price * (1 + a.spec.taker_fee), fire.buy_price),
-        (fire.sell_venue, b, -qty, qty * fire.sell_price * (1 - b.spec.taker_fee), fire.sell_price),
+        (
+            fire.buy_venue,
+            a,
+            quantity,
+            -quantity * fire.buy_price * (1 + a.spec.taker_fee),
+            fire.buy_price,
+        ),
+        (
+            fire.sell_venue,
+            b,
+            -quantity,
+            quantity * fire.sell_price * (1 - b.spec.taker_fee),
+            fire.sell_price,
+        ),
     )
     for venue_id, v, d_base, d_quote, limit in legs:
         price = v.mid if v.mid is not None else limit

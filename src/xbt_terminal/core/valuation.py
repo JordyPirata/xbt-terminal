@@ -56,7 +56,7 @@ class ValueSummary:
 
 
 def sample(
-    inv: Inventory, mids: Mapping[VenueId, Decimal | None], ts: int, every_ms: int
+    inv: Inventory, mids: Mapping[VenueId, Decimal | None], timestamp: int, every_ms: int
 ) -> ValueSample | None:
     """The inventory sample, or None if a venue lacks its balance or mid: a partial
     total would mislead (like RF-05)."""
@@ -68,7 +68,7 @@ def sample(
         if item is None or item.value is None or mid is None:
             return None
         venues.append(VenueValue(venue_id, item.btc, item.btcb2, mid, item.value))
-    return ValueSample(ts, inv.value, every_ms, tuple(venues))
+    return ValueSample(timestamp, inv.value, every_ms, tuple(venues))
 
 
 def sample_data(s: ValueSample) -> dict[str, Any]:
@@ -102,8 +102,8 @@ def _parse(row: Mapping[str, Any]) -> ValueSample:
         for venue_id, v in sorted(data["venues"].items())
     )
     at = data.get("at")
-    ts = at if isinstance(at, int) and not isinstance(at, bool) else _ms(row["ts"])
-    return ValueSample(ts, _dec(data["value"]), int(data["every_ms"]), venues)
+    timestamp = at if isinstance(at, int) and not isinstance(at, bool) else _ms(row["ts"])
+    return ValueSample(timestamp, _dec(data["value"]), int(data["every_ms"]), venues)
 
 
 def series(

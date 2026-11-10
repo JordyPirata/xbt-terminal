@@ -101,26 +101,26 @@ def parse_market(payload: dict[str, Any], symbol: str) -> MarketSpec:
 def _levels(raw: Iterable[dict[str, Any]], reverse: bool) -> tuple[Level, ...]:
     merged: dict[Decimal, Level] = {}
     for price_level in raw:
-        price, qty, amm = (
+        price, quantity, amm = (
             D(price_level["price"]),
             D(price_level["quantity"]),
             bool(price_level.get("isAmm")),
         )
         prev = merged.get(price)
         if prev is not None:
-            qty, amm = prev.qty + qty, prev.amm or amm
-        merged[price] = Level(price, qty, amm=amm)
+            quantity, amm = prev.qty + quantity, prev.amm or amm
+        merged[price] = Level(price, quantity, amm=amm)
     return tuple(
         sorted(merged.values(), key=lambda price_level: price_level.price, reverse=reverse)
     )
 
 
-def parse_book(payload: dict[str, Any], ts: int) -> BookSnapshot:
+def parse_book(payload: dict[str, Any], timestamp: int) -> BookSnapshot:
     return BookSnapshot(
         venue="nx",
         bids=_levels(payload.get("bids") or [], reverse=True),
         asks=_levels(payload.get("asks") or [], reverse=False),
-        ts=ts,
+        ts=timestamp,
     )
 
 
@@ -133,13 +133,13 @@ def _side(raw: Any) -> str:
 def parse_trade(raw: dict[str, Any]) -> tuple[str, Trade]:
     """(trade_id, Trade). REST usa trade_id/executed_at; el WS, tradeId/time."""
     trade_id = raw.get("trade_id") or raw["tradeId"]
-    ts = raw.get("executed_at") or raw["time"]
+    timestamp = raw.get("executed_at") or raw["time"]
     return str(trade_id), Trade(
         venue="nx",
         price=D(raw["price"]),
         qty=D(raw["quantity"]),
         side=_side(raw.get("side")),  # type: ignore[arg-type]
-        ts=iso_ms(ts),
+        ts=iso_ms(timestamp),
     )
 
 

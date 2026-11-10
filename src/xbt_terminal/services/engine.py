@@ -148,8 +148,8 @@ class Engine:
             return
         try:
             new = self.orders.check_doubles()
-        except Exception as exc:  # every second: a bug here cannot close anything
-            self.report_fault("engine", exc)
+        except Exception as exception:  # every second: a bug here cannot close anything
+            self.report_fault("engine", exception)
             return
         for double_id in new:
             self._say(

@@ -29,8 +29,10 @@ def row(event, at, venue=None, client_id=None, mode="live", **data):
     }  # fmt: skip
 
 
-def sent(cid, venue, side, qty, price, double, at=T0, mode="live"):
-    return row("order_sent", at, venue, cid, mode, side=side, qty=qty, price=price, double=double)
+def sent(cid, venue, side, quantity, price, double, at=T0, mode="live"):
+    return row(
+        "order_sent", at, venue, cid, mode, side=side, qty=quantity, price=price, double=double
+    )
 
 
 def ack(cid, venue, oid, at=T0):

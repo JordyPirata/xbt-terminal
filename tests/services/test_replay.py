@@ -53,8 +53,10 @@ def config(tmp_path, *, competitor="0", bot=BOT):
     return path
 
 
-def snap(venue, bid, ask, t, qty="1"):
-    return BookSnapshot(venue, (Level(D(bid), D(qty)),), (Level(D(ask), D(qty)),), t, None)
+def snap(venue, bid, ask, t, quantity="1"):
+    return BookSnapshot(
+        venue, (Level(D(bid), D(quantity)),), (Level(D(ask), D(quantity)),), t, None
+    )
 
 
 def line(t, venue, kind, event):
@@ -159,10 +161,10 @@ class TestReplayStream:
                         return loop.now_ms(), event.ts
 
         try:
-            at, ts = loop.run_until_complete(first_cross())
+            at, timestamp = loop.run_until_complete(first_cross())
         finally:
             loop.close()
-        assert at == ts == T0 + 10_000 + 1_000_000
+        assert at == timestamp == T0 + 10_000 + 1_000_000
 
     async def test_rest_book_is_the_replayed_one(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")

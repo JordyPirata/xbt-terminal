@@ -43,8 +43,8 @@ def _levels(rnd: random.Random, start: Decimal, n: int, up: bool) -> tuple[Level
     for _ in range(n):
         if price <= 0:
             break
-        qty = Decimal(rnd.choice(["0.0001", "0.001", "0.05", "0.3", "1", "7", "40", "250"]))
-        out.append(Level(price, qty))
+        quantity = Decimal(rnd.choice(["0.0001", "0.001", "0.05", "0.3", "1", "7", "40", "250"]))
+        out.append(Level(price, quantity))
         step = TICK * rnd.choice([1, 1, 2, 5, 13, 40])
         price = price + step if up else price - step
     return tuple(out)

@@ -33,7 +33,7 @@ KINDS: dict[str, type] = {
     "trade": Trade,
     "conn": ConnState,
 }
-_KIND_OF = {tp: kind for kind, tp in KINDS.items()}
+_KIND_OF = {target_type: kind for kind, target_type in KINDS.items()}
 
 
 class RecordingError(ValueError):
@@ -102,8 +102,8 @@ class Recorded:
 def _row(path: Path, number: int, raw: bytes) -> Recorded:
     try:
         row = loads(raw)
-        tp = KINDS[row["kind"]]
-        return Recorded(int(row["t"]), row["venue"], decode(tp, row["data"]))
+        target_type = KINDS[row["kind"]]
+        return Recorded(int(row["t"]), row["venue"], decode(target_type, row["data"]))
     except (ValueError, KeyError, TypeError, ArithmeticError) as error:
         raise RecordingError(f"{path}:{number}: línea mala: {error!r}") from None
 

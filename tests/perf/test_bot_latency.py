@@ -36,20 +36,22 @@ def median_ms(work, runs: int = 30) -> float:
     return statistics.median(times) * 1000
 
 
-def side(start: Decimal, n: int, up: bool, qty: str = "10") -> tuple[Level, ...]:
-    return tuple(Level(start + STEP * i if up else start - STEP * i, D(qty)) for i in range(n))
+def side(start: Decimal, n: int, up: bool, quantity: str = "10") -> tuple[Level, ...]:
+    return tuple(Level(start + STEP * i if up else start - STEP * i, D(quantity)) for i in range(n))
 
 
-def deep_views(nx_bid: str, qty: str = "10") -> dict[str, VenueView]:
+def deep_views(nx_bid: str, quantity: str = "10") -> dict[str, VenueView]:
     """NonKYC sells from 0.007 and Neoxa buys from `nx_bid`, 50 levels."""
     nk_ask, bid = D("0.00700000"), D(nx_bid)
     return {
         "nk": VenueView(
-            spec("nk"), side(nk_ask - STEP * 100, LEVELS, False), side(nk_ask, LEVELS, True, qty),
+            spec("nk"),
+            side(nk_ask - STEP * 100, LEVELS, False),
+            side(nk_ask, LEVELS, True, quantity),
             D("10"), D("10000"),
         ),
         "nx": VenueView(
-            spec("nx"), side(bid, LEVELS, False, qty), side(bid + STEP * 100, LEVELS, True),
+            spec("nx"), side(bid, LEVELS, False, quantity), side(bid + STEP * 100, LEVELS, True),
             D("10"), D("10000"),
         ),
     }  # fmt: skip
@@ -71,7 +73,7 @@ WALK = BotLimits(
 @pytest.mark.spec("RNF-23", "RNF-22", "RF-20")
 class TestDecide:
     @pytest.mark.parametrize(
-        "case,nx_bid,qty,want",
+        "case,nx_bid,quantity,want",
         [
             ("cruce con walk", "0.00760000", "10", Fire),
             ("sin cruce con walk", "0.00690000", "10", Skip),
@@ -79,8 +81,8 @@ class TestDecide:
             ("todos los pares rinden", "0.00900000", "0.0001", Fire),
         ],
     )
-    def test_decide_with_50_levels(self, case, nx_bid, qty, want):
-        views, state = deep_views(nx_bid, qty), arm(BotState())
+    def test_decide_with_50_levels(self, case, nx_bid, quantity, want):
+        views, state = deep_views(nx_bid, quantity), arm(BotState())
         assert isinstance(decide(views, state, WALK, NOW), want)
         ms = median_ms(lambda: decide(views, state, WALK, NOW))
         print(f"\ndecide · {case}: {ms:.3f} ms")

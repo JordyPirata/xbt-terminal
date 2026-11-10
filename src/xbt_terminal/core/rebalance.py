@@ -212,9 +212,11 @@ def _down(value: Decimal) -> Decimal:
     return value.quantize(STEP, rounding=ROUND_DOWN) if value > 0 else ZERO
 
 
-def break_even(cost_btc: Decimal, qty: Decimal, price: Decimal, net_pct: Decimal) -> int | None:
+def break_even(
+    cost_btc: Decimal, quantity: Decimal, price: Decimal, net_pct: Decimal
+) -> int | None:
     """Doubles of `qty` at net `net_pct` that pay `cost_btc`; None if they do not earn."""
-    per_double = qty * price * net_pct / HUNDRED
+    per_double = quantity * price * net_pct / HUNDRED
     if per_double <= 0:
         return None
     return math.ceil(cost_btc / per_double)

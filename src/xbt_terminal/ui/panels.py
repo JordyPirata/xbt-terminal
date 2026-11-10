@@ -191,13 +191,13 @@ class BookPanel(Static):
         if row is None:
             return Text(" " * SIDE_W)
         price = f"{row.price:.{pd}f}"
-        qty, cum = f"{row.qty:.{qd}f}", f"{row.cumulative:.{qd}f}"
+        quantity, cum = f"{row.qty:.{qd}f}", f"{row.cumulative:.{qd}f}"
         tag = AMM_TAG if row.amm else " " * len(AMM_TAG)
         if side == "bid":
-            line = f"{cum:>{QTY_W}}{qty:>{QTY_W}}{price:>{PRICE_W}}{tag}"
+            line = f"{cum:>{QTY_W}}{quantity:>{QTY_W}}{price:>{PRICE_W}}{tag}"
             style = "green"
         else:
-            line = f"{price:<{PRICE_W}}{qty:>{QTY_W}}{cum:>{QTY_W}}{tag}"
+            line = f"{price:<{PRICE_W}}{quantity:>{QTY_W}}{cum:>{QTY_W}}{tag}"
             style = "red"
         return Text(line, style=f"{style} dim" if row.amm else style)
 

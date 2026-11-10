@@ -491,10 +491,10 @@ class XbtApp(App[None]):
         """A bug in an action is reported and the terminal goes on."""
         try:
             await work
-        except (DaemonGoneError, DaemonRefusedError) as exc:
-            self.say(str(exc), error=True)
-        except Exception as exc:
-            self.engine.report_fault(where, exc)
+        except (DaemonGoneError, DaemonRefusedError) as exception:
+            self.say(str(exception), error=True)
+        except Exception as exception:
+            self.engine.report_fault(where, exception)
 
     # -- commands ---------------------------------------------------------------
 
@@ -523,14 +523,14 @@ class XbtApp(App[None]):
             return
         try:
             command = parse(text)
-        except CommandError as exc:
-            self.say(str(exc), error=True)
+        except CommandError as exception:
+            self.say(str(exception), error=True)
             return
         try:
             await self._dispatch(command)
         # attached: the daemon is away or refused
-        except (DaemonGoneError, DaemonRefusedError) as exc:
-            self.say(str(exc), error=True)
+        except (DaemonGoneError, DaemonRefusedError) as exception:
+            self.say(str(exception), error=True)
 
     async def _dispatch(self, command: Command) -> None:
         if isinstance(command, SetTimeframe):
@@ -812,10 +812,10 @@ class XbtApp(App[None]):
             return
         if not command.value.strip():
             verb = "buy" if event.side == "ask" else "sell"
-            qty = f"{event.qty:.{event.qty_decimals}f}"
-            command.value = f"{verb} {event.venue} {qty} {price}"
+            quantity = f"{event.qty:.{event.qty_decimals}f}"
+            command.value = f"{verb} {event.venue} {quantity} {price}"
             command.place_cursor(len(command.value))
-            self.say(f"{verb} {qty} @ {price}: Enter para confirmar, o edítala")
+            self.say(f"{verb} {quantity} @ {price}: Enter para confirmar, o edítala")
             return
         at = command.cursor_position
         before, after = command.value[:at], command.value[at:]

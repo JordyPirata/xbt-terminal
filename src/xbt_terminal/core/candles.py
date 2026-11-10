@@ -76,9 +76,9 @@ class CandleBuilder:
         if not self._candles:
             return
         close = self._candles[-1].close
-        ts = self._candles[-1].ts_open + self.step
+        timestamp = self._candles[-1].ts_open + self.step
         if self._candles.maxlen is not None:  # after a long gap, only those that fit
-            ts = max(ts, bucket - self._candles.maxlen * self.step)
-        while ts < bucket:
-            self._candles.append(Candle(ts, close, close, close, close, ZERO))
-            ts += self.step
+            timestamp = max(timestamp, bucket - self._candles.maxlen * self.step)
+        while timestamp < bucket:
+            self._candles.append(Candle(timestamp, close, close, close, close, ZERO))
+            timestamp += self.step

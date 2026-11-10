@@ -196,10 +196,12 @@ class SimVenue(DryRunVenue):
                 out.append(replace(level, qty=left))
         return out
 
-    def _spend(self, side: Side, levels: tuple[Level, ...], price: Decimal, qty: Decimal) -> None:
+    def _spend(
+        self, side: Side, levels: tuple[Level, ...], price: Decimal, quantity: Decimal
+    ) -> None:
         recorded = next(price_level.qty for price_level in levels if price_level.price == price)
         used = self._spent.get((side, price), (recorded, ZERO))[1]
-        self._spent[side, price] = (recorded, used + qty)
+        self._spent[side, price] = (recorded, used + quantity)
 
     async def place_limit(self, order_request: OrderRequest) -> Order:
         if self._latency_s:
@@ -210,11 +212,11 @@ class SimVenue(DryRunVenue):
             return order
         levels = book.asks if order_request.side == "buy" else book.bids
         left = self._unspent(order_request.side, levels)
-        for price, qty in match(
+        for price, quantity in match(
             order_request.side, order_request.price, order_request.qty, left, self._taken
         ):
-            self._spend(order_request.side, levels, price, qty)
-            order = await self.simulate_fill(order.order_id, qty, price=price)
+            self._spend(order_request.side, levels, price, quantity)
+            order = await self.simulate_fill(order.order_id, quantity, price=price)
         return order
 
 

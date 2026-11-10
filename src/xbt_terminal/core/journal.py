@@ -56,9 +56,9 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _iso_ms(ts: datetime) -> str:
-    ts = ts.astimezone(UTC)
-    return ts.strftime("%Y-%m-%dT%H:%M:%S.") + f"{ts.microsecond // 1000:03d}Z"
+def _iso_ms(timestamp: datetime) -> str:
+    timestamp = timestamp.astimezone(UTC)
+    return timestamp.strftime("%Y-%m-%dT%H:%M:%S.") + f"{timestamp.microsecond // 1000:03d}Z"
 
 
 class Journal:

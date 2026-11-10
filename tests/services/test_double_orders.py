@@ -72,8 +72,8 @@ class Setup:
             self.orders.on_private_event(venue, order)
 
 
-def dbl(qty="0.01", buy="0.00725000", sell="0.00726000"):
-    return DoubleOrder(D(qty), "nk", D(buy), "nx", D(sell))
+def dbl(quantity="0.01", buy="0.00725000", sell="0.00726000"):
+    return DoubleOrder(D(quantity), "nk", D(buy), "nx", D(sell))
 
 
 @pytest.mark.spec("RF-07", "RF-10")

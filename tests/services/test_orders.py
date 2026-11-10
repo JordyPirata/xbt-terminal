@@ -68,8 +68,8 @@ def buy(qty="0.01", price="0.00725000", venue="nk"):
     return PlaceOrder(venue, "buy", D(qty), D(price))
 
 
-def sell(qty="0.01", price="0.00725000", venue="nk"):
-    return PlaceOrder(venue, "sell", D(qty), D(price))
+def sell(quantity="0.01", price="0.00725000", venue="nk"):
+    return PlaceOrder(venue, "sell", D(quantity), D(price))
 
 
 @pytest.mark.spec("RF-06", "RF-11", "RF-13")

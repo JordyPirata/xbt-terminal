@@ -279,27 +279,29 @@ class OrderService:
                     **extra,
                 },
             )
-        except OSError as exc:
+        except OSError as exception:
             return Failed(
-                order_request, f"no se pudo escribir el journal ({exc}); no se envió", local=True
+                order_request,
+                f"no se pudo escribir el journal ({exception}); no se envió",
+                local=True,
             )
         try:
             order = await self._venues[order_request.venue].place_limit(order_request)
-        except UncertainError as exc:
+        except UncertainError as exception:
             self._record(
                 "order_unknown",
                 venue=order_request.venue,
                 client_id=order_request.client_id,
-                data={"error": describe(exc), **extra},
+                data={"error": describe(exception), **extra},
             )
             self.uncertain[order_request.client_id] = UncertainOrder(
                 order_request, sent_at, known, extra
             )
-            return Uncertain(order_request, describe(exc))
-        except (VenueError, httpx.HTTPError) as exc:
+            return Uncertain(order_request, describe(exception))
+        except (VenueError, httpx.HTTPError) as exception:
             # unconnected, the order never left: it must not look like a venue rejection (D-51)
-            error = describe(exc)
-            if isinstance(exc, NOT_SENT):
+            error = describe(exception)
+            if isinstance(exception, NOT_SENT):
                 error = f"no enviada, sin conexión ({error})"
             self._record(
                 "order_error", venue=order_request.venue, client_id=order_request.client_id,
@@ -374,12 +376,12 @@ class OrderService:
         self._changed(pending.id)
         return DoubleSent(self.doubles[pending.id])
 
-    async def send_held(self, double_id: str, qty: Decimal) -> Sent | Failed | Uncertain:
+    async def send_held(self, double_id: str, quantity: Decimal) -> Sent | Failed | Uncertain:
         """Send the double's `held` leg for `qty` (D-75). It was validated with the first on
         confirming; `qty` does not exceed what was validated."""
         state = self.doubles[double_id]
         (side,) = (order_leg.req.side for order_leg in state.legs if order_leg.status == "held")
-        state = state.resize(side, qty)
+        state = state.resize(side, quantity)
         self.doubles[double_id] = state
         order_request = state.leg(side).req
         async with self._sending(order_request.venue):

@@ -416,8 +416,8 @@ class RemoteOrders:
     async def execute_cancel(self, plan: CancelPlan) -> CancelResult:
         try:
             return await self._ask("execute_cancel", {"token": self._token(plan)})  # type: ignore[no-any-return]
-        except DaemonRefusedError as exc:
-            error = f"el daemon no canceló: {exc}"
+        except DaemonRefusedError as exception:
+            error = f"el daemon no canceló: {exception}"
             return CancelResult(
                 {venue_id: len(o) for venue_id, o in plan.orders.items()},
                 {venue_id: error for venue_id in plan.orders},
@@ -549,8 +549,8 @@ class RemoteEngine:
                 continue
             try:
                 await self._read(reader)
-            except (ConnectionError, OSError, ValueError) as exc:
-                log.warning("connection with the daemon lost: %s", exc)
+            except (ConnectionError, OSError, ValueError) as exception:
+                log.warning("connection with the daemon lost: %s", exception)
             finally:
                 self._writer.close()
                 self._writer = None

@@ -67,8 +67,8 @@ def api():
         yield mock
 
 
-def req(side="buy", qty="0.01", price="0.00725000"):
-    return OrderRequest("nx", side, D(qty), D(price), "t-abc123")
+def req(side="buy", quantity="0.01", price="0.00725000"):
+    return OrderRequest("nx", side, D(quantity), D(price), "t-abc123")
 
 
 @pytest.mark.spec("RNF-09", "RF-12")

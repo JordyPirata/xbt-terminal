@@ -4,8 +4,8 @@ from xbt_terminal.core.book import BookRow, L2Book
 from xbt_terminal.core.models import BookDelta, BookSnapshot, D, Level
 
 
-def price_level(price: str, qty: str, amm: bool = False) -> Level:
-    return Level(D(price), D(qty), amm)
+def price_level(price: str, quantity: str, amm: bool = False) -> Level:
+    return Level(D(price), D(quantity), amm)
 
 
 def snap(seq=10, ts=1_000, bids=None, asks=None) -> BookSnapshot:

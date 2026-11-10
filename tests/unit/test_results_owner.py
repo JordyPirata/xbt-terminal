@@ -20,14 +20,14 @@ QTYS = ("0", "0.005", "0.01", "0.02")
 class ScanBuilder(results_module._Builder):
     """The full scan of every order, as before T-97."""
 
-    def _owner(self, row, data, venue, side, qty, price, at):
+    def _owner(self, row, data, venue, side, quantity, price, at):
         cid = row.get("client_id")
         if cid in self.orders:
             return cid
         oid = data.get("order_id")
         if oid and (venue, str(oid)) in self.acks:
             return self.acks[(venue, str(oid))]
-        fits = [c for c, o in self.orders.items() if o.takes(venue, side, qty, price, at)]
+        fits = [c for c, o in self.orders.items() if o.takes(venue, side, quantity, price, at)]
         if len(fits) > 1:
             fits = [c for c in fits if at - self.orders[c].sent_at <= RECENT_MS]
         return fits[0] if len(fits) == 1 else None
@@ -46,8 +46,8 @@ def random_journal(seed: int, n: int = 120) -> list[dict]:
         if kind < 0.35 or not cids:
             cid = rnd.choice(cids) if cids and rnd.random() < 0.05 else f"c-{i}"
             double = f"d-{i // 2}" if rnd.random() < 0.8 else None
-            qty, price = rnd.choice(QTYS[1:]), rnd.choice(PRICES)
-            rows.append(sent(cid, venue, side, qty, price, double, at))
+            quantity, price = rnd.choice(QTYS[1:]), rnd.choice(PRICES)
+            rows.append(sent(cid, venue, side, quantity, price, double, at))
             cids.append(cid)
             if rnd.random() < 0.5:
                 rows.append(ack(cid, venue, f"o-{cid}", at))
@@ -57,11 +57,11 @@ def random_journal(seed: int, n: int = 120) -> list[dict]:
         elif kind < 0.46:
             rows.append(row("order_error", at, venue, rnd.choice(cids), error="x"))
         else:
-            qty, price = rnd.choice(QTYS), rnd.choice(PRICES)
+            quantity, price = rnd.choice(QTYS), rnd.choice(PRICES)
             ids = rnd.random()
             cid = rnd.choice(cids) if ids < 0.15 else None
             oid = f"o-{rnd.choice(cids)}" if 0.15 <= ids < 0.3 else None
-            rows.append(fill(venue, side, qty, price, cid=cid, oid=oid, at=at, tid=f"tr-{i}"))
+            rows.append(fill(venue, side, quantity, price, cid=cid, oid=oid, at=at, tid=f"tr-{i}"))
     return rows
 
 
@@ -81,10 +81,10 @@ def test_random_journals_exercise_the_id_less_path(monkeypatch):
     reasons = {"one": 0, "recent": 0, "none": 0}
 
     class Counting(ScanBuilder):
-        def _owner(self, row, data, venue, side, qty, price, at):
+        def _owner(self, row, data, venue, side, quantity, price, at):
             if row.get("client_id") in self.orders or data.get("order_id"):
-                return super()._owner(row, data, venue, side, qty, price, at)
-            fits = [c for c, o in self.orders.items() if o.takes(venue, side, qty, price, at)]
+                return super()._owner(row, data, venue, side, quantity, price, at)
+            fits = [c for c, o in self.orders.items() if o.takes(venue, side, quantity, price, at)]
             recent = [c for c in fits if at - self.orders[c].sent_at <= RECENT_MS]
             if len(fits) == 1:
                 reasons["one"] += 1
@@ -92,7 +92,7 @@ def test_random_journals_exercise_the_id_less_path(monkeypatch):
                 reasons["recent"] += 1
             else:
                 reasons["none"] += 1
-            return super()._owner(row, data, venue, side, qty, price, at)
+            return super()._owner(row, data, venue, side, quantity, price, at)
 
     monkeypatch.setattr(results_module, "_Builder", Counting)
     for seed in range(40):

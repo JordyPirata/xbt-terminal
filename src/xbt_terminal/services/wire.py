@@ -74,33 +74,33 @@ def _hints(cls: type) -> dict[str, Any]:
     return typing.get_type_hints(cls)
 
 
-def decode(tp: Any, data: Any) -> Any:
-    """Rebuild `tp` from the JSON `data`; `TypeError` or `ValueError` if it does not fit."""
-    return _decoder(tp)(tp, data)
+def decode(target_type: Any, data: Any) -> Any:
+    """Rebuild `target_type` from JSON `data`; `TypeError` or `ValueError` if it does not fit."""
+    return _decoder(target_type)(target_type, data)
 
 
 @cache
-def _decoder(tp: Any) -> Callable[[Any, Any], Any]:
-    """The decoder of `tp`, chosen once per type: it runs on every message."""
-    origin = typing.get_origin(tp)
+def _decoder(target_type: Any) -> Callable[[Any, Any], Any]:
+    """The decoder of `target_type`, chosen once per type: it runs on every message."""
+    origin = typing.get_origin(target_type)
     for matches, decoder in _DECODERS:
-        if matches(tp, origin):
+        if matches(target_type, origin):
             return decoder
     return _decode_unknown
 
 
-def _decode_unknown(tp: Any, data: Any) -> Any:
-    raise TypeError(f"tipo sin decodificar: {tp!r}")
+def _decode_unknown(target_type: Any, data: Any) -> Any:
+    raise TypeError(f"tipo sin decodificar: {target_type!r}")
 
 
-def _decode_none(tp: Any, data: Any) -> None:
+def _decode_none(target_type: Any, data: Any) -> None:
     if data is not None:
         raise TypeError(f"se esperaba null y llegó {data!r}")
 
 
-def _decode_union(tp: Any, data: Any) -> Any:
+def _decode_union(target_type: Any, data: Any) -> Any:
     """Try each union type in order; the first that fits wins."""
-    args = typing.get_args(tp)
+    args = typing.get_args(target_type)
     if data is None and type(None) in args:
         return None
     errors = []
@@ -111,17 +111,17 @@ def _decode_union(tp: Any, data: Any) -> Any:
             return decode(arg, data)
         except (TypeError, ValueError) as error:
             errors.append(str(error))
-    raise TypeError(f"{data!r} no encaja en {tp}: {'; '.join(errors)}")
+    raise TypeError(f"{data!r} no encaja en {target_type}: {'; '.join(errors)}")
 
 
-def _decode_literal(tp: Any, data: Any) -> Any:
-    args = typing.get_args(tp)
+def _decode_literal(target_type: Any, data: Any) -> Any:
+    args = typing.get_args(target_type)
     if data not in args:
         raise ValueError(f"{data!r} no es uno de {args}")
     return data
 
 
-def _decode_decimal(tp: Any, data: Any) -> Decimal:
+def _decode_decimal(target_type: Any, data: Any) -> Decimal:
     if not isinstance(data, str):
         raise TypeError(f"un Decimal llega como texto, no {type(data).__name__}")
     try:
@@ -130,13 +130,13 @@ def _decode_decimal(tp: Any, data: Any) -> Decimal:
         raise ValueError(f"Decimal inválido: {data!r}") from None
 
 
-def _decode_dataclass(tp: Any, data: Any) -> Any:
+def _decode_dataclass(target_type: Any, data: Any) -> Any:
     """Only the fields that arrive and go to `__init__`; the rest by default."""
     if not isinstance(data, dict):
-        raise TypeError(f"{tp.__name__} llega como objeto")
-    hints = _hints(tp)
+        raise TypeError(f"{target_type.__name__} llega como objeto")
+    hints = _hints(target_type)
     kwargs: dict[str, Any] = {}
-    for f in dataclasses.fields(tp):
+    for f in dataclasses.fields(target_type):
         if not f.init or f.name not in data:
             continue
         value = decode(hints[f.name], data[f.name])
@@ -145,47 +145,47 @@ def _decode_dataclass(tp: Any, data: Any) -> Any:
             fresh.extend(value)
             value = fresh
         kwargs[f.name] = value
-    return tp(**kwargs)
+    return target_type(**kwargs)
 
 
-def _decode_mapping(tp: Any, data: Any) -> dict[Any, Any]:
+def _decode_mapping(target_type: Any, data: Any) -> dict[Any, Any]:
     if not isinstance(data, dict):
         raise TypeError("se esperaba un objeto")
-    key_t, val_t = typing.get_args(tp)
+    key_t, val_t = typing.get_args(target_type)
     return {decode(key_t, k): decode(val_t, v) for k, v in data.items()}
 
 
-def _decode_sequence(tp: Any, data: Any) -> Any:
+def _decode_sequence(target_type: Any, data: Any) -> Any:
     """Lists, tuples (fixed length or `tuple[X, ...]`), deques and sets."""
     if not isinstance(data, list):
         raise TypeError("se esperaba una lista")
-    origin, args = typing.get_origin(tp), typing.get_args(tp)
+    origin, args = typing.get_origin(target_type), typing.get_args(target_type)
     if origin is tuple and not (len(args) == 2 and args[1] is Ellipsis):
         return tuple(decode(a, v) for a, v in zip(args, data, strict=True))
     return origin(decode(args[0], v) for v in data)
 
 
-def _decode_scalar(tp: Any, data: Any) -> Any:
+def _decode_scalar(target_type: Any, data: Any) -> Any:
     """int, str, bool and float; a bool is no number."""
     is_bool = isinstance(data, bool)
-    if tp is float and isinstance(data, int) and not is_bool:
+    if target_type is float and isinstance(data, int) and not is_bool:
         return float(data)
-    if not isinstance(data, tp) or (tp is int and is_bool):
-        raise TypeError(f"se esperaba {tp.__name__} y llegó {data!r}")
+    if not isinstance(data, target_type) or (target_type is int and is_bool):
+        raise TypeError(f"se esperaba {target_type.__name__} y llegó {data!r}")
     return data
 
 
 # In order: the first that fits decides (`decode`).
 _DECODERS: tuple[tuple[Callable[[Any, Any], bool], Callable[[Any, Any], Any]], ...] = (
-    (lambda tp, origin: tp is Any, lambda tp, data: data),
-    (lambda tp, origin: tp is type(None), _decode_none),
-    (lambda tp, origin: origin in (typing.Union, types.UnionType), _decode_union),
-    (lambda tp, origin: origin is typing.Literal, _decode_literal),
-    (lambda tp, origin: tp is Decimal, _decode_decimal),
-    (lambda tp, origin: dataclasses.is_dataclass(tp), _decode_dataclass),
-    (lambda tp, origin: origin in (dict, typing.Mapping, abc.Mapping), _decode_mapping),
-    (lambda tp, origin: origin in (list, tuple, deque, set, frozenset), _decode_sequence),
-    (lambda tp, origin: tp in (int, str, bool, float), _decode_scalar),
+    (lambda target_type, origin: target_type is Any, lambda target_type, data: data),
+    (lambda target_type, origin: target_type is type(None), _decode_none),
+    (lambda target_type, origin: origin in (typing.Union, types.UnionType), _decode_union),
+    (lambda target_type, origin: origin is typing.Literal, _decode_literal),
+    (lambda target_type, origin: target_type is Decimal, _decode_decimal),
+    (lambda target_type, origin: dataclasses.is_dataclass(target_type), _decode_dataclass),
+    (lambda target_type, origin: origin in (dict, typing.Mapping, abc.Mapping), _decode_mapping),
+    (lambda target_type, origin: origin in (list, tuple, deque, set, frozenset), _decode_sequence),
+    (lambda target_type, origin: target_type in (int, str, bool, float), _decode_scalar),
 )
 
 

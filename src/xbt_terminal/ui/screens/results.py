@@ -119,8 +119,8 @@ class ResultsScreen(ModalScreen[None]):
             # every minute and with each fill: the journal is read off the UI thread (T-94)
             try:
                 report = await asyncio.to_thread(self._source.load, rng)
-            except OSError as exc:
-                self._on_error(f"resultados: no se pudo leer el journal ({exc})")
+            except OSError as exception:
+                self._on_error(f"resultados: no se pudo leer el journal ({exception})")
                 return
             if rng == self.range:  # a range change while reading already drew its own
                 self._show(report)

@@ -90,10 +90,10 @@ class DoubleState:
         """The waiting leg is not sent (D-75): closed with 0 filled."""
         return self._with(side, replace(self.leg(side), status="skipped"))
 
-    def resize(self, side: Side, qty: Decimal) -> DoubleState:
+    def resize(self, side: Side, quantity: Decimal) -> DoubleState:
         """The waiting leg goes out for `qty`, what the first filled (D-75)."""
         leg = self.leg(side)
-        return self._with(side, replace(leg, req=replace(leg.req, qty=qty), status="pending"))
+        return self._with(side, replace(leg, req=replace(leg.req, qty=quantity), status="pending"))
 
     def _with(self, side: Side, leg: Leg) -> DoubleState:
         return replace(self, buy=leg) if side == "buy" else replace(self, sell=leg)

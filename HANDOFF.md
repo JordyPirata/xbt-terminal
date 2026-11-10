@@ -6,16 +6,12 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-09)
 
-- **M20 — Nombres descriptivos (D-83), en curso, sin commit:** T-98 a medias y
-  T-99 sin empezar. Hecho: `vid`→`venue_id`, `exc`→`error`, `cmd`→`command`,
-  `st`→`state`, `lv`→`price_level`, `leg`→`order_leg`, `pct`→`percent`,
-  `req`→`order_request` en `src/`, `tests/` y `tools/`, con un renombrado por
-  tokens dentro de cada función (no por regex). Gate verde: 1736 tests, ruff,
-  `spec_trace` 77/81 como antes. Quedan `qty`, `ts` y `tp` (bloqueados por el guard
-  de keyword: pasan a campos de dataclass), las letras sueltas y las funciones que
-  ya usaban el nombre destino. `leg` se conserva en `core/double.py` (es el término
-  del dominio, `DoubleState.leg(side)`). Los `"exc"` de `parametrize` se cambiaron
-  a `"error"` junto con su firma. Estado exacto en el cuerpo de T-98.
+- **M20 — Nombres descriptivos (D-83), en curso, rama `t-98-descriptive-names` (PR abierta):**
+  T-98 sin cerrar y T-99 sin empezar. Hechos: `vid`, `exc`, `cmd`, `st`, `lv`, `leg`,
+  `pct`, `req`, `qty`, `ts` y `tp` en `src/`, `tests/` y `tools/`. Queda la **letra
+  suelta** (unos 5 900 usos; `D` es el alias de Decimal), que pide decidir por función
+  y bloquea el test de guarda. `leg` en `core/double.py` se conserva (término del
+  dominio). Detalle en el cuerpo de T-98.
 - **Test de timing intermitente:** `tests/ui/test_orders_ui.py::test_dialog_does_not_wait_for_network`
   (umbral de 0,3 s) falló una vez en la suite completa con carga; en aislado pasa
   3 de 3. No tiene relación con los renombrados.

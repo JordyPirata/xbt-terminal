@@ -624,14 +624,14 @@ class TestSharpMove:
 LEAD = replace(BOT, lead_venue="nx", fill_timeout_ms=2_000)
 
 
-def fills_on_place(venue, qty):
+def fills_on_place(venue, quantity):
     """The venue matches on receipt, like Neoxa: fills `qty` before the ack."""
     place = venue.place_limit
 
     async def placed(order_request):
         order = await place(order_request)
-        if qty > 0:
-            order = await venue.simulate_fill(order.order_id, qty)
+        if quantity > 0:
+            order = await venue.simulate_fill(order.order_id, quantity)
         return order
 
     venue.place_limit = placed

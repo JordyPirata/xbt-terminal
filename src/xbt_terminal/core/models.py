@@ -94,9 +94,9 @@ class MarketSpec:
             return _snap(price, self.tick_size, ROUND_FLOOR)
         raise ValueError(f"lado inválido: {side!r}")
 
-    def quantize_qty(self, qty: Decimal) -> Decimal:
+    def quantize_qty(self, quantity: Decimal) -> Decimal:
         """Truncate to the lot: never send more than asked."""
-        return _snap(qty, self.lot_size, ROUND_FLOOR)
+        return _snap(quantity, self.lot_size, ROUND_FLOOR)
 
 
 @dataclass(frozen=True, slots=True)

@@ -43,16 +43,16 @@ class Faults:
         self._listeners.append(listener)
 
     def report(
-        self, where: str, exc: BaseException, *, venue: VenueId | None = None,
+        self, where: str, exception: BaseException, *, venue: VenueId | None = None,
         note: str | None = None,
     ) -> Fault:  # fmt: skip
         redactor = self._journal.redactor if self._journal is not None else Redactor([])
-        error = redactor.redact(f"{type(exc).__name__}: {exc}")
+        error = redactor.redact(f"{type(exception).__name__}: {exception}")
         fault = Fault(where, venue, error, self._clock(), note)
         at = f"{where} ({venue})" if venue else where
-        log.error("fault in %s: %s", at, error, exc_info=exc)  # traceback redacted on writing
+        log.error("fault in %s: %s", at, error, exc_info=exception)  # traceback redacted on writing
         if self._journal is not None:
-            trace = "".join(traceback.format_exception(exc))
+            trace = "".join(traceback.format_exception(exception))
             data = {"where": where, "error": error, "traceback": trace}
             if note:
                 data["note"] = note

@@ -153,17 +153,17 @@ def _levels(raw: Iterable[dict[str, Any]], reverse: bool) -> tuple[Level, ...]:
     return tuple(sorted(levels, key=lambda price_level: price_level.price, reverse=reverse))
 
 
-def parse_book(payload: dict[str, Any], ts: int, seq: int | None) -> BookSnapshot:
+def parse_book(payload: dict[str, Any], timestamp: int, seq: int | None) -> BookSnapshot:
     return BookSnapshot(
         venue="nk",
         bids=_levels(payload.get("bids") or [], reverse=True),
         asks=_levels(payload.get("asks") or [], reverse=False),
-        ts=ts,
+        ts=timestamp,
         seq=seq,
     )
 
 
-def parse_delta(params: dict[str, Any], ts: int) -> BookDelta:
+def parse_delta(params: dict[str, Any], timestamp: int) -> BookDelta:
     """`quantity` comes as a string, or as number 0 when deleting a level."""
     return BookDelta(
         venue="nk",
@@ -175,7 +175,7 @@ def parse_delta(params: dict[str, Any], ts: int) -> BookDelta:
             Level(D(price_level["price"]), D(price_level["quantity"]))
             for price_level in params.get("asks") or []
         ),
-        ts=ts,
+        ts=timestamp,
         seq=int(params["sequence"]),
     )
 
@@ -290,7 +290,7 @@ def _status(raw: Any, executed: Decimal) -> OrderStatus:
 def parse_order(raw: dict[str, Any], now: int) -> Order:
     """Works for `Order` (createorder, getorder) and `Order2` (account/orders)."""
     executed = D(raw["executedQuantity"])
-    ts = raw.get("timestamp") or raw.get("createdAt")
+    timestamp = raw.get("timestamp") or raw.get("createdAt")
     return Order(
         venue="nk",
         order_id=str(raw["id"]),
@@ -300,7 +300,7 @@ def parse_order(raw: dict[str, Any], now: int) -> Order:
         qty=D(raw["quantity"]),
         filled=executed,
         status=_status(raw.get("status"), executed),
-        ts=int(ts) if ts else now,
+        ts=int(timestamp) if timestamp else now,
     )
 
 
@@ -706,9 +706,9 @@ class NonKYCVenue(StreamingVenue):
             snap = self.parsing(parse_book, params, int(msg["timestamp"]), int(params["sequence"]))
             return book.snapshot(snap)
         if method == "updateOrderbook":
-            ts = params.get("timestamp")
+            timestamp = params.get("timestamp")
             return book.delta(
-                self.parsing(parse_delta, params, iso_ms(ts) if ts else self._clock())
+                self.parsing(parse_delta, params, iso_ms(timestamp) if timestamp else self._clock())
             )
         if method in ("snapshotTrades", "updateTrades"):
             raws = params.get("data") or []

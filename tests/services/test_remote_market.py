@@ -28,8 +28,8 @@ def candles(n=3, price="0.00725"):
     return [Candle(T0 + i * MIN, p, p, p, p, D("1")) for i in range(n)]
 
 
-def trade(venue_id, price, ts, qty="0.5"):
-    return Trade(venue_id, D(price), D(qty), "buy", ts)
+def trade(venue_id, price, ts, quantity="0.5"):
+    return Trade(venue_id, D(price), D(quantity), "buy", ts)
 
 
 def book(venue_id, bids, asks, ts=NOW, seq=None):

@@ -445,11 +445,11 @@ class BotService:
             return None
         spec = self._hub.state[held.req.venue].spec
         assert spec is not None  # it fired with its book
-        qty = spec.quantize_qty(first.filled)
-        if qty < spec.min_qty or qty * held.req.price < spec.min_notional:
+        quantity = spec.quantize_qty(first.filled)
+        if quantity < spec.min_qty or quantity * held.req.price < spec.min_notional:
             self._orders.skip_held(double_id)  # below the minimum: it hangs
             return _verdict(self._orders.doubles[double_id], cancel_errors)
-        await self._orders.send_held(double_id, qty)
+        await self._orders.send_held(double_id, quantity)
         return await self._follow(double_id)
 
     def _first(self, double_id: str, lead: VenueId) -> Leg:

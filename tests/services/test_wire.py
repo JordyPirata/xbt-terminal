@@ -17,9 +17,9 @@ from xbt_terminal.services.account import VenueAccount
 from xbt_terminal.services.wire import decode, encode, loads
 
 
-def round_trip(tp, obj):
+def round_trip(target_type, obj):
     text = json.dumps(encode(obj))
-    return decode(tp, json.loads(text))
+    return decode(target_type, json.loads(text))
 
 
 @pytest.mark.spec("RF-31", "RNF-07")
@@ -93,7 +93,7 @@ class TestEachType:
     """Pin what `decode` returns with each type family (D-77: splitting it changes nothing)."""
 
     @pytest.mark.parametrize(
-        ("tp", "data", "expected"),
+        ("target_type", "data", "expected"),
         [
             (Any, {"x": 1}, {"x": 1}),
             (type(None), None, None),
@@ -113,8 +113,8 @@ class TestEachType:
             (float, 1.5, 1.5),
         ],
     )
-    def test_values(self, tp, data, expected):
-        got = decode(tp, data)
+    def test_values(self, target_type, data, expected):
+        got = decode(target_type, data)
         assert got == expected and type(got) is type(expected)
 
     def test_deque_and_float_from_integer(self):
@@ -129,7 +129,7 @@ class TestEachType:
         assert got.c == deque([2, 3]) and got.c.maxlen == 2 and got.d == 7
 
     @pytest.mark.parametrize(
-        ("tp", "data", "error", "message"),
+        ("target_type", "data", "error", "message"),
         [
             (type(None), 0, TypeError, "se esperaba null y llegó 0"),
             (
@@ -160,10 +160,10 @@ class TestEachType:
             (bytes, b"", TypeError, "tipo sin decodificar: <class 'bytes'>"),
         ],
     )
-    def test_errors(self, tp, data, error, message):
-        with pytest.raises(error) as exc:
-            decode(tp, data)
-        assert type(exc.value) is error and str(exc.value) == message
+    def test_errors(self, target_type, data, error, message):
+        with pytest.raises(error) as exception:
+            decode(target_type, data)
+        assert type(exception.value) is error and str(exception.value) == message
 
     def test_fixed_tuple_with_fewer_elements(self):
         with pytest.raises(ValueError):

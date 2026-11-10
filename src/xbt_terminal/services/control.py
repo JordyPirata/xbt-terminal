@@ -310,8 +310,8 @@ class ControlServer:
     async def _answer(self, line: bytes) -> dict[str, Any]:
         try:
             msg = loads(line)
-        except ValueError as exc:
-            return {"type": "error", "error": str(exc)}
+        except ValueError as exception:
+            return {"type": "error", "error": str(exception)}
         command, rid = msg.get("cmd"), msg.get("id")
         head: dict[str, Any] = {"type": "reply", "cmd": command}
         if rid is not None:
@@ -327,13 +327,13 @@ class ControlServer:
         args = msg.get("args") or {}
         try:
             value, token = await work(args if isinstance(args, dict) else {})
-        except RefusedError as exc:
-            return {**head, "error": str(exc)}
-        except (KeyError, TypeError, ValueError) as exc:
-            return {**head, "error": f"petición mal formada: {exc}"}
-        except Exception as exc:  # a bug does not take the daemon down (RNF-14)
-            self._engine.report_fault("control", exc)
-            return {**head, "error": f"fallo del daemon: {exc}"}
+        except RefusedError as exception:
+            return {**head, "error": str(exception)}
+        except (KeyError, TypeError, ValueError) as exception:
+            return {**head, "error": f"petición mal formada: {exception}"}
+        except Exception as exception:  # a bug does not take the daemon down (RNF-14)
+            self._engine.report_fault("control", exception)
+            return {**head, "error": f"fallo del daemon: {exception}"}
         finally:
             self._dirty.set()
         reply = {**head, "kind": type(value).__name__, "value": value}
