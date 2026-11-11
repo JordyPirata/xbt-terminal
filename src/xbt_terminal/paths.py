@@ -124,5 +124,5 @@ class InstanceLock:
         self.acquire()
         return self
 
-    def __exit__(self, *exc: object) -> None:
+    def __exit__(self, *error: object) -> None:
         self.release()

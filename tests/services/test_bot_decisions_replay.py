@@ -36,8 +36,8 @@ def test_same_decisions_as_before_on_real_sample(tmp_path, monkeypatch):
     got = decisions(tmp_path, monkeypatch.setattr)
     want = GOLDEN.read_text(encoding="utf-8").splitlines()
     assert len(got) == len(want)
-    for i, (g, w) in enumerate(zip(got, want, strict=True)):
-        assert g == w, f"decision {i} changed"
+    for i, (got_decision, want_decision) in enumerate(zip(got, want, strict=True)):
+        assert got_decision == want_decision, f"decision {i} changed"
 
 
 if __name__ == "__main__":

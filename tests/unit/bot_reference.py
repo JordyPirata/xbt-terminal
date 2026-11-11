@@ -90,16 +90,24 @@ def _route(
     limits: BotLimits,
     budget: Decimal,
 ) -> Fire | _Miss:
-    for vid, v in ((buy, a), (sell, b)):
+    for venue_id, v in ((buy, a), (sell, b)):
         if v is not None and v.blocked:
-            return _Miss(Skip("blocked", f"{vid}: {v.blocked}"), None)
+            return _Miss(Skip("blocked", f"{venue_id}: {v.blocked}"), None)
     if a is None or b is None or not a.asks or not b.bids:
         return _Miss(Skip("no_quotes", f"{buy}→{sell}: falta el ask o el bid"), None)
 
     walk_a = limits.max_walk_pct.get(buy, ZERO) / HUNDRED
     walk_b = limits.max_walk_pct.get(sell, ZERO) / HUNDRED
-    refs_a = [lv.price for lv in a.asks if lv.price <= a.asks[0].price * (1 + walk_a)]
-    refs_b = [lv.price for lv in b.bids if lv.price >= b.bids[0].price * (1 - walk_b)]
+    refs_a = [
+        price_level.price
+        for price_level in a.asks
+        if price_level.price <= a.asks[0].price * (1 + walk_a)
+    ]
+    refs_b = [
+        price_level.price
+        for price_level in b.bids
+        if price_level.price >= b.bids[0].price * (1 - walk_b)
+    ]
     pairs = [(ra, rb) for ra in refs_a for rb in refs_b]  # the first one, at the best prices
     first = _pair(a, b, buy, sell, limits, budget, *pairs[0])
     if isinstance(first, _Miss) and first.skip.reason == "below_threshold":
@@ -138,36 +146,54 @@ def _pair(
 
     terms = {
         "no_depth": min(
-            sum((lv.qty for lv in a.asks if lv.price <= buy_price), ZERO),
-            sum((lv.qty for lv in b.bids if lv.price >= sell_price), ZERO),
+            sum(
+                (price_level.qty for price_level in a.asks if price_level.price <= buy_price),
+                ZERO,
+            ),
+            sum(
+                (price_level.qty for price_level in b.bids if price_level.price >= sell_price),
+                ZERO,
+            ),
         ),
         "no_balance": min(a.quote_available / (buy_price * (1 + fee_a)), b.base_available),
         "max_qty": limits.max_qty,
         "day_cap": budget / buy_price,
     }
     binding = min(terms, key=lambda k: terms[k])
-    qty = b.spec.quantize_qty(a.spec.quantize_qty(terms[binding]))
-    if a.spec.quantize_qty(qty) != qty:  # lots that do not fit each other
-        return _Miss(Skip("lot_mismatch", f"{qty} no es múltiplo del lote de {buy}"), net_pct)
-    if qty <= 0 or qty < max(a.spec.min_qty, b.spec.min_qty):
+    quantity = b.spec.quantize_qty(a.spec.quantize_qty(terms[binding]))
+    if a.spec.quantize_qty(quantity) != quantity:  # lots that do not fit each other
+        return _Miss(Skip("lot_mismatch", f"{quantity} no es múltiplo del lote de {buy}"), net_pct)
+    if quantity <= 0 or quantity < max(a.spec.min_qty, b.spec.min_qty):
         detail = f"{buy}→{sell}: {terms[binding]:f} {BASE_LABEL} no llega al lote"
         return _Miss(Skip(binding, detail), net_pct)
-    if qty * buy_price < a.spec.min_notional or qty * sell_price < b.spec.min_notional:
-        detail = f"{buy}→{sell}: {qty} {BASE_LABEL} bajo el mínimo"
+    if quantity * buy_price < a.spec.min_notional or quantity * sell_price < b.spec.min_notional:
+        detail = f"{buy}→{sell}: {quantity} {BASE_LABEL} bajo el mínimo"
         return _Miss(Skip("min_notional", detail), net_pct)
-    return Fire(buy, sell, buy_price, sell_price, qty, unit * qty, net_pct)
+    return Fire(buy, sell, buy_price, sell_price, quantity, unit * quantity, net_pct)
 
 
 def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarget) -> str | None:
     """Why the double worsens some venue's ratio (RF-26), or None. Buys on `a` and sells
     on `b`, with each one's taker fee; valued at the venue mid or, without one, at its
     leg's limit price."""
-    qty = fire.qty
+    quantity = fire.qty
     legs = (
-        (fire.buy_venue, a, qty, -qty * fire.buy_price * (1 + a.spec.taker_fee), fire.buy_price),
-        (fire.sell_venue, b, -qty, qty * fire.sell_price * (1 - b.spec.taker_fee), fire.sell_price),
+        (
+            fire.buy_venue,
+            a,
+            quantity,
+            -quantity * fire.buy_price * (1 + a.spec.taker_fee),
+            fire.buy_price,
+        ),
+        (
+            fire.sell_venue,
+            b,
+            -quantity,
+            quantity * fire.sell_price * (1 - b.spec.taker_fee),
+            fire.sell_price,
+        ),
     )
-    for vid, v, d_base, d_quote, limit in legs:
+    for venue_id, v, d_base, d_quote, limit in legs:
         price = v.mid if v.mid is not None else limit
         before = base_pct(v.quote_total, v.base_total, price)
         after = base_pct(v.quote_total + d_quote, v.base_total + d_base, price)
@@ -175,7 +201,7 @@ def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarg
             continue  # venue with nothing to value
         if target.worsens(before, after):
             return (
-                f"{vid}: {BASE_LABEL} {before:.1f} % → {after:.1f} %, fuera de "
+                f"{venue_id}: {BASE_LABEL} {before:.1f} % → {after:.1f} %, fuera de "
                 f"{target.low}-{target.high} %"
             )
     return None

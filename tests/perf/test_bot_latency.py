@@ -27,7 +27,7 @@ FIRE_BUDGET_MS = 50.0
 
 
 def median_ms(work, runs: int = 30) -> float:
-    work()  # warm up
+    work()
     times = []
     for _ in range(runs):
         t0 = time.perf_counter()
@@ -36,20 +36,24 @@ def median_ms(work, runs: int = 30) -> float:
     return statistics.median(times) * 1000
 
 
-def side(start: Decimal, n: int, up: bool, qty: str = "10") -> tuple[Level, ...]:
-    return tuple(Level(start + STEP * i if up else start - STEP * i, D(qty)) for i in range(n))
+def side(start: Decimal, level_count: int, up: bool, quantity: str = "10") -> tuple[Level, ...]:
+    return tuple(
+        Level(start + STEP * i if up else start - STEP * i, D(quantity)) for i in range(level_count)
+    )
 
 
-def deep_views(nx_bid: str, qty: str = "10") -> dict[str, VenueView]:
+def deep_views(nx_bid: str, quantity: str = "10") -> dict[str, VenueView]:
     """NonKYC sells from 0.007 and Neoxa buys from `nx_bid`, 50 levels."""
     nk_ask, bid = D("0.00700000"), D(nx_bid)
     return {
         "nk": VenueView(
-            spec("nk"), side(nk_ask - STEP * 100, LEVELS, False), side(nk_ask, LEVELS, True, qty),
+            spec("nk"),
+            side(nk_ask - STEP * 100, LEVELS, False),
+            side(nk_ask, LEVELS, True, quantity),
             D("10"), D("10000"),
         ),
         "nx": VenueView(
-            spec("nx"), side(bid, LEVELS, False, qty), side(bid + STEP * 100, LEVELS, True),
+            spec("nx"), side(bid, LEVELS, False, quantity), side(bid + STEP * 100, LEVELS, True),
             D("10"), D("10000"),
         ),
     }  # fmt: skip
@@ -71,7 +75,7 @@ WALK = BotLimits(
 @pytest.mark.spec("RNF-23", "RNF-22", "RF-20")
 class TestDecide:
     @pytest.mark.parametrize(
-        "case,nx_bid,qty,want",
+        "case,nx_bid,quantity,want",
         [
             ("cruce con walk", "0.00760000", "10", Fire),
             ("sin cruce con walk", "0.00690000", "10", Skip),
@@ -79,8 +83,8 @@ class TestDecide:
             ("todos los pares rinden", "0.00900000", "0.0001", Fire),
         ],
     )
-    def test_decide_with_50_levels(self, case, nx_bid, qty, want):
-        views, state = deep_views(nx_bid, qty), arm(BotState())
+    def test_decide_with_50_levels(self, case, nx_bid, quantity, want):
+        views, state = deep_views(nx_bid, quantity), arm(BotState())
         assert isinstance(decide(views, state, WALK, NOW), want)
         ms = median_ms(lambda: decide(views, state, WALK, NOW))
         print(f"\ndecide · {case}: {ms:.3f} ms")
@@ -105,9 +109,9 @@ async def test_from_cross_to_prepare_double(tmp_path):
         sent: list[float] = []
         real = rig.orders.prepare_double
 
-        async def timed(cmd):
+        async def timed(command):
             sent.append(time.perf_counter())
-            return await real(cmd)
+            return await real(command)
 
         rig.orders.prepare_double = timed
         rig.bot.arm()
@@ -122,8 +126,8 @@ async def test_from_cross_to_prepare_double(tmp_path):
                 "nx", side(D("0.00720000"), LEVELS, False), side(D("0.00730000"), LEVELS, True), now
             )
             t0 = time.perf_counter()
-            for vid, snap in (("nk", nk), ("nx", nx)):
-                rig.feeds[vid].push(ConnState(vid, "market", "ws", "up", 10.0, now), snap)
+            for venue_id, snap in (("nk", nk), ("nx", nx)):
+                rig.feeds[venue_id].push(ConnState(venue_id, "market", "ws", "up", 10.0, now), snap)
             await rig.until(lambda i=i: len(sent) > i, timeout=5)
             times.append((sent[i] - t0) * 1000)
             await rig.until(lambda: rig.bot.state.status == "cooldown", timeout=5)

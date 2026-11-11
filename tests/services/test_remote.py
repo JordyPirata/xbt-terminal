@@ -28,7 +28,7 @@ class Daemon:
         await self.server.start()
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         await self.server.aclose()
 
 
@@ -52,13 +52,13 @@ async def linked(tmp_path):
 @pytest.mark.spec("RF-31")
 class TestProbe:
     async def test_says_mode_and_whether_bot_exists(self, tmp_path):
-        async with Daemon(tmp_path) as d:
-            hello = await probe(d.path)
+        async with Daemon(tmp_path) as daemon:
+            hello = await probe(daemon.path)
         assert (hello.mode, hello.has_bot) == ("dry-run", True)
 
     async def test_without_bot(self, tmp_path):
-        async with Daemon(tmp_path, bot=False) as d:
-            assert not (await probe(d.path)).has_bot
+        async with Daemon(tmp_path, bot=False) as daemon:
+            assert not (await probe(daemon.path)).has_bot
 
     async def test_no_daemon(self, tmp_path):
         with pytest.raises(DaemonGoneError, match="xbt daemon"):
@@ -81,21 +81,21 @@ class TestState:
 
         from .test_account import FakePrivate, order
 
-        async with Daemon(tmp_path) as d:
+        async with Daemon(tmp_path) as daemon:
             venue = FakePrivate()
             venue.push(order("o-1"))
             account = AccountService({"nk": venue}, retry_s=0.01)
-            d.engine.account = account
+            daemon.engine.account = account
             runner = asyncio.create_task(account.run())
-            remote = RemoteEngine(d.path, has_bot=True, retry_s=0.02)
+            remote = RemoteEngine(daemon.path, has_bot=True, retry_s=0.02)
             task = asyncio.create_task(remote.run())
             heard = []
-            remote.account.subscribe(lambda vid, what: heard.append((vid, what)))
+            remote.account.subscribe(lambda venue_id, what: heard.append((venue_id, what)))
             await until(lambda: "nk" in remote.account.state)
             await until(lambda: remote.account.state["nk"].balances is not None)
-            st = remote.account.state["nk"]
-            assert st.balances["BTC"] == Balance("BTC", D("0.001"))
-            assert list(st.orders) == ["o-1"]
+            state = remote.account.state["nk"]
+            assert state.balances["BTC"] == Balance("BTC", D("0.001"))
+            assert list(state.orders) == ["o-1"]
             assert ("nk", "balances") in heard and ("nk", "orders") in heard
             task.cancel()
             runner.cancel()
@@ -111,7 +111,7 @@ class TestState:
         assert remote.bot.arm() is None
         await until(lambda: daemon.bot.state.status == "armed")
         await until(lambda: remote.bot.state.status == "armed")
-        assert [s.status for s in states] == ["armed"]  # only on change
+        assert [state.status for state in states] == ["armed"]  # only on change
         remote.bot.disarm()
         await until(lambda: remote.bot.state.status == "off")
         assert daemon.bot.state.status == "off"
@@ -153,16 +153,16 @@ class TestNotices:
 @pytest.mark.spec("RF-31")
 class TestReconnect:
     async def test_daemon_leaves_and_returns(self, tmp_path):
-        async with Daemon(tmp_path) as d:
-            remote = RemoteEngine(d.path, has_bot=True, retry_s=0.02)
+        async with Daemon(tmp_path) as daemon:
+            remote = RemoteEngine(daemon.path, has_bot=True, retry_s=0.02)
             links = []
             remote.subscribe_link(links.append)
             task = asyncio.create_task(remote.run())
             await until(lambda: remote.connected)
-            await d.server.aclose()
+            await daemon.server.aclose()
             await until(lambda: not remote.connected)
             remote.bot.arm()  # no connection: does not crash, warns
-            await d.server.start()
+            await daemon.server.start()
             await until(lambda: remote.connected and links[-1] is True)
             assert links[:3] == [True, False, True]
             task.cancel()
@@ -196,12 +196,12 @@ class TestDaemonMessages:
         remote, out = self.heard(tmp_path)
         remote._handle({"type": "reply", "id": 99, "error": "no"})
         remote._handle({"type": "reply", "id": 98})
-        assert [(n.text, n.error) for n in out] == [("no", True)]
+        assert [(notice.text, notice.error) for notice in out] == [("no", True)]
 
     def test_unawaited_error_is_notified(self, tmp_path):
         remote, out = self.heard(tmp_path)
         remote._handle({"type": "error", "id": 97, "error": "sin saldo"})
-        assert [(n.text, n.error) for n in out] == [
+        assert [(notice.text, notice.error) for notice in out] == [
             ("el daemon no aceptó la orden: sin saldo", True)
         ]
 
@@ -209,4 +209,7 @@ class TestDaemonMessages:
         remote, out = self.heard(tmp_path)
         remote._handle({"type": "notice", "text": "hola", "error": False})
         remote._handle({"type": "fault", "message": "bug"})
-        assert [(n.text, n.error) for n in out] == [("hola", False), ("daemon: bug", True)]
+        assert [(notice.text, notice.error) for notice in out] == [
+            ("hola", False),
+            ("daemon: bug", True),
+        ]

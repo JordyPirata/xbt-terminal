@@ -25,16 +25,16 @@ def test_no_section_no_bot(tmp_path):
     text = EXAMPLE.read_text(encoding="utf-8")
     start = text.index("[bot]")
     end = text.index("\n\n", start) if "\n\n" in text[start:] else len(text)
-    p = tmp_path / "config.toml"
-    p.write_text(text[:start] + text[end:], encoding="utf-8")
-    assert load_config(p).bot is None
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(text[:start] + text[end:], encoding="utf-8")
+    assert load_config(config_path).bot is None
 
 
 @pytest.mark.spec("RF-18")
 def test_enabled_must_be_boolean(tmp_path):
-    p = example_with(tmp_path, "enabled = false", 'enabled = "no"')
+    config_path = example_with(tmp_path, "enabled = false", 'enabled = "no"')
     with pytest.raises(ConfigError, match=r"bot\.enabled"):
-        load_config(p)
+        load_config(config_path)
 
 
 @pytest.mark.spec("RF-18", "RF-22")
@@ -52,9 +52,9 @@ def test_enabled_must_be_boolean(tmp_path):
     ],
 )
 def test_invalid_values(tmp_path, old, new, key):
-    p = example_with(tmp_path, old, new)
+    config_path = example_with(tmp_path, old, new)
     with pytest.raises(ConfigError, match=rf"bot\.{key}"):
-        load_config(p)
+        load_config(config_path)
 
 
 @pytest.mark.spec("RF-20")
@@ -64,8 +64,10 @@ def test_max_walk_pct_is_optional():
 
 @pytest.mark.spec("RF-20")
 def test_max_walk_pct_per_venue(tmp_path):
-    p = example_with(tmp_path, "enabled = false", 'enabled = false\nmax_walk_pct = { nk = "0.8" }')
-    assert load_config(p).bot.limits.max_walk_pct == {"nk": Decimal("0.8")}
+    config_path = example_with(
+        tmp_path, "enabled = false", 'enabled = false\nmax_walk_pct = { nk = "0.8" }'
+    )
+    assert load_config(config_path).bot.limits.max_walk_pct == {"nk": Decimal("0.8")}
 
 
 @pytest.mark.spec("RF-20")
@@ -79,9 +81,11 @@ def test_max_walk_pct_per_venue(tmp_path):
     ],
 )
 def test_invalid_max_walk_pct(tmp_path, value, match):
-    p = example_with(tmp_path, "enabled = false", f"enabled = false\nmax_walk_pct = {value}")
+    config_path = example_with(
+        tmp_path, "enabled = false", f"enabled = false\nmax_walk_pct = {value}"
+    )
     with pytest.raises(ConfigError, match=match):
-        load_config(p)
+        load_config(config_path)
 
 
 @pytest.mark.spec("RF-20")
@@ -92,23 +96,23 @@ def test_lead_venue_is_optional():
 @pytest.mark.spec("RF-20")
 def test_lead_venue(tmp_path):
     line = 'fill_timeout_ms = 3000\nlead_venue = "nx"'
-    p = example_with(tmp_path, "fill_timeout_ms = 3000", line)
-    assert load_config(p).bot.limits.lead_venue == "nx"
+    config_path = example_with(tmp_path, "fill_timeout_ms = 3000", line)
+    assert load_config(config_path).bot.limits.lead_venue == "nx"
 
 
 @pytest.mark.spec("RF-20")
 def test_invalid_lead_venue(tmp_path):
     line = 'fill_timeout_ms = 3000\nlead_venue = "xx"'
-    p = example_with(tmp_path, "fill_timeout_ms = 3000", line)
+    config_path = example_with(tmp_path, "fill_timeout_ms = 3000", line)
     with pytest.raises(ConfigError, match=r"bot\.lead_venue"):
-        load_config(p)
+        load_config(config_path)
 
 
 @pytest.mark.spec("RF-18")
 def test_unknown_key(tmp_path):
-    p = example_with(tmp_path, "enabled = false", 'enabled = false\nmax_qyt = "1"')
+    config_path = example_with(tmp_path, "enabled = false", 'enabled = false\nmax_qyt = "1"')
     with pytest.raises(ConfigError, match=r"bot\.max_qyt"):
-        load_config(p)
+        load_config(config_path)
 
 
 @pytest.mark.spec("RF-26")
@@ -123,9 +127,9 @@ def test_no_inventory_section_no_filter(tmp_path):
     text = EXAMPLE.read_text(encoding="utf-8")
     start = text.index("[inventory]")
     end = text.index("\n\n", start)
-    p = tmp_path / "config.toml"
-    p.write_text(text[:start] + text[end:], encoding="utf-8")
-    assert load_config(p).inventory is None
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(text[:start] + text[end:], encoding="utf-8")
+    assert load_config(config_path).inventory is None
 
 
 @pytest.mark.spec("RF-26")
@@ -141,6 +145,6 @@ def test_no_inventory_section_no_filter(tmp_path):
     ],
 )
 def test_invalid_inventory(tmp_path, old, new, key):
-    p = example_with(tmp_path, old, new)
+    config_path = example_with(tmp_path, old, new)
     with pytest.raises(ConfigError, match=rf"inventory\.{key}"):
-        load_config(p)
+        load_config(config_path)

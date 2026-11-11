@@ -53,12 +53,14 @@ def config(tmp_path, *, competitor="0", bot=BOT):
     return path
 
 
-def snap(venue, bid, ask, t, qty="1"):
-    return BookSnapshot(venue, (Level(D(bid), D(qty)),), (Level(D(ask), D(qty)),), t, None)
+def snap(venue, bid, ask, timestamp, quantity="1"):
+    return BookSnapshot(
+        venue, (Level(D(bid), D(quantity)),), (Level(D(ask), D(quantity)),), timestamp, None
+    )
 
 
-def line(t, venue, kind, event):
-    return dumps({"t": t, "venue": venue, "kind": kind, "data": event}).decode()
+def line(timestamp, venue, kind, event):
+    return dumps({"t": timestamp, "venue": venue, "kind": kind, "data": event}).decode()
 
 
 QUIET = {"nk": ("0.0100", "0.0102"), "nx": ("0.0099", "0.0100")}
@@ -69,14 +71,14 @@ def scenario(path):
     before the order arrives (`bot_miss`), one where the other leg falls (hanging) and
     another good one."""
     rows = ['{"format":1}\n']
-    for vid in ("nk", "nx"):
-        rows.append(line(T0, vid, "market", spec(vid)))
-        rows.append(line(T0, vid, "conn", ConnState(vid, "market", "ws", "up", None, T0)))
-        rows.append(line(T0, vid, "book", snap(vid, *QUIET[vid], T0)))
+    for venue_id in ("nk", "nx"):
+        rows.append(line(T0, venue_id, "market", spec(venue_id)))
+        rows.append(line(T0, venue_id, "conn", ConnState(venue_id, "market", "ws", "up", None, T0)))
+        rows.append(line(T0, venue_id, "book", snap(venue_id, *QUIET[venue_id], T0)))
 
-    def at(s, vid, bid, ask, qty="1"):
-        t = T0 + int(s * 1000)
-        rows.append(line(t, vid, "book", snap(vid, bid, ask, t, qty)))
+    def at(seconds, venue_id, bid, ask, qty="1"):
+        timestamp = T0 + int(seconds * 1000)
+        rows.append(line(timestamp, venue_id, "book", snap(venue_id, bid, ask, timestamp, qty)))
 
     cross, calm = ("0.0095", "0.0096"), QUIET["nx"]
     at(10, "nx", *cross)  # good
@@ -120,31 +122,31 @@ class TestReplayStream:
     def test_same_events_in_order_with_their_times(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         loop, _, feeds = venues_on_virtual(tmp_path, recording)
-        got = {vid: [] for vid in feeds}
+        got = {venue_id: [] for venue_id in feeds}
 
-        async def drain(vid):
-            async with aclosing(feeds[vid].market_stream()) as stream:
+        async def drain(venue_id):
+            async with aclosing(feeds[venue_id].market_stream()) as stream:
                 async for event in stream:
-                    got[vid].append((loop.now_ms(), event))
+                    got[venue_id].append((loop.now_ms(), event))
                     if isinstance(event, ConnState) and event.status == "down":
                         return
 
         async def both():
-            await asyncio.gather(*(drain(v) for v in feeds))
+            await asyncio.gather(*(drain(feed) for feed in feeds))
 
         try:
             loop.run_until_complete(both())
         finally:
             loop.close()
-        for vid in feeds:
+        for venue_id in feeds:
             want = [
-                (r.t, r.event)
-                for r in read_recording(recording)
-                if r.venue == vid and r.event != spec(vid)
+                (recorded.t, recorded.event)
+                for recorded in read_recording(recording)
+                if recorded.venue == venue_id and recorded.event != spec(venue_id)
             ]
-            assert got[vid][:-1] == want
-            assert got[vid][-1][1].status == "down"
-            assert got[vid][-1][0] == T0 + 90_000  # both, when the recording ends
+            assert got[venue_id][:-1] == want
+            assert got[venue_id][-1][1].status == "down"
+            assert got[venue_id][-1][0] == T0 + 90_000  # both, when the recording ends
 
     def test_another_origin_shifts_times_equally(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
@@ -159,10 +161,10 @@ class TestReplayStream:
                         return loop.now_ms(), event.ts
 
         try:
-            at, ts = loop.run_until_complete(first_cross())
+            at, timestamp = loop.run_until_complete(first_cross())
         finally:
             loop.close()
-        assert at == ts == T0 + 10_000 + 1_000_000
+        assert at == timestamp == T0 + 10_000 + 1_000_000
 
     async def test_rest_book_is_the_replayed_one(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
@@ -182,8 +184,8 @@ async def sim_on(tmp_path, books, *, competitor="0", latency=0):
     """A SimVenue with the `books` book already loaded."""
     recording = tmp_path / "r.jsonl"
     rows = ['{"format":1}\n']
-    for vid in ("nk", "nx"):
-        rows.append(line(T0, vid, "market", spec(vid)))
+    for venue_id in ("nk", "nx"):
+        rows.append(line(T0, venue_id, "market", spec(venue_id)))
     rows.append(line(T0, "nk", "book", books))
     recording.write_text("".join(rows))
     settings = load_settings(config(tmp_path, competitor=competitor), tmp_path / "no.env",
@@ -300,7 +302,7 @@ class TestReport:
     def test_gives_expected_twice_the_same_and_leaves_nothing(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
         settings = load_settings(config(tmp_path), tmp_path / "no.env", False, replay=True)
-        before = sorted(p.name for p in tmp_path.iterdir())
+        before = sorted(path.name for path in tmp_path.iterdir())
         first = replay_report(settings, recording)
         second = replay_report(settings, recording)
         assert first == second
@@ -312,7 +314,7 @@ class TestReport:
         # 2 doubles of 1 XBT: buy at 0.0096 and sell at 0.0100, 0.2 % on each
         each = D("0.0100") - D("0.0096") - (D("0.0100") + D("0.0096")) * D("0.002")
         assert first.net == 2 * each
-        assert sorted(p.name for p in tmp_path.iterdir()) == before
+        assert sorted(path.name for path in tmp_path.iterdir()) == before
 
     def test_total_competitor_fills_nothing(self, tmp_path):
         recording = scenario(tmp_path / "r.jsonl")
@@ -347,4 +349,3 @@ def test_report_on_fixed_real_sample(tmp_path):
     assert (report.misses, report.hanging, report.halted) == (0, 1, None)
     assert round(report.net * 100_000_000) == 8
     assert report == replay_report(settings, FIXTURES / "muestra.jsonl")
-

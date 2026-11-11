@@ -29,8 +29,8 @@ class TestSimpleOrder:
         assert parse("sell nx 0.5 900.25") == PlaceOrder("nx", "sell", D("0.5"), D("900.25"))
 
     def test_keeps_written_decimals(self):
-        cmd = parse("buy nk 0.0100 850.00")
-        assert str(cmd.qty) == "0.0100" and str(cmd.price) == "850.00"
+        command = parse("buy nk 0.0100 850.00")
+        assert str(command.qty) == "0.0100" and str(command.price) == "850.00"
 
     def test_uppercase_and_spaces(self):
         assert parse("  BUY   NK 0.01   850 ") == PlaceOrder("nk", "buy", D("0.01"), D("850"))
@@ -96,8 +96,8 @@ class TestDoubleOrder:
         )
 
     def test_in_the_other_direction(self):
-        cmd = parse("dbl 0.02 nx 880 nk 905")
-        assert (cmd.buy_venue, cmd.sell_venue) == ("nx", "nk")
+        command = parse("dbl 0.02 nx 880 nk 905")
+        assert (command.buy_venue, command.sell_venue) == ("nx", "nk")
 
     def test_same_venue_on_both_legs(self):
         with pytest.raises(CommandError, match="venues distintos"):
@@ -250,9 +250,9 @@ class TestRebalance:
 )
 def test_exact_text_of_each_error(text, message):
     """Pin the error messages (D-77: splitting `parse` changes nothing)."""
-    with pytest.raises(CommandError) as exc:
+    with pytest.raises(CommandError) as error:
         parse(text)
-    assert str(exc.value) == message
+    assert str(error.value) == message
 
 
 @pytest.mark.spec("RF-06", "RF-07")

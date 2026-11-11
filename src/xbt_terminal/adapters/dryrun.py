@@ -68,8 +68,6 @@ class DryRunVenue:
         self._last_base: tuple[int, dict[str, Balance]] | None = None  # (time, balances)
         self._listeners: list[asyncio.Queue[PrivateEvent]] = []
 
-    # -- market: delegated ---------------------------------------------------------
-
     async def market(self) -> MarketSpec:
         self._spec = await self.inner.market()
         return self._spec
@@ -85,8 +83,6 @@ class DryRunVenue:
 
     def market_stream(self) -> AsyncIterator[MarketEvent]:
         return self.inner.market_stream()
-
-    # -- private: simulated --------------------------------------------------------
 
     async def _base(self, *, reuse: bool = False) -> dict[str, Balance]:
         """Real (or fixed) balances. With `reuse`, the last recent read will do."""
@@ -115,18 +111,18 @@ class DryRunVenue:
         return out
 
     async def open_orders(self) -> list[Order]:
-        return [o for o in self._orders.values() if not o.is_done]
+        return [order for order in self._orders.values() if not order.is_done]
 
     async def recent_orders(self, since: int) -> list[Order]:
         """All simulated ones, finished included (D-26)."""
         return list(self._orders.values())
 
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         spec = await self._market_spec()
-        if req.side == "buy":
-            asset, amount = spec.quote, req.notional * (1 + spec.taker_fee)
+        if order_request.side == "buy":
+            asset, amount = spec.quote, order_request.notional * (1 + spec.taker_fee)
         else:
-            asset, amount = spec.base, req.qty
+            asset, amount = spec.base, order_request.qty
         bal = (await self.balances(reuse=True)).get(asset) or Balance(asset, ZERO)
         if amount > bal.available:
             raise VenueError(
@@ -137,10 +133,10 @@ class DryRunVenue:
         order = Order(
             venue=self.id,
             order_id=f"dry-{self.id}-{next(self._ids)}",
-            client_id=req.client_id,
-            side=req.side,
-            price=req.price,
-            qty=req.qty,
+            client_id=order_request.client_id,
+            side=order_request.side,
+            price=order_request.price,
+            qty=order_request.qty,
             filled=ZERO,
             status="open",
             ts=self._clock(),
@@ -165,29 +161,29 @@ class DryRunVenue:
             await self.cancel(order.order_id)
 
     async def simulate_fill(
-        self, order_id: str, qty: Decimal, *, price: Decimal | None = None
+        self, order_id: str, quantity: Decimal, *, price: Decimal | None = None
     ) -> Order:
         """Fill `qty` of an open order with taker fee, at `price` or, without it, at its
         limit price. When fully filled, what was over-locked comes back."""
         order = self._orders.get(order_id)
         if order is None or order.is_done:
             raise VenueError(f"dry-run: no hay orden abierta {order_id}")
-        if qty <= 0 or qty > order.remaining:
-            raise VenueError(f"dry-run: a {order_id} le queda {order.remaining:f}, no {qty:f}")
+        if quantity <= 0 or quantity > order.remaining:
+            raise VenueError(f"dry-run: a {order_id} le queda {order.remaining:f}, no {quantity:f}")
         spec = await self._market_spec()
         price = order.price if price is None else price
-        gross = qty * price
+        gross = quantity * price
         fee = gross * spec.taker_fee
         lock_asset, locked = self._locks[order_id]
         if order.side == "buy":
             used = gross + fee
             self._move(lock_asset, locked=-used)
-            self._move(spec.base, available=qty)
+            self._move(spec.base, available=quantity)
         else:
-            used = qty
+            used = quantity
             self._move(lock_asset, locked=-used)
             self._move(spec.quote, available=gross - fee)
-        filled = order.filled + qty
+        filled = order.filled + quantity
         status = "filled" if filled == order.qty else "partial"
         updated = replace(order, filled=filled, status=status, ts=self._clock())
         self._orders[order_id] = updated
@@ -200,7 +196,7 @@ class DryRunVenue:
         self._publish(updated)
         trade_id = f"dry-fill-{next(self._fill_ids)}"
         self._publish(
-            Fill(self.id, trade_id, order_id, order.side, price, qty, fee, spec.quote,
+            Fill(self.id, trade_id, order_id, order.side, price, quantity, fee, spec.quote,
                  self._clock())
         )  # fmt: skip
         return updated

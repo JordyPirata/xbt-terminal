@@ -51,7 +51,7 @@ class TestFigures:
 
     def test_positive_net_highlighted(self):
         text = render_cross(NK, NX)
-        styles = {text.plain[s.start : s.end]: str(s.style) for s in text.spans}
+        styles = {text.plain[span.start : span.end]: str(span.style) for span in text.spans}
         positive = next(k for k in styles if k.startswith("neto +"))
         negative = next(k for k in styles if k.startswith("neto -"))
         assert "green" in styles[positive] and "bold" in styles[positive]

@@ -17,9 +17,9 @@ from xbt_terminal.services.account import VenueAccount
 from xbt_terminal.services.wire import decode, encode, loads
 
 
-def round_trip(tp, obj):
+def round_trip(target_type, obj):
     text = json.dumps(encode(obj))
-    return decode(tp, json.loads(text))
+    return decode(target_type, json.loads(text))
 
 
 @pytest.mark.spec("RF-31", "RNF-07")
@@ -29,16 +29,16 @@ class TestRoundTrip:
         assert round_trip(Decimal, D("0.10")) == D("0.10")
 
     def test_bot_state(self):
-        st = BotState("halted", "pierna colgada", (1, 2), 20_000, D("0.0123"), 3, 2)
-        assert round_trip(BotState, st) == st
+        state = BotState("halted", "pierna colgada", (1, 2), 20_000, D("0.0123"), 3, 2)
+        assert round_trip(BotState, state) == state
 
     def test_double_with_legs(self):
         buy = OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "t-1")
         sell = OrderRequest("nx", "sell", D("0.01"), D("0.00730"), "t-2")
-        st = DoubleState(
+        state = DoubleState(
             "d-1", Leg(buy, "filled", "o-1", D("0.01")), Leg(sell, "rejected", error="x"), 5, 7
         )
-        assert round_trip(DoubleState, st) == st
+        assert round_trip(DoubleState, state) == state
 
     def test_venue_account(self):
         conn = ConnState("nk", "private", "ws", "up", 12.5, 9)
@@ -82,10 +82,10 @@ class TestLines:
 class Sample:
     """Test dataclass: default value, deque with `maxlen` and a non-init field."""
 
-    a: int
-    b: str = "x"
-    c: deque[int] = dataclasses.field(default_factory=lambda: deque(maxlen=2))
-    d: int = dataclasses.field(default=7, init=False)
+    number: int
+    label: str = "x"
+    history: deque[int] = dataclasses.field(default_factory=lambda: deque(maxlen=2))
+    computed: int = dataclasses.field(default=7, init=False)
 
 
 @pytest.mark.spec("RF-31", "RNF-07")
@@ -93,7 +93,7 @@ class TestEachType:
     """Pin what `decode` returns with each type family (D-77: splitting it changes nothing)."""
 
     @pytest.mark.parametrize(
-        ("tp", "data", "expected"),
+        ("target_type", "data", "expected"),
         [
             (Any, {"x": 1}, {"x": 1}),
             (type(None), None, None),
@@ -113,8 +113,8 @@ class TestEachType:
             (float, 1.5, 1.5),
         ],
     )
-    def test_values(self, tp, data, expected):
-        got = decode(tp, data)
+    def test_values(self, target_type, data, expected):
+        got = decode(target_type, data)
         assert got == expected and type(got) is type(expected)
 
     def test_deque_and_float_from_integer(self):
@@ -123,13 +123,13 @@ class TestEachType:
         assert type(decode(float, 1)) is float
 
     def test_dataclass_codec(self):
-        assert decode(Sample, {"a": 1}) == Sample(1)
-        got = decode(Sample, {"a": 1, "c": [1, 2, 3], "d": 9, "z": 0})
+        assert decode(Sample, {"number": 1}) == Sample(1)
+        got = decode(Sample, {"number": 1, "history": [1, 2, 3], "computed": 9, "z": 0})
         # keeps the field's maxlen; ignores extra keys and non-init fields
-        assert got.c == deque([2, 3]) and got.c.maxlen == 2 and got.d == 7
+        assert got.history == deque([2, 3]) and got.history.maxlen == 2 and got.computed == 7
 
     @pytest.mark.parametrize(
-        ("tp", "data", "error", "message"),
+        ("target_type", "data", "error", "message"),
         [
             (type(None), 0, TypeError, "se esperaba null y llegó 0"),
             (
@@ -149,7 +149,7 @@ class TestEachType:
             (Decimal, 1, TypeError, "un Decimal llega como texto, no int"),
             (Decimal, "abc", ValueError, "Decimal inválido: 'abc'"),
             (Sample, [1], TypeError, "Sample llega como objeto"),
-            (Sample, {"a": "1"}, TypeError, "se esperaba int y llegó '1'"),
+            (Sample, {"number": "1"}, TypeError, "se esperaba int y llegó '1'"),
             (dict[str, int], [], TypeError, "se esperaba un objeto"),
             (list[int], {}, TypeError, "se esperaba una lista"),
             (int, True, TypeError, "se esperaba int y llegó True"),
@@ -160,10 +160,10 @@ class TestEachType:
             (bytes, b"", TypeError, "tipo sin decodificar: <class 'bytes'>"),
         ],
     )
-    def test_errors(self, tp, data, error, message):
-        with pytest.raises(error) as exc:
-            decode(tp, data)
-        assert type(exc.value) is error and str(exc.value) == message
+    def test_errors(self, target_type, data, error, message):
+        with pytest.raises(error) as exception:
+            decode(target_type, data)
+        assert type(exception.value) is error and str(exception.value) == message
 
     def test_fixed_tuple_with_fewer_elements(self):
         with pytest.raises(ValueError):

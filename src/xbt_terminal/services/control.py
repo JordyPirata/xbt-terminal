@@ -64,7 +64,7 @@ BOOK_EVERY_S = 0.1  # the book, at most ten times per second per venue
 BOOK_DEPTH = 50
 PROPOSAL_TTL_S = 60.0  # how long the confirmation dialog may stay open
 CANCELS: dict[str, type[CancelOrder | CancelVenue | CancelAll]] = {
-    c.__name__: c for c in (CancelOrder, CancelVenue, CancelAll)
+    command_type.__name__: command_type for command_type in (CancelOrder, CancelVenue, CancelAll)
 }
 T = TypeVar("T")
 
@@ -163,8 +163,6 @@ class ControlServer:
         await server.wait_closed()
         self.path.unlink(missing_ok=True)
 
-    # -- from the engine to the clients -------------------------------------------------
-
     def _subscribe(self) -> None:
         if self._subscribed:  # services have no unsubscribe: once per server
             return
@@ -192,8 +190,8 @@ class ControlServer:
         """Called by the hub: a forwarding bug cannot take its venue down (RNF-14)."""
         try:
             work()
-        except Exception as exc:
-            self._engine.report_fault("control", exc)
+        except Exception as error:
+            self._engine.report_fault("control", error)
 
     def _forward(self, venue: VenueId, event: MarketEvent) -> None:
         if isinstance(event, Trade):
@@ -243,8 +241,8 @@ class ControlServer:
     def _state(self) -> dict[str, Any] | None:
         try:
             return {"type": "state", "state": snapshot(self._engine)}
-        except Exception as exc:  # a bug here cannot take the daemon down (RNF-14)
-            self._engine.report_fault("control", exc)
+        except Exception as error:  # a bug here cannot take the daemon down (RNF-14)
+            self._engine.report_fault("control", error)
             return None
 
     def _line(self, message: dict[str, Any]) -> bytes:
@@ -270,8 +268,6 @@ class ControlServer:
         if client in self._clients:
             self._clients.discard(client)
             client.close()
-
-    # -- from the clients to the engine -------------------------------------------------
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         # the initial snapshot (hello, state, one market_init per venue) does not count in the queue
@@ -310,30 +306,30 @@ class ControlServer:
     async def _answer(self, line: bytes) -> dict[str, Any]:
         try:
             msg = loads(line)
-        except ValueError as exc:
-            return {"type": "error", "error": str(exc)}
-        cmd, rid = msg.get("cmd"), msg.get("id")
-        head: dict[str, Any] = {"type": "reply", "cmd": cmd}
+        except ValueError as exception:
+            return {"type": "error", "error": str(exception)}
+        command, rid = msg.get("cmd"), msg.get("id")
+        head: dict[str, Any] = {"type": "reply", "cmd": command}
         if rid is not None:
             head["id"] = rid
-        if cmd == "ping":
+        if command == "ping":
             return {"type": "pong"} if rid is None else {**head, "kind": "pong", "value": None}
-        if cmd in ("bot_on", "bot_off"):
-            return {**head, "error": self._bot(cmd)}
-        work = self._commands.get(cmd) if isinstance(cmd, str) else None
+        if command in ("bot_on", "bot_off"):
+            return {**head, "error": self._bot(command)}
+        work = self._commands.get(command) if isinstance(command, str) else None
         if work is None:
-            error = {"type": "error", "error": f"orden no admitida: {cmd!r}"}
+            error = {"type": "error", "error": f"orden no admitida: {command!r}"}
             return error if rid is None else {**error, "id": rid}
         args = msg.get("args") or {}
         try:
             value, token = await work(args if isinstance(args, dict) else {})
-        except RefusedError as exc:
-            return {**head, "error": str(exc)}
-        except (KeyError, TypeError, ValueError) as exc:
-            return {**head, "error": f"petición mal formada: {exc}"}
-        except Exception as exc:  # a bug does not take the daemon down (RNF-14)
-            self._engine.report_fault("control", exc)
-            return {**head, "error": f"fallo del daemon: {exc}"}
+        except RefusedError as exception:
+            return {**head, "error": str(exception)}
+        except (KeyError, TypeError, ValueError) as exception:
+            return {**head, "error": f"petición mal formada: {exception}"}
+        except Exception as exception:  # a bug does not take the daemon down (RNF-14)
+            self._engine.report_fault("control", exception)
+            return {**head, "error": f"fallo del daemon: {exception}"}
         finally:
             self._dirty.set()
         reply = {**head, "kind": type(value).__name__, "value": value}
@@ -341,11 +337,11 @@ class ControlServer:
             reply["token"] = token
         return reply
 
-    def _bot(self, cmd: str) -> str | None:
+    def _bot(self, command: str) -> str | None:
         bot = self._engine.bot
         if bot is None:
             return "no hay [bot] en la config"
-        if cmd == "bot_on":
+        if command == "bot_on":
             error = bot.arm()
             log.info("bot on from a client%s", f": {error}" if error else "")
         else:
@@ -354,8 +350,6 @@ class ControlServer:
             log.info("bot off from a client")
         self._dirty.set()
         return error
-
-    # -- orders: proposal with a reference, confirmation with the reference --------
 
     @property
     def _commands(self) -> dict[str, Callable[[dict[str, Any]], Awaitable[tuple[Any, str | None]]]]:
@@ -373,7 +367,7 @@ class ControlServer:
 
     def _propose(self, value: Any) -> str:
         now = asyncio.get_running_loop().time()
-        self._proposals = {k: v for k, v in self._proposals.items() if v[1] > now}
+        self._proposals = {k: entry for k, entry in self._proposals.items() if entry[1] > now}
         token = secrets.token_hex(8)
         self._proposals[token] = (value, now + self._proposal_ttl_s)
         return token
@@ -441,4 +435,6 @@ class ControlServer:
         if rebalance is None or not rebalance.venues:
             raise RefusedError("reequilibrio: el daemon no tiene keys de ningún venue")
         fees = await rebalance.load()
-        return Fees(tuple(FeeRow(vid, asset, fee) for (vid, asset), fee in fees.items())), None
+        return Fees(
+            tuple(FeeRow(venue_id, asset, fee) for (venue_id, asset), fee in fees.items())
+        ), None

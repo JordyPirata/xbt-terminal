@@ -14,9 +14,9 @@ NX = {"NEOXA_API_KEY": "nx_key_CANARIO_3", "NEOXA_API_SECRET": "nx_sec_CANARIO_4
 
 
 def write(tmp_path: Path, text: str, name="config.toml") -> Path:
-    p = tmp_path / name
-    p.write_text(text, encoding="utf-8")
-    return p
+    config_path = tmp_path / name
+    config_path.write_text(text, encoding="utf-8")
+    return config_path
 
 
 def example_with(tmp_path: Path, old: str, new: str) -> Path:
@@ -26,7 +26,7 @@ def example_with(tmp_path: Path, old: str, new: str) -> Path:
 
 
 def env_file(tmp_path: Path, values: dict[str, str]) -> Path:
-    path = write(tmp_path, "".join(f"{k}={v}\n" for k, v in values.items()), ".env")
+    path = write(tmp_path, "".join(f"{k}={value}\n" for k, value in values.items()), ".env")
     path.chmod(0o600)  # RNF-18: live accepts no other
     return path
 
@@ -51,24 +51,28 @@ class TestConfig:
             load_config(write(tmp_path, "[risk\n"))
 
     def test_amount_as_float_rejected(self, tmp_path):
-        p = example_with(tmp_path, 'max_order_pct          = "25"', "max_order_pct = 25.0")
+        config_path = example_with(
+            tmp_path, 'max_order_pct          = "25"', "max_order_pct = 25.0"
+        )
         with pytest.raises(ConfigError, match=r"risk\.max_order_pct"):
-            load_config(p)
+            load_config(config_path)
 
     def test_unknown_key_rejected(self, tmp_path):
-        p = example_with(tmp_path, "[risk]", '[risk]\nmax_order_qyt = "1"')
+        config_path = example_with(tmp_path, "[risk]", '[risk]\nmax_order_qyt = "1"')
         with pytest.raises(ConfigError, match=r"risk\.max_order_qyt"):
-            load_config(p)
+            load_config(config_path)
 
     def test_venue_missing(self, tmp_path):
-        p = example_with(tmp_path, "[venues.nx]", "[venues.zz]")
+        config_path = example_with(tmp_path, "[venues.nx]", "[venues.zz]")
         with pytest.raises(ConfigError, match=r"venues"):
-            load_config(p)
+            load_config(config_path)
 
     def test_positive_risk_limits(self, tmp_path):
-        p = example_with(tmp_path, 'max_order_pct          = "25"', 'max_order_pct = "-1"')
+        config_path = example_with(
+            tmp_path, 'max_order_pct          = "25"', 'max_order_pct = "-1"'
+        )
         with pytest.raises(ConfigError, match=r"risk\.max_order_pct"):
-            load_config(p)
+            load_config(config_path)
 
     def test_percentage_at_most_100(self, tmp_path):
         """D-19: the per order cap is a % of the inventory."""
@@ -80,19 +84,21 @@ class TestConfig:
 
     @pytest.mark.parametrize("old", ["max_order_qty", "max_order_notional"])
     def test_old_keys_rejected(self, tmp_path, old):
-        p = example_with(tmp_path, "[risk]", f'[risk]\n{old} = "1"')
+        config_path = example_with(tmp_path, "[risk]", f'[risk]\n{old} = "1"')
         with pytest.raises(ConfigError, match=rf"risk\.{old}"):
-            load_config(p)
+            load_config(config_path)
 
     @pytest.mark.parametrize("tf", ["4h", "1d"])
     def test_long_timeframes_by_default(self, tmp_path, tf):
-        p = example_with(tmp_path, 'default_timeframe = "1m"', f'default_timeframe = "{tf}"')
-        assert load_config(p).ui.default_timeframe == tf
+        config_path = example_with(
+            tmp_path, 'default_timeframe = "1m"', f'default_timeframe = "{tf}"'
+        )
+        assert load_config(config_path).ui.default_timeframe == tf
 
     def test_invalid_timeframe(self, tmp_path):
-        p = example_with(tmp_path, 'default_timeframe = "1m"', 'default_timeframe = "2h"')
+        config_path = example_with(tmp_path, 'default_timeframe = "1m"', 'default_timeframe = "2h"')
         with pytest.raises(ConfigError, match=r"ui\.default_timeframe"):
-            load_config(p)
+            load_config(config_path)
 
     @pytest.mark.spec("RF-05")
     @pytest.mark.spec("RNF-16")
@@ -112,15 +118,15 @@ class TestConfig:
             load_config(cero)
 
     def test_balances_every_10s_at_most(self, tmp_path):
-        p = example_with(tmp_path, "balances_every_s      = 10", "balances_every_s = 11")
+        config_path = example_with(tmp_path, "balances_every_s      = 10", "balances_every_s = 11")
         with pytest.raises(ConfigError, match=r"polling\.balances_every_s"):
-            load_config(p)
+            load_config(config_path)
 
     @pytest.mark.spec("RF-19")
     def test_sharp_move_optional(self, tmp_path):
         limits = load_config(EXAMPLE).bot.limits
         assert (limits.max_move_pct, limits.move_window_ms) == (None, 2000)
-        on = "# max_move_pct = \"1.0\""
+        on = '# max_move_pct = "1.0"'
         cfg = load_config(example_with(tmp_path, on, 'max_move_pct = "1.0"\nmove_window_ms = 3000'))
         assert (cfg.bot.limits.max_move_pct, cfg.bot.limits.move_window_ms) == (D("1.0"), 3000)
         with pytest.raises(ConfigError, match=r"bot\.move_window_ms"):
@@ -164,17 +170,17 @@ class TestOnlyPairsAgainstBTC:
         ],
     )
     def test_rejects_other_pairs(self, tmp_path, venue_line, bad):
-        p = example_with(tmp_path, venue_line, f'symbol = "{bad}"')
+        config_path = example_with(tmp_path, venue_line, f'symbol = "{bad}"')
         with pytest.raises(ConfigError, match=r"venues\.n[kx]\.symbol.*BTC"):
-            load_config(p)
+            load_config(config_path)
 
     def test_base_and_quote(self):
         nk = load_config(EXAMPLE).venues["nk"]
         assert (nk.base, nk.quote) == ("BTCB2", "BTC")
 
     def test_accepts_lowercase(self, tmp_path):
-        p = example_with(tmp_path, 'symbol  = "BTCB2_BTC"', 'symbol = "btcb2_btc"')
-        assert load_config(p).venues["nx"].quote == "BTC"
+        config_path = example_with(tmp_path, 'symbol  = "BTCB2_BTC"', 'symbol = "btcb2_btc"')
+        assert load_config(config_path).venues["nx"].quote == "BTC"
 
 
 @pytest.mark.spec("RF-12", "RNF-08")
@@ -198,16 +204,16 @@ class TestCredentials:
 @pytest.mark.spec("RF-13")
 class TestMode:
     def test_no_keys_is_read_only(self, tmp_path):
-        s = load_settings(EXAMPLE, env_file(tmp_path, {}), live=False)
-        assert s.mode == "read-only"
-        assert not s.can_trade("nk") and not s.can_trade("nx")
+        settings = load_settings(EXAMPLE, env_file(tmp_path, {}), live=False)
+        assert settings.mode == "read-only"
+        assert not settings.can_trade("nk") and not settings.can_trade("nx")
 
     def test_no_env_file_is_read_only(self, tmp_path):
         assert load_settings(EXAMPLE, tmp_path / ".env", live=False).mode == "read-only"
 
     def test_with_keys_defaults_to_dry_run(self, tmp_path):
-        s = load_settings(EXAMPLE, env_file(tmp_path, NK | NX), live=False)
-        assert s.mode == "dry-run"
+        settings = load_settings(EXAMPLE, env_file(tmp_path, NK | NX), live=False)
+        assert settings.mode == "dry-run"
 
     def test_explicit_live(self, tmp_path):
         assert load_settings(EXAMPLE, env_file(tmp_path, NK | NX), live=True).mode == "live"
@@ -217,18 +223,21 @@ class TestMode:
             load_settings(EXAMPLE, env_file(tmp_path, {}), live=True)
 
     def test_keys_of_one_venue(self, tmp_path):
-        s = load_settings(EXAMPLE, env_file(tmp_path, NK), live=False)
-        assert s.mode == "dry-run"
-        assert s.can_trade("nk") and not s.can_trade("nx")
+        settings = load_settings(EXAMPLE, env_file(tmp_path, NK), live=False)
+        assert settings.mode == "dry-run"
+        assert settings.can_trade("nk") and not settings.can_trade("nx")
 
 
 @pytest.mark.spec("CA-07")
 def test_settings_do_not_reveal_keys(tmp_path):
-    s = load_settings(EXAMPLE, env_file(tmp_path, NK | NX), live=True)
-    rendered = repr(s) + str(s)
+    settings = load_settings(EXAMPLE, env_file(tmp_path, NK | NX), live=True)
+    rendered = repr(settings) + str(settings)
     for value in (NK | NX).values():
         assert value not in rendered
-    assert all(v in [x.reveal() for x in s.redactor.secrets] for v in (NK | NX).values())
+    assert all(
+        secret_value in [secret.reveal() for secret in settings.redactor.secrets]
+        for secret_value in (NK | NX).values()
+    )
 
 
 @pytest.mark.spec("RF-24")
@@ -238,17 +247,17 @@ class TestFeeDiscount:
         assert cfg.venues["nk"].fee_discount_pct == 0 and cfg.venues["nx"].fee_discount_pct == 0
 
     def test_percentage(self, tmp_path):
-        p = example_with(
+        config_path = example_with(
             tmp_path, 'symbol  = "BTCB2_BTC"', 'symbol  = "BTCB2_BTC"\nfee_discount_pct = "50"'
         )
-        assert load_config(p).venues["nx"].fee_discount_pct == Decimal("50")
+        assert load_config(config_path).venues["nx"].fee_discount_pct == Decimal("50")
 
     @pytest.mark.parametrize("value", ['"150"', '"-1"', "50"])
     def test_invalid(self, tmp_path, value):
         new = f'symbol  = "BTCB2_BTC"\nfee_discount_pct = {value}'
-        p = example_with(tmp_path, 'symbol  = "BTCB2_BTC"', new)
+        config_path = example_with(tmp_path, 'symbol  = "BTCB2_BTC"', new)
         with pytest.raises(ConfigError, match=r"venues\.nx\.fee_discount_pct"):
-            load_config(p)
+            load_config(config_path)
 
 
 NK_SYMBOL = 'symbol  = "BTCB2/BTC"'
@@ -265,8 +274,10 @@ class TestFeeTokenSetup:
         assert nk.fee_token is None and nk.fee_token_min is None
 
     def test_token_and_minimum(self, tmp_path):
-        p = nk_token(tmp_path, 'fee_discount_pct = "25"\nfee_token = "nkyc"\nfee_token_min = "1"')
-        nk = load_config(p).venues["nk"]
+        config_path = nk_token(
+            tmp_path, 'fee_discount_pct = "25"\nfee_token = "nkyc"\nfee_token_min = "1"'
+        )
+        nk = load_config(config_path).venues["nk"]
         assert (nk.fee_token, nk.fee_token_min) == ("NKYC", Decimal("1"))
 
     @pytest.mark.parametrize(

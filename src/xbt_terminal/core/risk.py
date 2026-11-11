@@ -69,18 +69,20 @@ class Violation:
     message: str
 
 
-def check(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
+def check(order_request: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
     """All violations of `req`, in rule order; empty = it can be sent."""
-    if req.venue != ctx.market.venue:
-        raise ValueError(f"orden para {req.venue} validada con el contexto de {ctx.market.venue}")
+    if order_request.venue != ctx.market.venue:
+        raise ValueError(
+            f"orden para {order_request.venue} validada con el contexto de {ctx.market.venue}"
+        )
     return [
         *_stale(ctx, limits),
-        *_size(req, ctx, limits),
-        *_grid(req, ctx.market),
-        *_mid_deviation(req, ctx, limits),
-        *_self_cross(req, ctx),
-        *_balance(req, ctx),
-        *_exposure(req, ctx, limits),
+        *_size(order_request, ctx, limits),
+        *_grid(order_request, ctx.market),
+        *_mid_deviation(order_request, ctx, limits),
+        *_self_cross(order_request, ctx),
+        *_balance(order_request, ctx),
+        *_exposure(order_request, ctx, limits),
     ]
 
 
@@ -94,33 +96,37 @@ def _stale(ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
     return []
 
 
-def _size(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
+def _size(order_request: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
     """Size: the notional stays within `max_order_pct` % of total inventory (D-19)."""
-    pct = limits.max_order_pct
+    percent = limits.max_order_pct
     if ctx.inventory_value is None:
-        message = f"no se puede calcular el inventario total para el tope del {pct} %"
+        message = f"no se puede calcular el inventario total para el tope del {percent} %"
         return [Violation("order_size", message)]
-    notional = req.qty * req.price
-    cap = ctx.inventory_value * pct / HUNDRED
+    notional = order_request.qty * order_request.price
+    cap = ctx.inventory_value * percent / HUNDRED
     if notional <= cap:
         return []
     message = (
-        f"nocional {notional:.8f} > {pct} % del inventario total "
+        f"nocional {notional:.8f} > {percent} % del inventario total "
         f"({ctx.inventory_value:.8f} {ctx.market.quote}) = {cap:.8f}"
     )
     return [Violation("order_size", message)]
 
 
-def _grid(req: OrderRequest, market: MarketSpec) -> list[Violation]:
+def _grid(order_request: OrderRequest, market: MarketSpec) -> list[Violation]:
     """Market grid: tick, lot and minimums."""
-    notional = req.qty * req.price
+    notional = order_request.qty * order_request.price
     out = []
-    if req.price % market.tick_size != 0:
-        out.append(Violation("tick", f"precio {req.price} fuera del tick {market.tick_size}"))
-    if req.qty % market.lot_size != 0:
-        out.append(Violation("lot", f"cantidad {req.qty} fuera del lote {market.lot_size}"))
-    if req.qty < market.min_qty:
-        message = f"cantidad {req.qty} < mínimo {market.min_qty} {market.base}"
+    if order_request.price % market.tick_size != 0:
+        out.append(
+            Violation("tick", f"precio {order_request.price} fuera del tick {market.tick_size}")
+        )
+    if order_request.qty % market.lot_size != 0:
+        out.append(
+            Violation("lot", f"cantidad {order_request.qty} fuera del lote {market.lot_size}")
+        )
+    if order_request.qty < market.min_qty:
+        message = f"cantidad {order_request.qty} < mínimo {market.min_qty} {market.base}"
         out.append(Violation("min_qty", message))
     if notional < market.min_notional:
         message = f"nocional {notional:.8f} < mínimo {market.min_notional} {market.quote}"
@@ -128,43 +134,47 @@ def _grid(req: OrderRequest, market: MarketSpec) -> list[Violation]:
     return out
 
 
-def _mid_deviation(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
+def _mid_deviation(
+    order_request: OrderRequest, ctx: RiskContext, limits: RiskLimits
+) -> list[Violation]:
     """Price against the mid; with no mid, `_stale` already rejects."""
     mid = ctx.mid
     if mid is None:
         return []
-    deviation = abs(req.price - mid) / mid * HUNDRED
+    deviation = abs(order_request.price - mid) / mid * HUNDRED
     if deviation <= limits.max_mid_deviation_pct:
         return []
     message = f"precio a {deviation:.2f}% del mid {mid} (máx. {limits.max_mid_deviation_pct}%)"
     return [Violation("mid_deviation", message)]
 
 
-def _self_cross(req: OrderRequest, ctx: RiskContext) -> list[Violation]:
+def _self_cross(order_request: OrderRequest, ctx: RiskContext) -> list[Violation]:
     """Crossing own open orders on the same venue."""
-    mine = [o for o in ctx.open_orders if o.venue == ctx.market.venue and not o.is_done]
-    if req.side == "buy":
-        asks = [o.price for o in mine if o.side == "sell"]
-        if asks and req.price >= min(asks):
-            message = f"compra a {req.price} cruza tu venta abierta a {min(asks)}"
+    mine = [
+        order for order in ctx.open_orders if order.venue == ctx.market.venue and not order.is_done
+    ]
+    if order_request.side == "buy":
+        asks = [order.price for order in mine if order.side == "sell"]
+        if asks and order_request.price >= min(asks):
+            message = f"compra a {order_request.price} cruza tu venta abierta a {min(asks)}"
             return [Violation("self_cross", message)]
     else:
-        bids = [o.price for o in mine if o.side == "buy"]
-        if bids and req.price <= max(bids):
-            message = f"venta a {req.price} cruza tu compra abierta a {max(bids)}"
+        bids = [order.price for order in mine if order.side == "buy"]
+        if bids and order_request.price <= max(bids):
+            message = f"venta a {order_request.price} cruza tu compra abierta a {max(bids)}"
             return [Violation("self_cross", message)]
     return []
 
 
-def _balance(req: OrderRequest, ctx: RiskContext) -> list[Violation]:
+def _balance(order_request: OrderRequest, ctx: RiskContext) -> list[Violation]:
     """Available balance: a buy includes the taker fee."""
     market = ctx.market
-    if req.side == "buy":
+    if order_request.side == "buy":
         asset = market.quote
-        need = req.qty * req.price * (1 + market.taker_fee)
+        need = order_request.qty * order_request.price * (1 + market.taker_fee)
     else:
         asset = market.base
-        need = req.qty
+        need = order_request.qty
     have = ctx.balance(asset).available
     if need <= have:
         return []
@@ -173,15 +183,15 @@ def _balance(req: OrderRequest, ctx: RiskContext) -> list[Violation]:
     return [Violation("insufficient_balance", message)]
 
 
-def _exposure(req: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
+def _exposure(order_request: OrderRequest, ctx: RiskContext, limits: RiskLimits) -> list[Violation]:
     """Venue exposure after the order (D-07); with no mid, `_stale` already rejects."""
     mid = ctx.mid
     if mid is None:
         return []
     market = ctx.market
     value = ctx.balance(market.quote).total + ctx.balance(market.base).total * mid
-    direction = 1 if req.side == "buy" else -1
-    after = value + direction * req.qty * (mid - req.price)
+    direction = 1 if order_request.side == "buy" else -1
+    after = value + direction * order_request.qty * (mid - order_request.price)
     if after <= limits.max_venue_exposure:
         return []
     message = (

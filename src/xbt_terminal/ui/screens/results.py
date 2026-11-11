@@ -119,8 +119,8 @@ class ResultsScreen(ModalScreen[None]):
             # every minute and with each fill: the journal is read off the UI thread (T-94)
             try:
                 report = await asyncio.to_thread(self._source.load, rng)
-            except OSError as exc:
-                self._on_error(f"resultados: no se pudo leer el journal ({exc})")
+            except OSError as exception:
+                self._on_error(f"resultados: no se pudo leer el journal ({exception})")
                 return
             if rng == self.range:  # a range change while reading already drew its own
                 self._show(report)
@@ -130,8 +130,8 @@ class ResultsScreen(ModalScreen[None]):
     def reload(self) -> None:
         try:
             report = self._source.load(self.range)
-        except OSError as exc:
-            self._on_error(f"resultados: no se pudo leer el journal ({exc})")
+        except OSError as error:
+            self._on_error(f"resultados: no se pudo leer el journal ({error})")
             return
         self._show(report)
 
@@ -157,55 +157,62 @@ class ResultsScreen(ModalScreen[None]):
         if table.row_count:
             selected = table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
         table.clear()
-        priced = {a for a, _ in self.report.summary.prices}
-        for d in reversed(self.report.doubles):  # most recent on top
-            table.add_row(*self._cells(d, priced), key=d.id)
+        priced = {token for token, _ in self.report.summary.prices}
+        for double in reversed(self.report.doubles):
+            table.add_row(*self._cells(double, priced), key=double.id)
         if selected is not None and selected in table.rows:
             table.move_cursor(row=table.get_row_index(selected), animate=False)
 
     @staticmethod
-    def _cells(d: DoubleResult, priced: Collection[str] = ()) -> tuple[str, ...]:
+    def _cells(double: DoubleResult, priced: Collection[str] = ()) -> tuple[str, ...]:
         """`priced`: tokens whose fee is already in sats (D-65)."""
-        started = datetime.fromtimestamp(d.started / 1000, UTC).strftime("%m-%d %H:%M:%S")
-        avg = lambda v: "—" if v is None else f"{v:.8f}"  # noqa: E731
-        fees = fmt_sats(d.fees + d.token_fees, signed=False)
-        valued = [f"{q:f} {a}" for a, q in d.other_fees if a in priced]
-        loose = [f"{q:f} {a}" for a, q in d.other_fees if a not in priced]
+        started = datetime.fromtimestamp(double.started / 1000, UTC).strftime("%m-%d %H:%M:%S")
+        avg = lambda value: "—" if value is None else f"{value:.8f}"  # noqa: E731
+        fees = fmt_sats(double.fees + double.token_fees, signed=False)
+        valued = [
+            f"{quantity:f} {asset}" for asset, quantity in double.other_fees if asset in priced
+        ]
+        loose = [
+            f"{quantity:f} {asset}" for asset, quantity in double.other_fees if asset not in priced
+        ]
         if valued:  # already in sats (D-65): the quantity, to know where they come from
             fees += f" ({', '.join(valued)})"
         if loose:
             fees += " + " + ", ".join(loose)
         return (
-            started, d.id, d.origin, f"{d.buy_venue or '?'}→{d.sell_venue or '?'}",
-            f"{d.matched:f}", avg(d.buy_avg), avg(d.sell_avg), fees,
-            fmt_pct(d.expected_pct), fmt_pct(d.result_pct), fmt_sats(d.result),
-            "—" if d.mismatch == 0 else f"{d.mismatch:+f}", STATUS_NAMES[d.status],
+            started,
+            double.id,
+            double.origin,
+            f"{double.buy_venue or '?'}→{double.sell_venue or '?'}",
+            f"{double.matched:f}", avg(double.buy_avg), avg(double.sell_avg), fees,
+            fmt_pct(double.expected_pct), fmt_pct(double.result_pct), fmt_sats(double.result),
+            "—" if double.mismatch == 0 else f"{double.mismatch:+f}", STATUS_NAMES[double.status],
         )  # fmt: skip
 
     def summary_text(self) -> str:
         if self.report is None:
             return ""
-        s = self.report.summary
-        parts = [f"{s.closed} dobles cerradas"]
-        if s.closed:
+        summary = self.report.summary
+        parts = [f"{summary.closed} dobles cerradas"]
+        if summary.closed:
             parts += [
-                f"total {s.total:+.8f} BTC · {fmt_sats(s.total)} sats",
-                f"media {fmt_sats(s.mean)} · mejor {fmt_sats(s.best)} "
-                f"· peor {fmt_sats(s.worst)} sats",
+                f"total {summary.total:+.8f} BTC · {fmt_sats(summary.total)} sats",
+                f"media {fmt_sats(summary.mean)} · mejor {fmt_sats(summary.best)} "
+                f"· peor {fmt_sats(summary.worst)} sats",
             ]
-        if s.prices:  # RF-25, D-65: token fees subtracted at today's price
-            used = ", ".join(f"{a} a {p:.8f} BTC" for a, p in s.prices)
+        if summary.prices:  # RF-25, D-65: token fees subtracted at today's price
+            used = ", ".join(f"{asset} a {price:.8f} BTC" for asset, price in summary.prices)
             parts.append(f"fees en token restadas con {used} (precio de ahora)")
-        if s.other_fees:  # no price: not valued in BTC
-            other = ", ".join(f"{q:f} {a}" for a, q in s.other_fees)
+        if summary.other_fees:  # no price: not valued in BTC
+            other = ", ".join(f"{quantity:f} {asset}" for asset, quantity in summary.other_fees)
             parts.append(f"+ {other} en fees, sin descontar del total")
         extra = [
-            (s.hanging, "colgadas (no suman)"),
-            (s.no_fills, "sin fills"),
-            (s.unassigned, "fills sin asignar a una orden de la terminal"),
-            (s.bad_rows, "líneas del journal ilegibles"),
+            (summary.hanging, "colgadas (no suman)"),
+            (summary.no_fills, "sin fills"),
+            (summary.unassigned, "fills sin asignar a una orden de la terminal"),
+            (summary.bad_rows, "líneas del journal ilegibles"),
         ]
-        parts += [f"{n} {what}" for n, what in extra if n]
+        parts += [f"{number} {what}" for number, what in extra if number]
         return " · ".join(parts)
 
     def _shown_values(self) -> tuple[ValueSample, ...]:
@@ -232,23 +239,25 @@ class ResultsScreen(ModalScreen[None]):
         """Series summary (RF-32) and what it is not: deposits and withdrawals unadjusted,
         gaps without daemon."""
         values = self.report.values if self.report is not None else ()
-        s = summarize(values)
-        if s is None:
+        summary = summarize(values)
+        if summary is None:
             return (
                 "aún sin muestras en el rango: el daemon apunta una cada `value_every_s` "
                 "(5 min por defecto) si tiene saldos y mid de los dos venues"
             )
         fmt = "%m-%d %H:%M"
-        since = datetime.fromtimestamp(s.since / 1000, UTC).strftime(fmt)
-        until = datetime.fromtimestamp(s.until / 1000, UTC).strftime(fmt)
-        pct = f" ({s.change_pct:+.2f} %)" if s.change_pct is not None else ""
+        since = datetime.fromtimestamp(summary.since / 1000, UTC).strftime(fmt)
+        until = datetime.fromtimestamp(summary.until / 1000, UTC).strftime(fmt)
+        percent = f" ({summary.change_pct:+.2f} %)" if summary.change_pct is not None else ""
         venues = " · ".join(
-            f"{VENUE_NAME.get(v.venue, v.venue)} {v.value:.8f}" for v in values[-1].venues
+            f"{VENUE_NAME.get(venue.venue, venue.venue)} {venue.value:.8f}"
+            for venue in values[-1].venues
         )
         return "\n".join([
-            f"ahora {s.last:.8f} BTC ({venues}) · cambio {s.change:+.8f} BTC{pct} "
-            f"desde {s.first:.8f}",
-            f"máx {s.high:.8f} · mín {s.low:.8f} · {s.count} muestras de {since} a {until} UTC",
+            f"ahora {summary.last:.8f} BTC ({venues}) · cambio {summary.change:+.8f} BTC{percent} "
+            f"desde {summary.first:.8f}",
+            f"máx {summary.high:.8f} · mín {summary.low:.8f} · "
+            f"{summary.count} muestras de {since} a {until} UTC",
             *self._stretch_text(),
             "Los depósitos y retiros salen como saltos: es el valor, no es PnL. "
             "Los huecos son ratos sin daemon. Valor = BTC + BTCB2 × mid de cada venue.",
@@ -258,13 +267,13 @@ class ResultsScreen(ModalScreen[None]):
         """With `z`: when the stretch is from and how much it changed in sats."""
         if not self.zoom:
             return []
-        s = summarize(self._shown_values())
-        if s is None:
+        summary = summarize(self._shown_values())
+        if summary is None:
             return []
-        since = datetime.fromtimestamp(s.since / 1000, UTC).strftime("%m-%d %H:%M")
+        since = datetime.fromtimestamp(summary.since / 1000, UTC).strftime("%m-%d %H:%M")
         return [
             f"último tramo desde {since} UTC (tras el último salto > 5 %): "
-            f"cambio {fmt_sats(s.change)} sats en {s.count} muestras"
+            f"cambio {fmt_sats(summary.change)} sats en {summary.count} muestras"
         ]
 
     def row_count(self) -> int:

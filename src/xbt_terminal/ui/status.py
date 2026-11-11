@@ -132,7 +132,7 @@ def render_status(
             out.append(" ✖ sin daemon ", style="bold white on red")
     label, style = MODES[mode]
     if bot in BOT:
-        label = f"{label.split(' ')[0]} · {BOT[bot]}"  # "LIVE · BOT armado"
+        label = f"{label.split(' ')[0]} · {BOT[bot]}"
         if bot == "halted":
             style = "bold white on red"
     out.append(" ")

@@ -183,8 +183,8 @@ class SimVenue(DryRunVenue):
         book = self._feed.book.snapshot(MATCH_DEPTH)
         if not self._spent or book is None:
             return
-        now = {("buy", lv.price): lv.qty for lv in book.asks}
-        now |= {("sell", lv.price): lv.qty for lv in book.bids}
+        now = {("buy", price_level.price): price_level.qty for price_level in book.asks}
+        now |= {("sell", price_level.price): price_level.qty for price_level in book.bids}
         self._spent = {key: spent for key, spent in self._spent.items() if now.get(key) == spent[0]}
 
     def _unspent(self, side: Side, levels: tuple[Level, ...]) -> list[Level]:
@@ -196,23 +196,27 @@ class SimVenue(DryRunVenue):
                 out.append(replace(level, qty=left))
         return out
 
-    def _spend(self, side: Side, levels: tuple[Level, ...], price: Decimal, qty: Decimal) -> None:
-        recorded = next(lv.qty for lv in levels if lv.price == price)
+    def _spend(
+        self, side: Side, levels: tuple[Level, ...], price: Decimal, quantity: Decimal
+    ) -> None:
+        recorded = next(price_level.qty for price_level in levels if price_level.price == price)
         used = self._spent.get((side, price), (recorded, ZERO))[1]
-        self._spent[side, price] = (recorded, used + qty)
+        self._spent[side, price] = (recorded, used + quantity)
 
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         if self._latency_s:
             await asyncio.sleep(self._latency_s)
-        order = await super().place_limit(req)
+        order = await super().place_limit(order_request)
         book = self._feed.book.snapshot(MATCH_DEPTH)
         if book is None:
             return order
-        levels = book.asks if req.side == "buy" else book.bids
-        left = self._unspent(req.side, levels)
-        for price, qty in match(req.side, req.price, req.qty, left, self._taken):
-            self._spend(req.side, levels, price, qty)
-            order = await self.simulate_fill(order.order_id, qty, price=price)
+        levels = book.asks if order_request.side == "buy" else book.bids
+        left = self._unspent(order_request.side, levels)
+        for price, quantity in match(
+            order_request.side, order_request.price, order_request.qty, left, self._taken
+        ):
+            self._spend(order_request.side, levels, price, quantity)
+            order = await self.simulate_fill(order.order_id, quantity, price=price)
         return order
 
 
@@ -267,11 +271,11 @@ class CrossingProbe:
         if what != "book":
             return
         views: dict[VenueId, VenueView] = {}
-        for vid, st in self._hub.state.items():
-            book = st.book.snapshot(PROBE_DEPTH)
-            if st.spec is None or book is None:
+        for venue_id, state in self._hub.state.items():
+            book = state.book.snapshot(PROBE_DEPTH)
+            if state.spec is None or book is None:
                 return
-            views[vid] = VenueView(st.spec, book.bids, book.asks, PLENTY, PLENTY)
+            views[venue_id] = VenueView(state.spec, book.bids, book.asks, PLENTY, PLENTY)
         crossed = isinstance(decide(views, _ARMED, self._limits, self._clock()), Fire)
         self.count += crossed and not self._open
         self._open = crossed
@@ -308,7 +312,7 @@ def summarize_journal(directory: Path, crossings: int, info: RecordingInfo) -> R
         lines += path.read_text(encoding="utf-8").splitlines()
     rows, _ = read_rows(lines)
     results = compute(rows, mode="dry-run")
-    filled = sum(d.result is not None and d.mismatch == 0 for d in results.doubles)
+    filled = sum(double.result is not None and double.mismatch == 0 for double in results.doubles)
     return summarize(
         rows,
         crossings=crossings,

@@ -201,12 +201,12 @@ def _parse_order(side: Side, args: list[str]) -> Command:
 
 def _parse_double(args: list[str]) -> Command:
     _arity("dbl", args, 5)
-    qty = _positive(args[0], "cantidad")
+    quantity = _positive(args[0], "cantidad")
     buy_venue, sell_venue = _venue(args[1]), _venue(args[3])
     if buy_venue == sell_venue:
         raise CommandError("la orden doble necesita venues distintos en cada pierna")
     return DoubleOrder(
-        qty=qty,
+        qty=quantity,
         buy_venue=buy_venue,
         buy_price=_positive(args[2], "precio de compra"),
         sell_venue=sell_venue,

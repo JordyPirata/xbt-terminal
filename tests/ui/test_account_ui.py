@@ -15,20 +15,20 @@ from .test_double_ui import Rig, ready, until
 
 
 async def place(rig, venue, side="buy", price="0.00725000", qty="0.01"):
-    req = OrderRequest(venue, side, D(qty), D(price), f"t-{venue}{side}")
-    return await rig.venues[venue].place_limit(req)
+    order_request = OrderRequest(venue, side, D(qty), D(price), f"t-{venue}{side}")
+    return await rig.venues[venue].place_limit(order_request)
 
 
 async def command(rig, pilot, text):
-    cmd = rig.app.query_one(CommandLine)
-    cmd.focus()
-    cmd.value = text
+    command_line = rig.app.query_one(CommandLine)
+    command_line.focus()
+    command_line.value = text
     rig.app.last_message = ""
     await pilot.press("enter")
 
 
 def total_open(rig):
-    return sum(len(st.orders) for st in rig.account.state.values())
+    return sum(len(state.orders) for state in rig.account.state.values())
 
 
 @pytest.mark.spec("RF-05")
@@ -91,7 +91,7 @@ class TestBalances:
             panel = rig.app.query_one(BalancesPanel)
             await until(pilot, lambda: "valor" in panel.text)
             assert all(len(ln) <= 156 for ln in panel.text.splitlines())
-            assert all(c.region.height >= 8 for c in rig.app.query(ChartPanel))
+            assert all(chart.region.height >= 8 for chart in rig.app.query(ChartPanel))
 
 
 @pytest.mark.spec("RF-08")
@@ -100,13 +100,13 @@ class TestOpenOrders:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            a = await place(rig, "nk")
-            b = await place(rig, "nx", side="sell", price="0.00730000")
+            first_order = await place(rig, "nk")
+            second_order = await place(rig, "nx", side="sell", price="0.00730000")
             await until(pilot, lambda: total_open(rig) == 2)
             await pilot.press("o")
             await until(pilot, lambda: isinstance(rig.app.screen, OrdersScreen))
             screen = rig.app.screen
-            assert screen.order_ids == [a.order_id, b.order_id]
+            assert screen.order_ids == [first_order.order_id, second_order.order_id]
             await pilot.press("escape")
             await until(pilot, lambda: not isinstance(rig.app.screen, OrdersScreen))
 
@@ -115,23 +115,23 @@ class TestOpenOrders:
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
             await place(rig, "nk")
-            b = await place(rig, "nx", side="sell", price="0.00730000")
+            second_order = await place(rig, "nx", side="sell", price="0.00730000")
             await until(pilot, lambda: total_open(rig) == 2)
             await command(rig, pilot, "orders nx")
             await until(pilot, lambda: isinstance(rig.app.screen, OrdersScreen))
-            assert rig.app.screen.order_ids == [b.order_id]
+            assert rig.app.screen.order_ids == [second_order.order_id]
 
     async def test_cancel_selected_with_confirmation(self, tmp_path):
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            a = await place(rig, "nk")
+            first_order = await place(rig, "nk")
             await until(pilot, lambda: total_open(rig) == 1)
             await pilot.press("o")
             await until(pilot, lambda: isinstance(rig.app.screen, OrdersScreen))
             await pilot.press("c")
             await until(pilot, lambda: isinstance(rig.app.screen, ConfirmScreen))
-            assert a.order_id in rig.app.screen.summary
+            assert first_order.order_id in rig.app.screen.summary
             await pilot.press("y")
             await until(pilot, lambda: total_open(rig) == 0, timeout=3)
             assert "cancelado" in rig.app.last_message
@@ -145,8 +145,10 @@ class TestOpenOrders:
             await pilot.press("o")
             await until(pilot, lambda: isinstance(rig.app.screen, OrdersScreen))
             assert rig.app.screen.order_ids == []
-            a = await place(rig, "nk")
-            await until(pilot, lambda: rig.app.screen.order_ids == [a.order_id], timeout=3)
+            first_order = await place(rig, "nk")
+            await until(
+                pilot, lambda: rig.app.screen.order_ids == [first_order.order_id], timeout=3
+            )
 
 
 @pytest.mark.spec("RF-08", "CA-05")
@@ -183,9 +185,9 @@ class TestCancelAll:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            a = await place(rig, "nk")
+            first_order = await place(rig, "nk")
             await place(rig, "nx", side="sell", price="0.00730000")
-            await command(rig, pilot, f"cancel {a.order_id}")
+            await command(rig, pilot, f"cancel {first_order.order_id}")
             await until(pilot, lambda: isinstance(rig.app.screen, ConfirmScreen))
             await pilot.press("y")
             await until(pilot, lambda: "cancelado" in rig.app.last_message, timeout=3)
@@ -194,7 +196,7 @@ class TestCancelAll:
             assert "en Neoxa" in rig.app.screen.summary
             await pilot.press("y")
             await until(pilot, lambda: "cancelado" in rig.app.last_message, timeout=3)
-            assert [len(await v.open_orders()) for v in rig.venues.values()] == [0, 0]
+            assert [len(await venue.open_orders()) for venue in rig.venues.values()] == [0, 0]
 
     async def test_no_orders_says_so_without_dialog(self, tmp_path):
         rig = Rig(tmp_path)
@@ -210,8 +212,8 @@ async def test_d_starts_a_double_order(tmp_path):
     rig = Rig(tmp_path)
     async with rig.app.run_test(size=(160, 45)) as pilot:
         await pilot.press("d")
-        cmd = rig.app.query_one(CommandLine)
-        await until(pilot, lambda: cmd.has_focus and cmd.value == "dbl ")
+        command = rig.app.query_one(CommandLine)
+        await until(pilot, lambda: command.has_focus and command.value == "dbl ")
 
 
 @pytest.mark.spec("RF-06", "RF-08")

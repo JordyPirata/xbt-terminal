@@ -79,7 +79,7 @@ class RestHarness(Harness):
         self.read_only = self.build(self.http)
         return self
 
-    async def __aexit__(self, *exc: object) -> None:
+    async def __aexit__(self, *error: object) -> None:
         await self.http.aclose()
         self.mock.stop()
 
@@ -277,7 +277,7 @@ class NeoxaHarness(RestHarness):
     def cancel_all_reached_venue(self) -> bool:
         """No "cancel all" on Neoxa: one by one, the active orders of the pair."""
         paths = [call.request.url.path for call in self.cancel_route.calls]
-        return len(paths) == 2 and not any(self.foreign_orders[0] in p for p in paths)
+        return len(paths) == 2 and not any(self.foreign_orders[0] in path for path in paths)
 
     def new_own_trade(self) -> str:
         payload = json.loads(self.fixture("trades_my.json"))
@@ -302,9 +302,9 @@ class NeoxaHarness(RestHarness):
         async def handler(ws: Any) -> None:
             sessions["n"] += 1
             await ws.send(frames["open"])
-            await ws.recv()  # namespace connect
+            await ws.recv()
             await ws.send(frames["connect"])
-            await ws.recv()  # subscribe
+            await ws.recv()
             await ws.send(frames["orderbook"])
             await ws.send(frames["trades"])
             if not (drop and sessions["n"] == 1):

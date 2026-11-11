@@ -73,17 +73,17 @@ class Rig:
             retry_s=0.01,
             clock=lambda: T0,
         )
-        self.account.subscribe(lambda v, what: self.seen.append((v, what)))
+        self.account.subscribe(lambda venue, what: self.seen.append((venue, what)))
 
     def lines(self):
         files = sorted(self.logs.glob("journal-*.jsonl"))
-        return [json.loads(ln) for f in files for ln in f.read_text().splitlines()]
+        return [json.loads(ln) for path in files for ln in path.read_text().splitlines()]
 
     async def __aenter__(self):
         self.task = asyncio.create_task(self.account.run())
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         self.task.cancel()
         await asyncio.gather(self.task, return_exceptions=True)
         self.journal.close()
@@ -99,33 +99,33 @@ async def until(predicate, timeout=1.0):
 async def test_private_channel_state(tmp_path):
     async with Rig(tmp_path) as rig:
         rig.venue.push(ConnState("nk", "private", "ws", "up", 120.0, T0))
-        st = rig.account.state["nk"]
-        await until(lambda: st.conn is not None)
-        assert (st.conn.source, st.conn.status, st.conn_at) == ("ws", "up", T0)
+        state = rig.account.state["nk"]
+        await until(lambda: state.conn is not None)
+        assert (state.conn.source, state.conn.status, state.conn_at) == ("ws", "up", T0)
         assert ("nk", "conn") in rig.seen
 
 
 @pytest.mark.spec("RF-08")
 async def test_open_and_finished_orders(tmp_path):
     async with Rig(tmp_path) as rig:
-        st = rig.account.state["nk"]
+        state = rig.account.state["nk"]
         rig.venue.push(order("a"), order("b"))
-        await until(lambda: len(st.orders) == 2)
+        await until(lambda: len(state.orders) == 2)
         rig.venue.push(order("a", status="cancelled"))
-        await until(lambda: list(st.orders) == ["b"])
+        await until(lambda: list(state.orders) == ["b"])
         assert ("nk", "orders") in rig.seen
 
 
 @pytest.mark.spec("RF-05", "RF-09", "RF-11")
 async def test_fill_to_journal_and_refreshes_balances(tmp_path):
     async with Rig(tmp_path) as rig:
-        st = rig.account.state["nk"]
-        await until(lambda: st.balances is not None)  # initial load
+        state = rig.account.state["nk"]
+        await until(lambda: state.balances is not None)  # initial load
         assert rig.venue.balance_calls == 1
         rig.venue.push(order("o-1"), fill())
         await until(lambda: rig.venue.balance_calls == 2)
-        await until(lambda: st.balances["BTCB2"].available == D("2"))
-        assert st.fills == [fill()]
+        await until(lambda: state.balances["BTCB2"].available == D("2"))
+        assert state.fills == [fill()]
         (line,) = rig.lines()
         assert (line["event"], line["venue"], line["client_id"]) == ("fill", "nk", "t-abc123")
         assert line["data"] == {
@@ -149,13 +149,13 @@ async def test_balances_every_few_seconds(tmp_path):
 @pytest.mark.spec("RF-05")
 async def test_balance_failure_keeps_previous(tmp_path):
     async with Rig(tmp_path, every=0.02) as rig:
-        st = rig.account.state["nk"]
-        await until(lambda: st.balances is not None)
-        before = st.balances
+        state = rig.account.state["nk"]
+        await until(lambda: state.balances is not None)
+        before = state.balances
         rig.venue.fail_balances = True
         calls = rig.venue.balance_calls
         await until(lambda: rig.venue.balance_calls > calls + 1)
-        assert st.balances == before and "sin red" in (st.error or "")
+        assert state.balances == before and "sin red" in (state.error or "")
 
 
 @pytest.mark.spec("RF-13")
@@ -181,7 +181,7 @@ async def test_fill_of_unknown_order_has_no_client_id(tmp_path):
 async def test_forwards_each_event_to_those_asking(tmp_path):
     async with Rig(tmp_path) as rig:
         got = []
-        rig.account.subscribe_events(lambda v, ev: got.append((v, ev)))
+        rig.account.subscribe_events(lambda venue, ev: got.append((venue, ev)))
         rig.venue.push(order("a"), fill())
         await until(lambda: len(got) == 2)
         assert got == [("nk", order("a")), ("nk", fill())]
@@ -191,8 +191,8 @@ async def test_forwards_each_event_to_those_asking(tmp_path):
 async def test_own_order_also_refreshes_balances(tmp_path):
     """Opening or cancelling moves balance between available and locked."""
     async with Rig(tmp_path) as rig:
-        st = rig.account.state["nk"]
-        await until(lambda: st.balances is not None)
+        state = rig.account.state["nk"]
+        await until(lambda: state.balances is not None)
         rig.venue.push(order("a"))
         await until(lambda: rig.venue.balance_calls == 2)
 
@@ -260,8 +260,8 @@ async def test_interval_does_not_add_read_time(tmp_path):
     async with Rig(tmp_path, every=0.2) as rig:
         rig.venue.balances = slow_balances
         await until(lambda: len(starts) >= 4, timeout=2.0)
-    gaps = [b - a for a, b in pairwise(starts)]
-    assert all(g < 0.24 for g in gaps[1:]), gaps  # 0.2 interval, not 0.26
+    gaps = [later - earlier for earlier, later in pairwise(starts)]
+    assert all(gap < 0.24 for gap in gaps[1:]), gaps  # 0.2 interval, not 0.26
 
 
 @pytest.mark.spec("RF-11", "RF-19")
@@ -279,8 +279,8 @@ async def test_textless_error_keeps_its_type(tmp_path):
 @pytest.mark.spec("RF-11", "RF-25")
 async def test_corrected_fee_to_journal_without_another_fill(tmp_path):
     async with Rig(tmp_path) as rig:
-        st = rig.account.state["nk"]
-        await until(lambda: st.balances is not None)
+        state = rig.account.state["nk"]
+        await until(lambda: state.balances is not None)
         rig.venue.push(order("o-1"), fill())
         await until(lambda: len(rig.lines()) == 1)
         rig.seen.clear()
@@ -294,6 +294,6 @@ async def test_corrected_fee_to_journal_without_another_fill(tmp_path):
             "fee": "0.0000893166",
             "fee_asset": "NKYC",
         }
-        (f,) = st.fills
-        assert (f.qty, f.fee, f.fee_asset) == (D("0.004"), D("0.0000893166"), "NKYC")
+        (filled,) = state.fills
+        assert (filled.qty, filled.fee, filled.fee_asset) == (D("0.004"), D("0.0000893166"), "NKYC")
         assert ("nk", "fill") in rig.seen

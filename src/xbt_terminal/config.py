@@ -142,9 +142,6 @@ class Settings:
         return self.mode != "read-only" and venue in self.credentials
 
 
-# --- reading values ------------------------------------------------------------
-
-
 class _Section:
     """View of a TOML table remembering its path and which keys were read."""
 
@@ -237,67 +234,72 @@ def _venue_ids(sec: _Section) -> None:
         raise ConfigError(f"{sec.path}: se esperan {', '.join(VENUE_IDS)}; hay {found}")
 
 
-# --- loading -------------------------------------------------------------------
-
-
 def load_config(path: Path) -> AppConfig:
     try:
         raw = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise ConfigError(f"{path}: no existe (copiar config.example.toml)") from None
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"{path}: TOML inválido: {exc}") from None
+    except tomllib.TOMLDecodeError as error:
+        raise ConfigError(f"{path}: TOML inválido: {error}") from None
 
     root = _Section(raw, "")
 
     venues_sec = root.section("venues")
     _venue_ids(venues_sec)
     venues: dict[VenueId, VenueConfig] = {}
-    for vid in VENUE_IDS:
-        v = venues_sec.section(vid)
-        venues[vid] = VenueConfig(
-            id=vid,
-            name=v.str("name"),
-            symbol=_btc_symbol(v),
-            maker_fee=v.decimal("maker_fee", positive=False),
-            taker_fee=v.decimal("taker_fee", positive=False),
+    for venue_id in VENUE_IDS:
+        venue_section = venues_sec.section(venue_id)
+        venues[venue_id] = VenueConfig(
+            id=venue_id,
+            name=venue_section.str("name"),
+            symbol=_btc_symbol(venue_section),
+            maker_fee=venue_section.decimal("maker_fee", positive=False),
+            taker_fee=venue_section.decimal("taker_fee", positive=False),
             fee_discount_pct=(
-                _percent(v, "fee_discount_pct", positive=False)
-                if "fee_discount_pct" in v.data
+                _percent(venue_section, "fee_discount_pct", positive=False)
+                if "fee_discount_pct" in venue_section.data
                 else Decimal(0)
             ),
-            **_fee_token(v),
+            **_fee_token(venue_section),
         )
-        v.done()
+        venue_section.done()
     venues_sec.done()
 
-    u = root.section("ui")
+    ui_section = root.section("ui")
     ui = UiConfig(
-        book_levels=u.int("book_levels", max=200),
-        default_timeframe=u.choice("default_timeframe", get_args(Timeframe)),
+        book_levels=ui_section.int("book_levels", max=200),
+        default_timeframe=ui_section.choice("default_timeframe", get_args(Timeframe)),
     )
-    u.done()
+    ui_section.done()
 
-    p = root.section("polling")
+    polling_section = root.section("polling")
     polling = PollingConfig(
-        neoxa_private_every_s=p.int("neoxa_private_every_s"),
-        balances_every_s=p.int("balances_every_s", max=BALANCES_MAX_EVERY_S),
-        rest_fallback_every_s=p.int("rest_fallback_every_s"),
-        **({"value_every_s": p.int("value_every_s", min=60)} if "value_every_s" in p.data else {}),
+        neoxa_private_every_s=polling_section.int("neoxa_private_every_s"),
+        balances_every_s=polling_section.int("balances_every_s", max=BALANCES_MAX_EVERY_S),
+        rest_fallback_every_s=polling_section.int("rest_fallback_every_s"),
+        **(
+            {"value_every_s": polling_section.int("value_every_s", min=60)}
+            if "value_every_s" in polling_section.data
+            else {}
+        ),
     )
-    p.done()
+    polling_section.done()
 
-    r = root.section("risk")
+    risk_section = root.section("risk")
     risk = RiskLimits(
-        max_order_pct=_percent(r, "max_order_pct"),
-        max_mid_deviation_pct=r.decimal("max_mid_deviation_pct"),
-        max_venue_exposure=r.decimal("max_venue_exposure"),
-        stale_after_s=r.int("stale_after_s"),
-        hanging_leg_after_s=r.int("hanging_leg_after_s"),
-        max_clock_skew_s=r.int("max_clock_skew_s"),
-        **({"book_check_s": r.int("book_check_s", min=1)} if "book_check_s" in r.data else {}),
+        max_order_pct=_percent(risk_section, "max_order_pct"),
+        max_mid_deviation_pct=risk_section.decimal("max_mid_deviation_pct"),
+        max_venue_exposure=risk_section.decimal("max_venue_exposure"),
+        stale_after_s=risk_section.int("stale_after_s"),
+        hanging_leg_after_s=risk_section.int("hanging_leg_after_s"),
+        max_clock_skew_s=risk_section.int("max_clock_skew_s"),
+        **(
+            {"book_check_s": risk_section.int("book_check_s", min=1)}
+            if "book_check_s" in risk_section.data
+            else {}
+        ),
     )
-    r.done()
+    risk_section.done()
 
     rl_sec = root.section("ratelimit")
     _venue_ids(rl_sec)
@@ -345,101 +347,109 @@ def load_config(path: Path) -> AppConfig:
     )
 
 
-def _replay(s: _Section) -> ReplayConfig:
+def _replay(section: _Section) -> ReplayConfig:
     """`[replay]` (RF-34, D-80): balances required; latency, competitor and seed optional."""
     extra: dict[str, Any] = {}
-    if "latency_ms" in s.data:
-        extra["latency_ms"] = s.int("latency_ms", min=0)
-    if "competitor_pct" in s.data:
-        extra["competitor_pct"] = _percent(s, "competitor_pct", positive=False)
-    if "seed" in s.data:
-        extra["seed"] = s.int("seed", min=0)
+    if "latency_ms" in section.data:
+        extra["latency_ms"] = section.int("latency_ms", min=0)
+    if "competitor_pct" in section.data:
+        extra["competitor_pct"] = _percent(section, "competitor_pct", positive=False)
+    if "seed" in section.data:
+        extra["seed"] = section.int("seed", min=0)
     config = ReplayConfig(
-        base_balance=s.decimal("base_balance"), quote_balance=s.decimal("quote_balance"), **extra
+        base_balance=section.decimal("base_balance"),
+        quote_balance=section.decimal("quote_balance"),
+        **extra,
     )
-    s.done()
+    section.done()
     return config
 
 
-def _inventory(s: _Section) -> InventoryTarget:
+def _inventory(section: _Section) -> InventoryTarget:
     """`[inventory]` (RF-26, D-46): target strictly between 0 and 100; band > 0 and at
     most 50 points (wider would filter nothing)."""
-    target = _percent(s, "target_base_pct")
+    target = _percent(section, "target_base_pct")
     if target >= 100:
-        raise ConfigError(f"{s._key('target_base_pct')}: debe ser menor que 100")
-    band = _percent(s, "band_pct")
+        raise ConfigError(f"{section._key('target_base_pct')}: debe ser menor que 100")
+    band = _percent(section, "band_pct")
     if band > 50:
-        raise ConfigError(f"{s._key('band_pct')}: como mucho 50 puntos (no {band})")
-    s.done()
+        raise ConfigError(f"{section._key('band_pct')}: como mucho 50 puntos (no {band})")
+    section.done()
     return InventoryTarget(target, band)
 
 
-def _bot(b: _Section) -> BotConfig:
+def _bot(bot_section: _Section) -> BotConfig:
     """`[bot]` (design.md §6.9): a net of 0 leaves no margin for error, so `min_net_pct`
     must be > 0; slippage may be 0 (at the best price). `max_walk_pct` is optional
     and per venue (D-60)."""
     config = BotConfig(
-        enabled=b.bool("enabled"),
+        enabled=bot_section.bool("enabled"),
         limits=BotLimits(
-            min_net_pct=_percent(b, "min_net_pct"),
-            max_slippage_pct=_percent(b, "max_slippage_pct", positive=False),
-            max_qty=b.decimal("max_qty"),
-            fill_timeout_ms=b.int("fill_timeout_ms", min=MIN_FILL_TIMEOUT_MS),
-            cooldown_s=b.int("cooldown_s", min=MIN_COOLDOWN_S),
-            max_trades_per_hour=b.int("max_trades_per_hour"),
-            max_daily_btc=b.decimal("max_daily_btc"),
-            max_consecutive_failures=b.int("max_consecutive_failures"),
-            max_walk_pct=_walk(b.section("max_walk_pct")) if "max_walk_pct" in b.data else {},
-            **_move(b),
-            **_lead(b),
+            min_net_pct=_percent(bot_section, "min_net_pct"),
+            max_slippage_pct=_percent(bot_section, "max_slippage_pct", positive=False),
+            max_qty=bot_section.decimal("max_qty"),
+            fill_timeout_ms=bot_section.int("fill_timeout_ms", min=MIN_FILL_TIMEOUT_MS),
+            cooldown_s=bot_section.int("cooldown_s", min=MIN_COOLDOWN_S),
+            max_trades_per_hour=bot_section.int("max_trades_per_hour"),
+            max_daily_btc=bot_section.decimal("max_daily_btc"),
+            max_consecutive_failures=bot_section.int("max_consecutive_failures"),
+            max_walk_pct=_walk(bot_section.section("max_walk_pct"))
+            if "max_walk_pct" in bot_section.data
+            else {},
+            **_move(bot_section),
+            **_lead(bot_section),
         ),
     )
-    b.done()
+    bot_section.done()
     return config
 
 
-def _move(b: _Section) -> dict[str, Any]:
+def _move(bot_section: _Section) -> dict[str, Any]:
     """`max_move_pct` and `move_window_ms` (RF-19, D-71): optional; without the first
     there is no filter."""
     out: dict[str, Any] = {}
-    if "max_move_pct" in b.data:
-        out["max_move_pct"] = _percent(b, "max_move_pct")
-    if "move_window_ms" in b.data:
-        out["move_window_ms"] = b.int("move_window_ms", min=100, max=60_000)
+    if "max_move_pct" in bot_section.data:
+        out["max_move_pct"] = _percent(bot_section, "max_move_pct")
+    if "move_window_ms" in bot_section.data:
+        out["move_window_ms"] = bot_section.int("move_window_ms", min=100, max=60_000)
     return out
 
 
-def _lead(b: _Section) -> dict[str, Any]:
+def _lead(bot_section: _Section) -> dict[str, Any]:
     """`lead_venue` (RF-20, D-75): optional; one of the venues."""
-    if "lead_venue" not in b.data:
+    if "lead_venue" not in bot_section.data:
         return {}
-    return {"lead_venue": b.choice("lead_venue", VENUE_IDS)}
+    return {"lead_venue": bot_section.choice("lead_venue", VENUE_IDS)}
 
 
-def _fee_token(v: _Section) -> dict[str, Any]:
+def _fee_token(venue_section: _Section) -> dict[str, Any]:
     """`fee_token` and `fee_token_min` (RF-24, D-63): both or neither, with a
     `fee_discount_pct` to discount and a token outside the pair."""
-    has_token, has_min = "fee_token" in v.data, "fee_token_min" in v.data
+    has_token, has_min = "fee_token" in venue_section.data, "fee_token_min" in venue_section.data
     if not (has_token or has_min):
         return {}
     if not has_token:
-        raise ConfigError(f"{v._key('fee_token')}: falta (va con fee_token_min)")
+        raise ConfigError(f"{venue_section._key('fee_token')}: falta (va con fee_token_min)")
     if not has_min:
-        raise ConfigError(f"{v._key('fee_token_min')}: falta (va con fee_token)")
-    token = v.str("fee_token").strip().upper()
+        raise ConfigError(f"{venue_section._key('fee_token_min')}: falta (va con fee_token)")
+    token = venue_section.str("fee_token").strip().upper()
     if not token:
-        raise ConfigError(f"{v._key('fee_token')}: vacío")
-    if token in _split_symbol(_btc_symbol(v)):
-        raise ConfigError(f"{v._key('fee_token')}: {token} es un activo del par")
-    discount = v.data.get("fee_discount_pct")
+        raise ConfigError(f"{venue_section._key('fee_token')}: vacío")
+    if token in _split_symbol(_btc_symbol(venue_section)):
+        raise ConfigError(f"{venue_section._key('fee_token')}: {token} es un activo del par")
+    discount = venue_section.data.get("fee_discount_pct")
     if discount is None or Decimal(str(discount)) == 0:
-        raise ConfigError(f"{v._key('fee_discount_pct')}: hace falta con fee_token")
-    return {"fee_token": token, "fee_token_min": v.decimal("fee_token_min")}
+        raise ConfigError(f"{venue_section._key('fee_discount_pct')}: hace falta con fee_token")
+    return {"fee_token": token, "fee_token_min": venue_section.decimal("fee_token_min")}
 
 
-def _walk(s: _Section) -> dict[VenueId, Decimal]:
-    walk = {vid: _percent(s, vid, positive=False) for vid in VENUE_IDS if vid in s.data}
-    s.done()
+def _walk(section: _Section) -> dict[VenueId, Decimal]:
+    walk = {
+        venue_id: _percent(section, venue_id, positive=False)
+        for venue_id in VENUE_IDS
+        if venue_id in section.data
+    }
+    section.done()
     return walk
 
 
@@ -453,14 +463,17 @@ def _percent(sec: _Section, key: str, *, positive: bool = True) -> Decimal:
 def load_credentials(env: Mapping[str, str | None]) -> dict[VenueId, Credentials]:
     """Key and secret of each venue. Empty = absent; only one of the two = error."""
     creds: dict[VenueId, Credentials] = {}
-    for vid in VENUE_IDS:
-        key_name, secret_name = f"{ENV_PREFIX[vid]}_API_KEY", f"{ENV_PREFIX[vid]}_API_SECRET"
+    for venue_id in VENUE_IDS:
+        key_name, secret_name = (
+            f"{ENV_PREFIX[venue_id]}_API_KEY",
+            f"{ENV_PREFIX[venue_id]}_API_SECRET",
+        )
         key, secret = (env.get(key_name) or "").strip(), (env.get(secret_name) or "").strip()
         if bool(key) != bool(secret):
             missing = secret_name if key else key_name
             raise ConfigError(f".env: falta {missing}")
         if key:
-            creds[vid] = Credentials(api_key=Secret(key), api_secret=Secret(secret))
+            creds[venue_id] = Credentials(api_key=Secret(key), api_secret=Secret(secret))
     return creds
 
 
@@ -489,7 +502,11 @@ def load_settings(
         if mode == "live":
             raise ConfigError(problem)
         warnings = (problem,)
-    secrets = [s for c in credentials.values() for s in (c.api_key, c.api_secret)]
+    secrets = [
+        secret
+        for credential in credentials.values()
+        for secret in (credential.api_key, credential.api_secret)
+    ]
     return Settings(
         config=config,
         credentials=credentials,

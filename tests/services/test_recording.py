@@ -20,7 +20,9 @@ from ..fakes import T0, FakeFeed, book, spec
 
 
 def hub_with(*venues):
-    return MarketHub({v: FakeFeed(v) for v in venues}, clock=lambda: T0 + 5, faults=Faults())
+    return MarketHub(
+        {venue: FakeFeed(venue) for venue in venues}, clock=lambda: T0 + 5, faults=Faults()
+    )
 
 
 def recorder(tmp_path, hub):
@@ -28,10 +30,10 @@ def recorder(tmp_path, hub):
     return Recorder(hub, path, clock=lambda: T0 + 5), path
 
 
-def load_market(hub, vid):
-    st = hub.state[vid]
-    st.spec, st.ready, st.loaded_at = spec(vid), True, T0
-    hub._notify(vid, "market")
+def load_market(hub, venue_id):
+    state = hub.state[venue_id]
+    state.spec, state.ready, state.loaded_at = spec(venue_id), True, T0
+    hub._notify(venue_id, "market")
 
 
 @pytest.mark.spec("RF-33", "CA-19")
@@ -44,12 +46,14 @@ class TestRecord:
         trade = Trade("nk", D("0.0073"), D("1"), "buy", T0 + 2)
         conn = ConnState("nx", "market", "ws", "up", 12.5, T0 + 3)
         snapshot = book("nk", "0.00720000", "0.00730000", ts=T0)
-        for vid, event in (("nk", snapshot), ("nk", delta), ("nk", trade), ("nx", conn)):
-            hub.apply(vid, event)
+        for venue_id, event in (("nk", snapshot), ("nk", delta), ("nk", trade), ("nx", conn)):
+            hub.apply(venue_id, event)
         rec.close()
         rows = list(read_recording(path))
-        assert [(r.t, r.venue) for r in rows] == [(T0 + 5, v) for v in "nk nk nk nk nx".split()]
-        assert [r.event for r in rows] == [spec("nk"), snapshot, delta, trade, conn]
+        assert [(row.t, row.venue) for row in rows] == [
+            (T0 + 5, venue) for venue in "nk nk nk nk nx".split()
+        ]
+        assert [row.event for row in rows] == [spec("nk"), snapshot, delta, trade, conn]
 
     def test_file_is_user_only(self, tmp_path):
         rec, path = recorder(tmp_path, hub_with("nk"))
@@ -98,9 +102,9 @@ class TestRecord:
 def recorded(tmp_path, *venues):
     hub = hub_with(*venues)
     rec, path = recorder(tmp_path, hub)
-    for vid in venues:
-        load_market(hub, vid)
-        hub.apply(vid, book(vid, "0.00720000", "0.00730000", ts=T0))
+    for venue_id in venues:
+        load_market(hub, venue_id)
+        hub.apply(venue_id, book(venue_id, "0.00720000", "0.00730000", ts=T0))
     rec.close()
     return path
 

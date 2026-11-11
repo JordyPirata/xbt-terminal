@@ -29,8 +29,10 @@ def row(event, at, venue=None, client_id=None, mode="live", **data):
     }  # fmt: skip
 
 
-def sent(cid, venue, side, qty, price, double, at=T0, mode="live"):
-    return row("order_sent", at, venue, cid, mode, side=side, qty=qty, price=price, double=double)
+def sent(cid, venue, side, quantity, price, double, at=T0, mode="live"):
+    return row(
+        "order_sent", at, venue, cid, mode, side=side, qty=quantity, price=price, double=double
+    )
 
 
 def ack(cid, venue, oid, at=T0):
@@ -50,12 +52,12 @@ def fire(double, net_pct, at=T0):
 
 def plain_double(double="d-1", at=T0, qty="0.01", buy="0.0050", sell="0.0052"):
     """Buy on nx and sell on nk, both filled, fee 0."""
-    b, s = f"t-{double}-b", f"t-{double}-s"
+    buy_id, sell_id = f"t-{double}-b", f"t-{double}-s"
     return [
-        sent(b, "nx", "buy", qty, buy, double, at),
-        sent(s, "nk", "sell", qty, sell, double, at),
+        sent(buy_id, "nx", "buy", qty, buy, double, at),
+        sent(sell_id, "nk", "sell", qty, sell, double, at),
         fill("nx", "buy", qty, buy, at=at + 1000),
-        fill("nk", "sell", qty, sell, cid=s, at=at + 1000),
+        fill("nk", "sell", qty, sell, cid=sell_id, at=at + 1000),
     ]
 
 
@@ -63,12 +65,12 @@ def plain_double(double="d-1", at=T0, qty="0.01", buy="0.0050", sell="0.0052"):
 class TestResult:
     def test_filled_double_without_fees(self):
         rep = compute(plain_double())
-        (d,) = rep.doubles
-        assert d.status == "closed"
-        assert (d.buy_venue, d.sell_venue) == ("nx", "nk")
-        assert d.matched == D("0.01")
-        assert d.result == D("0.000002")  # 0.01 × (0.0052 - 0.0050)
-        assert d.mismatch == 0
+        (double,) = rep.doubles
+        assert double.status == "closed"
+        assert (double.buy_venue, double.sell_venue) == ("nx", "nk")
+        assert double.matched == D("0.01")
+        assert double.result == D("0.000002")  # 0.01 × (0.0052 - 0.0050)
+        assert double.mismatch == 0
 
     def test_btc_fees_subtract(self):
         rows = [
@@ -77,16 +79,16 @@ class TestResult:
             fill("nk", "buy", "0.01", "0.0050", fee="0.0000001", cid="t-b"),
             fill("nx", "sell", "0.01", "0.0052", fee="0.00000011"),
         ]
-        (d,) = compute(rows).doubles
-        assert d.fees == D("0.00000021")
-        assert d.result == D("0.000002") - D("0.00000021")
+        (double,) = compute(rows).doubles
+        assert double.fees == D("0.00000021")
+        assert double.result == D("0.000002") - D("0.00000021")
 
     def test_btcb2_fee_valued_at_fill_price(self):
         rows = plain_double()
         rows[2] = fill("nx", "buy", "0.01", "0.0050", fee="0.00002", asset="BTCB2")
-        (d,) = compute(rows).doubles
-        assert d.fees == D("0.00002") * D("0.0050")
-        assert d.result == D("0.000002") - D("0.0000001")
+        (double,) = compute(rows).doubles
+        assert double.fees == D("0.00002") * D("0.0050")
+        assert double.result == D("0.000002") - D("0.0000001")
 
     def test_fee_without_asset_and_zero_does_not_count(self):
         rows = plain_double()
@@ -96,9 +98,9 @@ class TestResult:
     def test_other_token_fee_unvalued_and_noted(self):
         rows = plain_double()
         rows[2] = fill("nx", "buy", "0.01", "0.0050", fee="3", asset="NEOX")
-        (d,) = compute(rows).doubles
-        assert d.fees == 0
-        assert d.other_fees == (("NEOX", D("3")),)
+        (double,) = compute(rows).doubles
+        assert double.fees == 0
+        assert double.other_fees == (("NEOX", D("3")),)
 
     @pytest.mark.spec("RF-24")
     def test_summary_adds_fees_in_another_token(self):
@@ -115,9 +117,9 @@ class TestResult:
             fill("nx", "buy", "0.02", "0.0050", at=T0 + 900),
             fill("nk", "sell", "0.03", "0.0052", cid="t-s"),
         ]
-        (d,) = compute(rows).doubles
-        assert d.buy_avg == (D("0.01") * D("0.0049") + D("0.02") * D("0.0050")) / D("0.03")
-        assert d.result == D("0.03") * D("0.0052") - D("0.000049") - D("0.0001")
+        (double,) = compute(rows).doubles
+        assert double.buy_avg == (D("0.01") * D("0.0049") + D("0.02") * D("0.0050")) / D("0.03")
+        assert double.result == D("0.03") * D("0.0052") - D("0.000049") - D("0.0001")
 
     def test_unequal_partials_match_the_minimum_and_the_rest_is_mismatch(self):
         rows = [
@@ -126,15 +128,15 @@ class TestResult:
             fill("nx", "buy", "0.05", "0.0050"),
             fill("nk", "sell", "0.03", "0.0052", cid="t-s"),
         ]
-        (d,) = compute(rows).doubles
-        assert d.status == "closed"
-        assert d.matched == D("0.03")
-        assert d.mismatch == D("0.02")  # overbought
-        assert d.result == D("0.03") * D("0.0002")
+        (double,) = compute(rows).doubles
+        assert double.status == "closed"
+        assert double.matched == D("0.03")
+        assert double.mismatch == D("0.02")  # overbought
+        assert double.result == D("0.03") * D("0.0002")
 
     def test_real_percent_of_what_was_paid(self):
-        (d,) = compute(plain_double()).doubles
-        assert d.result_pct == D("0.000002") / (D("0.01") * D("0.0050")) * 100
+        (double,) = compute(plain_double()).doubles
+        assert double.result_pct == D("0.000002") / (D("0.01") * D("0.0050")) * 100
 
 
 @pytest.mark.spec("RF-25", "CA-11")
@@ -175,14 +177,14 @@ class TestStates:
 class TestOrigin:
     def test_bot_with_expected_net(self):
         rows = [fire("d-1", "3.5"), *plain_double()]
-        (d,) = compute(rows).doubles
-        assert d.origin == "bot"
-        assert d.expected_pct == D("3.5")
+        (double,) = compute(rows).doubles
+        assert double.origin == "bot"
+        assert double.expected_pct == D("3.5")
 
     def test_manual_without_expected_net(self):
-        (d,) = compute(plain_double()).doubles
-        assert d.origin == "manual"
-        assert d.expected_pct is None
+        (double,) = compute(plain_double()).doubles
+        assert double.origin == "manual"
+        assert double.expected_pct is None
 
     def test_simple_orders_are_not_doubles(self):
         rows = [
@@ -209,7 +211,7 @@ class TestAssignment:
     def test_without_ids_goes_to_compatible_order(self):
         rows = [*plain_double("d-1", T0), *plain_double("d-2", T0 + 60_000, qty="0.02")]
         rep = compute(rows)
-        assert [d.matched for d in rep.doubles] == [D("0.01"), D("0.02")]
+        assert [double.matched for double in rep.doubles] == [D("0.01"), D("0.02")]
         assert rep.summary.unassigned == 0
 
     def test_price_outside_limit_not_assigned(self):
@@ -272,22 +274,28 @@ class TestSummaryAndRange:
             *plain_double("d-2", T0 + 60_000, buy="0.0053"),  # -0.000001
             *plain_double("d-3", T0 + 120_000, sell="0.0055"),  # +0.000005
         ]
-        s = compute(rows).summary
-        assert s.closed == 3
-        assert s.total == D("0.000006")
-        assert s.mean == D("0.000002")
-        assert (s.best, s.worst) == (D("0.000005"), D("-0.000001"))
+        summary = compute(rows).summary
+        assert summary.closed == 3
+        assert summary.total == D("0.000006")
+        assert summary.mean == D("0.000002")
+        assert (summary.best, summary.worst) == (D("0.000005"), D("-0.000001"))
         curve = compute(rows).curve
-        assert [v for _, v in curve] == [D("0.000002"), D("0.000001"), D("0.000006")]
+        assert [value for _, value in curve] == [D("0.000002"), D("0.000001"), D("0.000006")]
 
     def test_no_doubles(self):
-        s = compute([]).summary
-        assert (s.closed, s.total, s.mean, s.best, s.worst) == (0, 0, None, None, None)
+        summary = compute([]).summary
+        assert (summary.closed, summary.total, summary.mean, summary.best, summary.worst) == (
+            0,
+            0,
+            None,
+            None,
+            None,
+        )
 
     def test_since_filters_by_double_start(self):
         rows = [*plain_double("d-1", T0 - DAY), *plain_double("d-2", T0)]
         rep = compute(rows, since_ms=T0 - 1000)
-        assert [d.id for d in rep.doubles] == ["d-2"]
+        assert [double.id for double in rep.doubles] == ["d-2"]
 
     def test_double_across_midnight_belongs_to_its_start_day(self):
         midnight = T0 - 12 * 3600_000
@@ -305,7 +313,7 @@ class TestSummaryAndRange:
 @pytest.mark.spec("RF-25")
 class TestReading:
     def test_broken_lines_counted_and_harmless(self):
-        good = [json.dumps(r) for r in plain_double()]
+        good = [json.dumps(row) for row in plain_double()]
         rows, bad = read_rows([good[0], "{roto", "", good[1], '{"sin": "campos"}', *good[2:]])
         assert bad == 2
         assert compute(rows).doubles[0].status == "closed"
@@ -339,8 +347,8 @@ class TestCorrectedFee:
         ]  # fmt: skip
 
     def test_uncorrected_fee_in_btc(self):
-        (d,) = compute(self.rows()).doubles
-        assert d.fees == D("0.000000031183488") and d.other_fees == ()
+        (double,) = compute(self.rows()).doubles
+        assert double.fees == D("0.000000031183488") and double.other_fees == ()
 
     def test_correction_replaces_fee(self):
         rows = [
@@ -348,12 +356,12 @@ class TestCorrectedFee:
             fill_fee("nk", "c7", "0.0000893166", "NKYC", oid="6add927d"),
             fill_fee("nk", "c6", "0.0000891439", "NKYC", oid="6add927d"),
         ]
-        (d,) = compute(rows).doubles
-        assert d.fees == 0
-        assert d.other_fees == (("NKYC", D("0.0001784605")),)
+        (double,) = compute(rows).doubles
+        assert double.fees == 0
+        assert double.other_fees == (("NKYC", D("0.0001784605")),)
         sold = D("0.0036") * D("0.00441389")
         paid = D("0.0018") * D("0.00433523") + D("0.0018") * D("0.00432685")
-        assert d.result == sold - paid
+        assert double.result == sold - paid
 
     def test_two_corrections_the_last_counts(self):
         rows = [
@@ -361,14 +369,14 @@ class TestCorrectedFee:
             fill_fee("nk", "c7", "0.00000002", "BTC"),
             fill_fee("nk", "c7", "0.0000893166", "NKYC"),
         ]
-        (d,) = compute(rows).doubles
-        assert d.fees == D("0.00000001557666")
-        assert d.other_fees == (("NKYC", D("0.0000893166")),)
+        (double,) = compute(rows).doubles
+        assert double.fees == D("0.00000001557666")
+        assert double.other_fees == (("NKYC", D("0.0000893166")),)
 
     def test_unknown_trade_is_ignored(self):
         rows = [*self.rows(), fill_fee("nk", "zz", "1", "NKYC")]
-        (d,) = compute(rows).doubles
-        assert d.other_fees == () and compute(rows).summary.bad_rows == 0
+        (double,) = compute(rows).doubles
+        assert double.other_fees == () and compute(rows).summary.bad_rows == 0
 
 
 @pytest.mark.spec("RF-24", "RF-25")
@@ -389,11 +397,11 @@ class TestValuedTokenFee:
 
     def test_priced_fee_subtracts(self):
         rep = compute(self.rows(), prices={"NKYC": self.PRICE})
-        (d,) = rep.doubles
-        assert d.token_fees == self.NKYC * self.PRICE
-        assert d.result == self.SOLD - self.PAID - self.NKYC * self.PRICE
-        assert d.other_fees == (("NKYC", self.NKYC),)  # the quantity is still shown
-        assert rep.summary.total == d.result
+        (double,) = rep.doubles
+        assert double.token_fees == self.NKYC * self.PRICE
+        assert double.result == self.SOLD - self.PAID - self.NKYC * self.PRICE
+        assert double.other_fees == (("NKYC", self.NKYC),)  # the quantity is still shown
+        assert rep.summary.total == double.result
         assert rep.summary.other_fees == ()  # nothing unvalued
         assert rep.summary.prices == (("NKYC", self.PRICE),)
 
@@ -405,8 +413,8 @@ class TestValuedTokenFee:
 
     def test_no_price_as_before(self):
         rep = compute(self.rows())
-        (d,) = rep.doubles
-        assert d.token_fees == 0 and d.result == self.SOLD - self.PAID
+        (double,) = rep.doubles
+        assert double.token_fees == 0 and double.result == self.SOLD - self.PAID
         assert rep.summary.other_fees == (("NKYC", self.NKYC),)
         assert rep.summary.prices == ()
 

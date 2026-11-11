@@ -29,12 +29,12 @@ class PercentSize:
 
 
 def size_from_percent(
-    side: Side, pct: Decimal, price: Decimal, balances: Mapping[str, Balance], spec: MarketSpec
+    side: Side, percent: Decimal, price: Decimal, balances: Mapping[str, Balance], spec: MarketSpec
 ) -> PercentSize:
     asset = spec.quote if side == "buy" else spec.base
     bal = balances.get(asset)
     basis = bal.total if bal is not None else ZERO
-    amount = basis * pct / HUNDRED
+    amount = basis * percent / HUNDRED
     if side == "buy":
         amount /= price * (1 + spec.taker_fee)
-    return PercentSize(_snap(amount, spec.lot_size, ROUND_DOWN), pct, basis, asset)
+    return PercentSize(_snap(amount, spec.lot_size, ROUND_DOWN), percent, basis, asset)

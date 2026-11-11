@@ -29,7 +29,7 @@ class TestQr:
     def test_matches_segno_module_by_module(self):
         lines = qr_lines(ADDRESS)
         qr = segno.make(ADDRESS, error="l", micro=False)
-        expected = [list(r) for r in qr.matrix_iter(border=2)]
+        expected = [list(row) for row in qr.matrix_iter(border=2)]
         got = decode(lines)
         assert got[: len(expected)] == expected
         # odd number of rows: the half row left over is light margin

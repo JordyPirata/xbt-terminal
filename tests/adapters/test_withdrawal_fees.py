@@ -37,9 +37,9 @@ def nx_fees(**override):
          "minWithdrawal": "0.01", "autoLimit": 200},
         {"token": "DOGE", "chain": "dogecoin", "withdrawalFee": 2, "minWithdrawal": 10},
     ]  # fmt: skip
-    for f in fees:
-        f.update(override.get(f["token"], {}))
-    return {"success": True, "fees": [f for f in fees if f.get("token")]}
+    for fee in fees:
+        fee.update(override.get(fee["token"], {}))
+    return {"success": True, "fees": [fee for fee in fees if fee.get("token")]}
 
 
 @pytest.mark.spec("RF-29", "CA-14")

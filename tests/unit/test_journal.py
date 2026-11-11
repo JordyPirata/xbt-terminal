@@ -48,7 +48,7 @@ class TestFormat:
         journal.write("order_ack", venue="nk", client_id="t-1", data={"order_id": "abc"})
         journal.write("conn", venue="nx", data={"status": "up"})
         rows = lines(only_file(tmp_path))
-        assert [r["event"] for r in rows] == ["order_sent", "order_ack", "conn"]
+        assert [row["event"] for row in rows] == ["order_sent", "order_ack", "conn"]
         assert set(rows[0]) == {"ts", "mode", "venue", "event", "client_id", "data"}
         assert rows[0]["mode"] == "dry-run"
         assert rows[2]["client_id"] is None
@@ -101,7 +101,7 @@ class TestAppendOnly:
         journal.write("conn", data={})
         clock.now += timedelta(seconds=2)
         journal.write("conn", data={})
-        names = sorted(p.name for p in tmp_path.glob("journal-*.jsonl"))
+        names = sorted(path.name for path in tmp_path.glob("journal-*.jsonl"))
         assert names == ["journal-20261019.jsonl", "journal-20261020.jsonl"]
 
     def test_creates_the_directory(self, tmp_path, clock):

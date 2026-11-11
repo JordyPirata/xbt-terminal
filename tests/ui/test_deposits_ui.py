@@ -55,8 +55,8 @@ class TestScreen:
         app = make_app(DepositService({"nk": FakeDepositor("nk"), "nx": nx}))
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
-            s = await opened(app, pilot)
-            lines = s.table_text().splitlines()
+            screen = await opened(app, pilot)
+            lines = screen.table_text().splitlines()
             assert len(lines) == 4
             nk_base = next(ln for ln in lines if "nk-BTCB2" in ln)
             # display name and venue ticker, so the asset is not mistaken
@@ -71,8 +71,8 @@ class TestScreen:
         app = Rig(tmp_path, deposits=DepositService({"nk": FakeDepositor("nk")})).app
         async with app.run_test(size=(160, 45)) as pilot:
             await type_command(pilot, app, "deposit")
-            s = await opened(app, pilot)
-            assert len(s.table_text().splitlines()) == 2
+            screen = await opened(app, pilot)
+            assert len(screen.table_text().splitlines()) == 2
 
     async def test_reopening_asks_again(self):
         nk = FakeDepositor("nk")
@@ -101,11 +101,11 @@ class TestScreen:
         monkeypatch.setattr(app, "copy_to_clipboard", copied.append)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
-            s = await opened(app, pilot)
+            screen = await opened(app, pilot)
             await pilot.press("down")  # second row: NonKYC's BTCB2
             await pilot.press("c")
             await until(pilot, lambda: copied == ["nk-BTCB2"])
-            await until(pilot, lambda: "nk-BTCB2" in s.status_text())
+            await until(pilot, lambda: "nk-BTCB2" in screen.status_text())
             await pilot.press("up", "enter")
             await until(pilot, lambda: copied == ["nk-BTCB2", "nk-BTC"])
 
@@ -116,9 +116,9 @@ class TestScreen:
         monkeypatch.setattr(app, "copy_to_clipboard", copied.append)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
-            s = await opened(app, pilot)
+            screen = await opened(app, pilot)
             await pilot.press("c")
-            assert copied == [] and "sin dirección" in s.status_text()
+            assert copied == [] and "sin dirección" in screen.status_text()
 
     async def test_copies_with_system_and_says_so(self, monkeypatch):
         clip = FakeClipboard("xclip")
@@ -127,40 +127,40 @@ class TestScreen:
         monkeypatch.setattr(app, "copy_to_clipboard", osc.append)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
-            s = await opened(app, pilot)
+            screen = await opened(app, pilot)
             await pilot.press("c")
-            await until(pilot, lambda: "xclip" in s.status_text())
+            await until(pilot, lambda: "xclip" in screen.status_text())
             assert clip.copied == ["nk-BTC"] and osc == ["nk-BTC"]
-            assert "copiada" in s.status_text()
+            assert "copiada" in screen.status_text()
 
     async def test_without_tool_says_it_only_went_to_terminal(self, monkeypatch):
         app = make_app(DepositService({"nk": FakeDepositor("nk")}), clipboard=FakeClipboard(None))
         monkeypatch.setattr(app, "copy_to_clipboard", lambda text: None)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
-            s = await opened(app, pilot)
+            screen = await opened(app, pilot)
             await pilot.press("c")
-            await until(pilot, lambda: "terminal" in s.status_text())
-            assert "copiada" not in s.status_text()
-            assert "Shift" in s.status_text() and "nk-BTC" in s.status_text()
+            await until(pilot, lambda: "terminal" in screen.status_text())
+            assert "copiada" not in screen.status_text()
+            assert "Shift" in screen.status_text() and "nk-BTC" in screen.status_text()
 
     async def test_qr_follows_cursor(self):
         app = make_app(DepositService({"nk": FakeDepositor("nk")}))
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
-            s = await opened(app, pilot)
-            await until(pilot, lambda: s.qr_text() == "\n".join(qr_lines("nk-BTC")))
+            screen = await opened(app, pilot)
+            await until(pilot, lambda: screen.qr_text() == "\n".join(qr_lines("nk-BTC")))
             await pilot.press("down")
-            await until(pilot, lambda: s.qr_text() == "\n".join(qr_lines("nk-BTCB2")))
+            await until(pilot, lambda: screen.qr_text() == "\n".join(qr_lines("nk-BTCB2")))
 
     async def test_error_row_without_qr(self):
         nk = FakeDepositor("nk", fail={"BTC": VenueError("caída")})
         app = make_app(DepositService({"nk": nk}))
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("w")
-            s = await opened(app, pilot)
-            await until(pilot, lambda: "sin QR" in s.qr_text())
-            assert "█" not in s.qr_text()
+            screen = await opened(app, pilot)
+            await until(pilot, lambda: "sin QR" in screen.qr_text())
+            assert "█" not in screen.qr_text()
 
     async def test_no_keys_says_so(self):
         app = make_app(None)

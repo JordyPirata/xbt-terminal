@@ -40,7 +40,7 @@ def test_format_with_time_level_and_module(diag):
     log.warning("ws down")
     (line,) = diag.read_text().splitlines()
     assert "WARNING" in line and "xbt_terminal.prueba" in line and line.endswith("ws down")
-    assert line[:4].isdigit()  # starts with the date
+    assert line[:4].isdigit()
 
 
 @pytest.mark.spec("RNF-19", "RNF-18")
@@ -75,13 +75,13 @@ def test_unconfigured_does_not_write_on_screen_either(capfd):
 def test_rotates_by_size(tmp_path):
     handler = setup_diagnostics(tmp_path, Redactor([]), "info", max_bytes=200, backups=2)
     try:
-        for n in range(40):
-            log.warning("filler message number %d", n)
+        for index in range(40):
+            log.warning("filler message number %d", index)
     finally:
         handler.close()
-    names = sorted(p.name for p in tmp_path.iterdir())
+    names = sorted(config_path.name for config_path in tmp_path.iterdir())
     assert names == [LOG_FILE, f"{LOG_FILE}.1", f"{LOG_FILE}.2"]
-    assert all(stat.S_IMODE((tmp_path / n).stat().st_mode) == 0o600 for n in names)
+    assert all(stat.S_IMODE((tmp_path / index).stat().st_mode) == 0o600 for index in names)
     assert "number 39" in (tmp_path / LOG_FILE).read_text()
 
 
@@ -99,10 +99,10 @@ class TestConfig:
         assert load_config(EXAMPLE).log.level == "info"
 
     def test_no_section_is_info(self, tmp_path):
-        p = example_with(tmp_path, '[log]\nlevel = "info"', "")
-        assert load_config(p).log.level == "info"
+        config_path = example_with(tmp_path, '[log]\nlevel = "info"', "")
+        assert load_config(config_path).log.level == "info"
 
     def test_unknown_level(self, tmp_path):
-        p = example_with(tmp_path, 'level = "info"', 'level = "verbose"')
+        config_path = example_with(tmp_path, 'level = "info"', 'level = "verbose"')
         with pytest.raises(ConfigError, match=r"log\.level"):
-            load_config(p)
+            load_config(config_path)

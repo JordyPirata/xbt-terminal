@@ -274,3 +274,9 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 - Tests: `best_bid`/`best_ask`/`mid` iguales a los de hoy en una secuencia
   aleatoria de snapshots y deltas con semilla fija; sin clientes no se llama a
   `snapshot`, y al conectarse uno recibe el book en su `market_init`.
+
+## M20 — Nombres descriptivos (D-83)
+
+### T-98 Renombrar identificadores abreviados · `done` · RNF-21 · D-83
+
+### T-99 Quitar comentarios que repiten el código · `done` · RNF-21 · D-83 · dep T-98

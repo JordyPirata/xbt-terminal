@@ -22,14 +22,14 @@ HANGING = "hanging_leg"  # how the reason of a hanging leg stop begins
 def match(
     side: Side,
     price: Decimal,
-    qty: Decimal,
+    quantity: Decimal,
     levels: Iterable[Level],
     taken: Callable[[Level], bool],
 ) -> list[tuple[Decimal, Decimal]]:
     """(price, quantity) a taker order matches against `levels`, best to worst, within
     its limit. `taken`: the competitor takes that level."""
     fills: list[tuple[Decimal, Decimal]] = []
-    left = qty
+    left = quantity
     for level in levels:
         beyond = level.price > price if side == "buy" else level.price < price
         if beyond or left <= 0:

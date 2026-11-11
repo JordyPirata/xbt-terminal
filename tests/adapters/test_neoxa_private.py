@@ -67,8 +67,8 @@ def api():
         yield mock
 
 
-def req(side="buy", qty="0.01", price="0.00725000"):
-    return OrderRequest("nx", side, D(qty), D(price), "t-abc123")
+def req(side="buy", quantity="0.01", price="0.00725000"):
+    return OrderRequest("nx", side, D(quantity), D(price), "t-abc123")
 
 
 @pytest.mark.spec("RNF-09", "RF-12")
@@ -167,7 +167,7 @@ class TestOrders:
         api["cancel"].side_effect = cancel
         with pytest.raises(VenueError, match="ORD-TEST0002-BBBB0002"):
             await venue.cancel_all()
-        deleted = [c.request.url.path for c in api.calls if c.request.method == "DELETE"]
+        deleted = [call.request.url.path for call in api.calls if call.request.method == "DELETE"]
         assert deleted == [
             "/api/exchange/order/ORD-TEST0002-BBBB0002",
             "/api/exchange/order/ORD-TEST0001-AAAA0001",
@@ -178,7 +178,7 @@ class TestOrders:
 class TestFills:
     async def test_own_trades_of_the_pair(self, venue, api):
         fills = await venue.fetch_fills()
-        assert [f.trade_id for f in fills] == [
+        assert [fill.trade_id for fill in fills] == [
             "TRD-TEST0001-00000001", "AMM-TEST0002-00000002", "TRD-TEST0003-00000003",
         ]  # fmt: skip
         assert fills[0] == Fill(
@@ -204,7 +204,7 @@ class TestPrivateStream:
         state = events[0]
         assert isinstance(state, ConnState)
         assert (state.channel, state.source, state.status) == ("private", "rest", "up")
-        assert [o.order_id for o in events[1:]] == [
+        assert [order.order_id for order in events[1:]] == [
             "ORD-TEST0002-BBBB0002",
             "ORD-TEST0001-AAAA0001",
         ]
@@ -215,7 +215,7 @@ class TestPrivateStream:
             async with aclosing(venue.private_stream()) as stream:
                 await anext(stream)
                 await asyncio.sleep(0.35)
-        polls = [c for c in api.calls if c.request.url.path == "/api/exchange/orders"]
+        polls = [call for call in api.calls if call.request.url.path == "/api/exchange/orders"]
         assert 3 <= len(polls) <= 5  # one at start and one every 0.1 s
         assert set(limiter.kinds) == {"private"}
 
@@ -245,7 +245,9 @@ class TestPrivateStream:
             await venue.place_limit(req())
             async with aclosing(venue.private_stream()) as stream:
                 events = [await anext(stream) for _ in range(3)]
-        mine = next(e for e in events if getattr(e, "order_id", "") == "ORD-TEST0001-AAAA0001")
+        mine = next(
+            event for event in events if getattr(event, "order_id", "") == "ORD-TEST0001-AAAA0001"
+        )
         assert mine.client_id == "t-abc123"
 
     async def test_no_keys_no_stream(self, limiter):
@@ -291,7 +293,7 @@ class TestRecentOrders:
 
     async def test_active_and_history_of_the_pair(self, venue, api, limiter):
         orders = await venue.recent_orders(NOW - 60_000)
-        assert [(o.order_id, o.status) for o in orders] == [
+        assert [(order.order_id, order.status) for order in orders] == [
             ("ORD-TEST0002-BBBB0002", "partial"),
             ("ORD-TEST0001-AAAA0001", "open"),
             ("ORD-TEST0001-AAAA0001", "cancelled"),

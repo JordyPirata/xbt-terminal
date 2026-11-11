@@ -115,10 +115,10 @@ class Backoff:
     ) -> None:
         self.base_s, self.max_s, self._rng = base_s, max_s, rng
 
-    def delay(self, n: int) -> float:
-        if n < 1:
-            raise ValueError(f"reintento inválido: {n}")
-        raw = min(self.max_s, self.base_s * 2 ** (n - 1))
+    def delay(self, attempt: int) -> float:
+        if attempt < 1:
+            raise ValueError(f"reintento inválido: {attempt}")
+        raw = min(self.max_s, self.base_s * 2 ** (attempt - 1))
         return min(self.max_s, raw * (0.8 + 0.4 * self._rng()))
 
 
@@ -177,8 +177,6 @@ class StreamingVenue:
         self._current: ConnState | None = None
         self.clock_skew_ms: int | None = None  # venue - local, from the last `Date` (RNF-16)
 
-    # -- to implement by each venue -----------------------------------------
-
     async def book_snapshot(self, depth: int) -> BookSnapshot:
         raise NotImplementedError
 
@@ -198,8 +196,6 @@ class StreamingVenue:
         if ws is not None:
             log.warning("%s: book differs from REST; reconnecting the WS", self.name)
             await ws.close()
-
-    # -- helpers for the venues --------------------------------------------
 
     @asynccontextmanager
     async def ws_connect(self) -> AsyncIterator[Any]:
@@ -233,8 +229,8 @@ class StreamingVenue:
             return fn(*args)
         except VenueError:
             raise
-        except PARSE_ERRORS as exc:
-            raise VenueError(f"{self.name}: respuesta inesperada ({exc!r})") from exc
+        except PARSE_ERRORS as error:
+            raise VenueError(f"{self.name}: respuesta inesperada ({error!r})") from error
 
     async def sending(self, request: Awaitable[Any], parse: Callable[[Any], T]) -> T:
         """Await a send that creates something on the venue and read the reply with `parse`.
@@ -245,33 +241,33 @@ class StreamingVenue:
             payload = await request
         except NOT_SENT:
             raise
-        except httpx.HTTPError as exc:
-            detail = f"{type(exc).__name__} {exc}".strip()
-            raise UncertainError(f"{self.name}: sin respuesta clara ({detail})") from exc
+        except httpx.HTTPError as error:
+            detail = f"{type(error).__name__} {error}".strip()
+            raise UncertainError(f"{self.name}: sin respuesta clara ({detail})") from error
         except UncertainError:
             raise
-        except VenueError as exc:
-            status = exc.status
-            if status is not None and (status >= 500 or (exc.unreadable and status < 400)):
-                raise UncertainError(str(exc), status=status) from exc
+        except VenueError as error:
+            status = error.status
+            if status is not None and (status >= 500 or (error.unreadable and status < 400)):
+                raise UncertainError(str(error), status=status) from error
             raise
         try:
             return parse(payload)
-        except (*PARSE_ERRORS, VenueError) as exc:
-            raise UncertainError(f"{self.name}: respuesta al envío ilegible ({exc})") from exc
+        except (*PARSE_ERRORS, VenueError) as error:
+            raise UncertainError(f"{self.name}: respuesta al envío ilegible ({error})") from error
 
     async def recent_trades(self, limit: int) -> list[Trade]:
         """Most recent trades in chronological order. Marks them as seen."""
         trades = await self._fetch_trades(min(limit, self.max_trades))
         for trade_id, _ in trades:
             self._seen.add(trade_id)
-        return sorted((t for _, t in trades), key=lambda t: t.ts)
+        return sorted((trade for _, trade in trades), key=lambda trade: trade.ts)
 
     def fresh(self, trades: list[tuple[str, Trade]]) -> list[Trade]:
         """Only those not delivered yet, in chronological order."""
-        return sorted((t for i, t in trades if self._seen.add(i)), key=lambda t: t.ts)
-
-    # -- state and latency -----------------------------------------------------
+        return sorted(
+            (trade for i, trade in trades if self._seen.add(i)), key=lambda trade: trade.ts
+        )
 
     def _latency_ms(self, source: Source) -> float | None:
         if source == "ws":
@@ -283,8 +279,6 @@ class StreamingVenue:
     def state(self, source: Source, status: ConnStatus) -> ConnState:
         latency = self._latency_ms(source) if status == "up" else None
         return ConnState(self.id, "market", source, status, latency, since=self._clock())
-
-    # -- supervisor --------------------------------------------------------------
 
     async def market_stream(self) -> AsyncIterator[MarketEvent]:
         """Market events from whichever source is alive, with `ConnState` on state changes
@@ -302,8 +296,8 @@ class StreamingVenue:
                 await work
             except asyncio.CancelledError:
                 raise
-            except BaseException as exc:
-                queue.put_nowait(_Crash(exc))
+            except BaseException as error:
+                queue.put_nowait(_Crash(error))
 
         def spawn(work: Awaitable[None]) -> asyncio.Task[None]:
             return asyncio.create_task(guarded(work))
@@ -343,8 +337,8 @@ class StreamingVenue:
                                     log.info("%s: end of fallback REST polling", self.name)
                                 emit(self.state("ws", "up"))
                             emit(event)
-                except WS_ERRORS as exc:
-                    cause = f"{type(exc).__name__}: {exc}"
+                except WS_ERRORS as error:
+                    cause = f"{type(error).__name__}: {error}"
                 failures += 1
                 delay = self._backoff.delay(failures)
                 log.warning(
@@ -366,18 +360,18 @@ class StreamingVenue:
     async def _poll(self, emit: Callable[[MarketEvent], None]) -> None:
         """Fallback REST polling until the supervisor cancels it."""
         status: ConnStatus | None = None
-        n = 0
+        poll_count = 0
         while True:
             try:
                 events: list[MarketEvent] = [await self.book_snapshot(self._book_depth)]
-                if n % TRADES_EVERY_POLLS == 0:
+                if poll_count % TRADES_EVERY_POLLS == 0:
                     limit = min(FALLBACK_TRADES, self.max_trades)
                     events += self.fresh(await self._fetch_trades(limit))
                 new_status: ConnStatus = "up"
-            except (httpx.HTTPError, VenueError) as exc:
+            except (httpx.HTTPError, VenueError) as error:
                 events, new_status = [], "down"
                 if status != "down":
-                    log.warning("%s: fallback REST down: %s", self.name, describe(exc))
+                    log.warning("%s: fallback REST down: %s", self.name, describe(error))
             if new_status != status:
                 if new_status == "up":
                     log.info("%s: fallback REST has data", self.name)
@@ -385,7 +379,7 @@ class StreamingVenue:
                 emit(self.state("rest", status))
             for event in events:
                 emit(event)
-            n += 1
+            poll_count += 1
             await asyncio.sleep(self._fallback_every_s)
 
     async def _heartbeat(self, emit: Callable[[MarketEvent], None]) -> None:

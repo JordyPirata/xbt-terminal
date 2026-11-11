@@ -37,14 +37,14 @@ def _spec(rnd: random.Random, venue: str) -> MarketSpec:
     )
 
 
-def _levels(rnd: random.Random, start: Decimal, n: int, up: bool) -> tuple[Level, ...]:
+def _levels(rnd: random.Random, start: Decimal, count: int, up: bool) -> tuple[Level, ...]:
     """`n` distinct levels from `start`, up (asks) or down (bids)."""
     out, price = [], start
-    for _ in range(n):
+    for _ in range(count):
         if price <= 0:
             break
-        qty = Decimal(rnd.choice(["0.0001", "0.001", "0.05", "0.3", "1", "7", "40", "250"]))
-        out.append(Level(price, qty))
+        quantity = Decimal(rnd.choice(["0.0001", "0.001", "0.05", "0.3", "1", "7", "40", "250"]))
+        out.append(Level(price, quantity))
         step = TICK * rnd.choice([1, 1, 2, 5, 13, 40])
         price = price + step if up else price - step
     return tuple(out)
@@ -75,8 +75,8 @@ def _case(seed: int):
     gap = TICK * rnd.choice([-30000, -10000, -3000, -500, 0, 60, 900, 3000, 10000, 30000])
     views = {"nk": _view(rnd, "nk", base), "nx": _view(rnd, "nx", base + gap)}
     walk = {
-        vid: Decimal(rnd.choice(["0", "0", "0.1", "0.5", "0.8", "2"]))
-        for vid in ("nk", "nx")
+        venue_id: Decimal(rnd.choice(["0", "0", "0.1", "0.5", "0.8", "2"]))
+        for venue_id in ("nk", "nx")
         if rnd.random() < 0.7
     }
     limits = BotLimits(
@@ -118,12 +118,12 @@ def test_unsorted_book_same_decision():
         views, limits, target = _case(seed)
         rnd = random.Random(-seed)
         views = {
-            vid: replace(
-                v,
-                asks=tuple(rnd.sample(v.asks, len(v.asks))),
-                bids=tuple(rnd.sample(v.bids, len(v.bids))),
+            venue_id: replace(
+                venue_view,
+                asks=tuple(rnd.sample(venue_view.asks, len(venue_view.asks))),
+                bids=tuple(rnd.sample(venue_view.bids, len(venue_view.bids))),
             )
-            for vid, v in views.items()
+            for venue_id, venue_view in views.items()
         }
         got = decide(views, state, limits, NOW, target)
         assert got == ref.decide(views, state, limits, NOW, target), f"semilla {seed}"

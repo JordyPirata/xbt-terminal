@@ -164,7 +164,7 @@ def _spent(state: BotState, now: int) -> Decimal:
 
 
 def _recent(state: BotState, now: int) -> tuple[int, ...]:
-    return tuple(t for t in state.fired_at if now - t < HOUR_MS)
+    return tuple(fired_time for fired_time in state.fired_at if now - fired_time < HOUR_MS)
 
 
 def price_move_pct(mids: Sequence[Decimal]) -> Decimal | None:
@@ -181,11 +181,11 @@ def _volatile(views: Mapping[VenueId, VenueView], limits: BotLimits) -> Skip | N
     cap = limits.max_move_pct
     if cap is None:
         return None
-    for vid in sorted(views):
-        move = views[vid].move_pct
+    for venue_id in sorted(views):
+        move = views[venue_id].move_pct
         if move is not None and move > cap:
             window = limits.move_window_ms / 1000
-            return Skip("volatile", f"{vid}: mid {move:.2f} % en {window:g} s > {cap} %")
+            return Skip("volatile", f"{venue_id}: mid {move:.2f} % en {window:g} s > {cap} %")
     return None
 
 
@@ -211,10 +211,15 @@ def decide(
     fires: list[Fire] = []
     misses: list[_Miss] = []
     for buy, sell in ROUTES:
-        a, b = views.get(buy), views.get(sell)
-        result = _route(a, b, buy, sell, limits, budget)
-        if isinstance(result, Fire) and target is not None and a is not None and b is not None:
-            veto = inventory_veto(a, b, result, target)
+        buy_view, sell_view = views.get(buy), views.get(sell)
+        result = _route(buy_view, sell_view, buy, sell, limits, budget)
+        if (
+            isinstance(result, Fire)
+            and target is not None
+            and buy_view is not None
+            and sell_view is not None
+        ):
+            veto = inventory_veto(buy_view, sell_view, result, target)
             if veto is not None:
                 result = _Miss(Skip("inventory_band", veto), result.net_pct)
         if isinstance(result, Fire):
@@ -222,48 +227,62 @@ def decide(
         else:
             misses.append(result)
     if fires:
-        return max(fires, key=lambda f: f.net)
-    blocked = [m.skip for m in misses if m.skip.reason == "blocked"]
-    priced = [m for m in misses if m.net_pct is not None]
+        return max(fires, key=lambda fire: fire.net)
+    blocked = [miss.skip for miss in misses if miss.skip.reason == "blocked"]
+    priced = [miss for miss in misses if miss.net_pct is not None]
     if priced:
-        return max(priced, key=lambda m: m.net_pct or ZERO).skip
+        return max(priced, key=lambda miss: miss.net_pct or ZERO).skip
     return blocked[0] if blocked else misses[0].skip
 
 
 def _route(
-    a: VenueView | None,
-    b: VenueView | None,
+    buy_view: VenueView | None,
+    sell_view: VenueView | None,
     buy: VenueId,
     sell: VenueId,
     limits: BotLimits,
     budget: Decimal,
 ) -> Fire | _Miss:
-    for vid, v in ((buy, a), (sell, b)):
-        if v is not None and v.blocked:
-            return _Miss(Skip("blocked", f"{vid}: {v.blocked}"), None)
-    if a is None or b is None or not a.asks or not b.bids:
+    for venue_id, view in ((buy, buy_view), (sell, sell_view)):
+        if view is not None and view.blocked:
+            return _Miss(Skip("blocked", f"{venue_id}: {view.blocked}"), None)
+    if buy_view is None or sell_view is None or not buy_view.asks or not sell_view.bids:
         return _Miss(Skip("no_quotes", f"{buy}→{sell}: falta el ask o el bid"), None)
 
     walk_a = limits.max_walk_pct.get(buy, ZERO) / HUNDRED
     walk_b = limits.max_walk_pct.get(sell, ZERO) / HUNDRED
-    refs_a = [lv.price for lv in a.asks if lv.price <= a.asks[0].price * (1 + walk_a)]
-    refs_b = [lv.price for lv in b.bids if lv.price >= b.bids[0].price * (1 - walk_b)]
-    asks, bids = _Side(a.asks, up=True), _Side(b.bids, up=False)
+    refs_a = [
+        price_level.price
+        for price_level in buy_view.asks
+        if price_level.price <= buy_view.asks[0].price * (1 + walk_a)
+    ]
+    refs_b = [
+        price_level.price
+        for price_level in sell_view.bids
+        if price_level.price >= sell_view.bids[0].price * (1 - walk_b)
+    ]
+    asks, bids = _Side(buy_view.asks, up=True), _Side(sell_view.bids, up=False)
     # the first one, at the best prices, alone: without a cross nothing else is prepared
-    first = _Pairs(a, b, buy, sell, limits, budget, refs_a[:1], refs_b[:1], asks, bids).pair(0, 0)
+    first = _Pairs(
+        buy_view, sell_view, buy, sell, limits, budget, refs_a[:1], refs_b[:1], asks, bids
+    ).pair(0, 0)
     if isinstance(first, _Miss) and first.skip.reason == "below_threshold":
         return first  # deeper levels only give a worse net
-    r = _Pairs(a, b, buy, sell, limits, budget, refs_a, refs_b, asks, bids)
-    if r.ordered:
-        return r.search(first)
+    pairs = _Pairs(buy_view, sell_view, buy, sell, limits, budget, refs_a, refs_b, asks, bids)
+    if pairs.ordered:
+        return pairs.search(first)
     # unsorted book: no monotonicity to prune with, so every pair is tried
-    results = [first, *(r.pair(i, j) for i in range(r.n) for j in range(r.m) if i or j)]
-    fires = [x for x in results if isinstance(x, Fire)]
+    results = [first, *(pairs.pair(i, j) for i in range(pairs.n) for j in range(pairs.m) if i or j)]
+    fires = [candidate for candidate in results if isinstance(candidate, Fire)]
     if fires:
-        return max(fires, key=lambda f: f.net)
+        return max(fires, key=lambda fire: fire.net)
     # with depth that does not pay, the reason is the threshold, not the venue minimum
-    short = [x for x in results if isinstance(x, _Miss) and x.skip.reason == "below_threshold"]
-    return max(short, key=lambda m: m.net_pct or ZERO) if short else first
+    short = [
+        candidate
+        for candidate in results
+        if isinstance(candidate, _Miss) and candidate.skip.reason == "below_threshold"
+    ]
+    return max(short, key=lambda miss: miss.net_pct or ZERO) if short else first
 
 
 class _Side:
@@ -274,28 +293,36 @@ class _Side:
 
     def __init__(self, levels: tuple[Level, ...], up: bool) -> None:
         self._levels, self._up = levels, up  # up: asks, low to high
-        prices = [lv.price for lv in levels]
-        self.ordered = all((p <= q) if up else (p >= q) for p, q in pairwise(prices))
-        self._keys = prices if up else [-p for p in prices]
+        prices = [price_level.price for price_level in levels]
+        self.ordered = all(
+            (earlier <= later) if up else (earlier >= later) for earlier, later in pairwise(prices)
+        )
+        self._keys = prices if up else [-earlier for earlier in prices]
         cum, acc = [ZERO], ZERO
-        for lv in levels:  # same summing order as before: same Decimal
-            acc += lv.qty
+        for price_level in levels:  # same summing order as before: same Decimal
+            acc += price_level.qty
             cum.append(acc)
         self._cum = cum
 
     def depth(self, price: Decimal) -> Decimal:
         """What there is up to `price`: asks at or below it, bids at or above it."""
         if not self.ordered:
-            ok = (lambda p: p <= price) if self._up else (lambda p: p >= price)
-            return sum((lv.qty for lv in self._levels if ok(lv.price)), ZERO)
+            ok = (
+                (lambda level_price: level_price <= price)
+                if self._up
+                else (lambda level_price: level_price >= price)
+            )
+            return sum(
+                (price_level.qty for price_level in self._levels if ok(price_level.price)), ZERO
+            )
         key = price if self._up else -price
         return self._cum[bisect_right(self._keys, key)]
 
 
-def _first(n: int, below: Callable[[int], bool]) -> int:
+def _first(length: int, below: Callable[[int], bool]) -> int:
     """First index in [0, n) with `below` true, if `below` is monotonic
     (false… true); n if none."""
-    lo, hi = 0, n
+    lo, hi = 0, length
     while lo < hi:
         mid = (lo + hi) // 2
         if below(mid):
@@ -312,8 +339,8 @@ class _Pairs:
 
     def __init__(
         self,
-        a: VenueView,
-        b: VenueView,
+        buy_view: VenueView,
+        sell_view: VenueView,
         buy: VenueId,
         sell: VenueId,
         limits: BotLimits,
@@ -323,23 +350,26 @@ class _Pairs:
         asks: _Side,
         bids: _Side,
     ) -> None:
-        self.a, self.b, self.buy, self.sell, self.limits = a, b, buy, sell, limits
+        self.a, self.b, self.buy, self.sell, self.limits = buy_view, sell_view, buy, sell, limits
         self.n, self.m = len(refs_a), len(refs_b)
         slip = limits.max_slippage_pct / HUNDRED
-        fee_a = a.spec.taker_fee
-        net_a = fee_a if a.net_fee is None else a.net_fee
-        net_b = b.spec.taker_fee if b.net_fee is None else b.net_fee
+        fee_a = buy_view.spec.taker_fee
+        net_a = fee_a if buy_view.net_fee is None else buy_view.net_fee
+        net_b = sell_view.spec.taker_fee if sell_view.net_fee is None else sell_view.net_fee
         self.ordered = asks.ordered and bids.ordered
-        self.buy_price = [a.spec.quantize_price(r * (1 + slip), "buy") for r in refs_a]
-        self.sell_price = [b.spec.quantize_price(r * (1 - slip), "sell") for r in refs_b]
-        self.buy_cost = [p * (1 + net_a) for p in self.buy_price]  # BTC per unit
-        self.sell_gain = [p * (1 - net_b) for p in self.sell_price]
-        self.depth_a = [asks.depth(p) for p in self.buy_price]
-        self.depth_b = [bids.depth(p) for p in self.sell_price]
-        self.balance = [
-            min(a.quote_available / (p * (1 + fee_a)), b.base_available) for p in self.buy_price
+        self.buy_price = [buy_view.spec.quantize_price(ref * (1 + slip), "buy") for ref in refs_a]
+        self.sell_price = [
+            sell_view.spec.quantize_price(ref * (1 - slip), "sell") for ref in refs_b
         ]
-        self.day = [budget / p for p in self.buy_price]
+        self.buy_cost = [price * (1 + net_a) for price in self.buy_price]  # BTC per unit
+        self.sell_gain = [price * (1 - net_b) for price in self.sell_price]
+        self.depth_a = [asks.depth(price) for price in self.buy_price]
+        self.depth_b = [bids.depth(price) for price in self.sell_price]
+        self.balance = [
+            min(buy_view.quote_available / (price * (1 + fee_a)), sell_view.base_available)
+            for price in self.buy_price
+        ]
+        self.day = [budget / price for price in self.buy_price]
 
     def unit(self, i: int, j: int) -> Decimal:
         return self.sell_gain[j] - self.buy_cost[i]
@@ -352,7 +382,7 @@ class _Pairs:
 
     def pair(self, i: int, j: int) -> Fire | _Miss:
         """A route with one pair of reference prices (RF-20)."""
-        a, b, buy, sell, limits = self.a, self.b, self.buy, self.sell, self.limits
+        buy_view, sell_view, buy, sell, limits = self.a, self.b, self.buy, self.sell, self.limits
         buy_price, sell_price = self.buy_price[i], self.sell_price[j]
         unit = self.unit(i, j)
         net_pct = unit / buy_price * HUNDRED
@@ -367,16 +397,21 @@ class _Pairs:
             "day_cap": self.day[i],
         }
         binding = min(terms, key=lambda k: terms[k])
-        qty = b.spec.quantize_qty(a.spec.quantize_qty(terms[binding]))
-        if a.spec.quantize_qty(qty) != qty:  # lots that do not fit each other
-            return _Miss(Skip("lot_mismatch", f"{qty} no es múltiplo del lote de {buy}"), net_pct)
-        if qty <= 0 or qty < max(a.spec.min_qty, b.spec.min_qty):
+        quantity = sell_view.spec.quantize_qty(buy_view.spec.quantize_qty(terms[binding]))
+        if buy_view.spec.quantize_qty(quantity) != quantity:  # lots that do not fit each other
+            return _Miss(
+                Skip("lot_mismatch", f"{quantity} no es múltiplo del lote de {buy}"), net_pct
+            )
+        if quantity <= 0 or quantity < max(buy_view.spec.min_qty, sell_view.spec.min_qty):
             detail = f"{buy}→{sell}: {terms[binding]:f} {BASE_LABEL} no llega al lote"
             return _Miss(Skip(binding, detail), net_pct)
-        if qty * buy_price < a.spec.min_notional or qty * sell_price < b.spec.min_notional:
-            detail = f"{buy}→{sell}: {qty} {BASE_LABEL} bajo el mínimo"
+        if (
+            quantity * buy_price < buy_view.spec.min_notional
+            or quantity * sell_price < sell_view.spec.min_notional
+        ):
+            detail = f"{buy}→{sell}: {quantity} {BASE_LABEL} bajo el mínimo"
             return _Miss(Skip("min_notional", detail), net_pct)
-        return Fire(buy, sell, buy_price, sell_price, qty, unit * qty, net_pct)
+        return Fire(buy, sell, buy_price, sell_price, quantity, unit * quantity, net_pct)
 
     def _cap(self, i: int, jc: int) -> Decimal:
         """Upper bound of the quantity of row `i` over columns [0, jc)."""
@@ -388,12 +423,12 @@ class _Pairs:
     def _can_fire(self, i: int, cap: Decimal) -> bool:
         """Can any pair in the row fire? Checked with the maximum quantity (quantity
         grows with the bound and lot rounding is monotonic)."""
-        a, b = self.a.spec, self.b.spec
-        top = b.quantize_qty(a.quantize_qty(cap))
-        if top <= 0 or top < max(a.min_qty, b.min_qty):
+        buy_spec, sell_spec = self.a.spec, self.b.spec
+        top = sell_spec.quantize_qty(buy_spec.quantize_qty(cap))
+        if top <= 0 or top < max(buy_spec.min_qty, sell_spec.min_qty):
             return False
-        return top * self.buy_price[i] >= a.min_notional and (
-            top * self.sell_price[0] >= b.min_notional
+        return top * self.buy_price[i] >= buy_spec.min_notional and (
+            top * self.sell_price[0] >= sell_spec.min_notional
         )
 
     def search(self, first: Fire | _Miss) -> Fire | _Miss:
@@ -444,24 +479,38 @@ class _Pairs:
         return self.pair(*max(sorted(short), key=lambda ij: self.net_pct(*ij)))
 
 
-def inventory_veto(a: VenueView, b: VenueView, fire: Fire, target: InventoryTarget) -> str | None:
+def inventory_veto(
+    buy_view: VenueView, sell_view: VenueView, fire: Fire, target: InventoryTarget
+) -> str | None:
     """Why the double worsens some venue's ratio (RF-26), or None. Buys on `a` and
     sells on `b`, with each one's taker fee; valued at the venue mid or, without
     one, at its leg's limit price."""
-    qty = fire.qty
+    quantity = fire.qty
     legs = (
-        (fire.buy_venue, a, qty, -qty * fire.buy_price * (1 + a.spec.taker_fee), fire.buy_price),
-        (fire.sell_venue, b, -qty, qty * fire.sell_price * (1 - b.spec.taker_fee), fire.sell_price),
+        (
+            fire.buy_venue,
+            buy_view,
+            quantity,
+            -quantity * fire.buy_price * (1 + buy_view.spec.taker_fee),
+            fire.buy_price,
+        ),
+        (
+            fire.sell_venue,
+            sell_view,
+            -quantity,
+            quantity * fire.sell_price * (1 - sell_view.spec.taker_fee),
+            fire.sell_price,
+        ),
     )
-    for vid, v, d_base, d_quote, limit in legs:
-        price = v.mid if v.mid is not None else limit
-        before = base_pct(v.quote_total, v.base_total, price)
-        after = base_pct(v.quote_total + d_quote, v.base_total + d_base, price)
+    for venue_id, view, d_base, d_quote, limit in legs:
+        price = view.mid if view.mid is not None else limit
+        before = base_pct(view.quote_total, view.base_total, price)
+        after = base_pct(view.quote_total + d_quote, view.base_total + d_base, price)
         if before is None or after is None:
             continue  # venue with nothing to value
         if target.worsens(before, after):
             return (
-                f"{vid}: {BASE_LABEL} {before:.1f} % → {after:.1f} %, fuera de "
+                f"{venue_id}: {BASE_LABEL} {before:.1f} % → {after:.1f} %, fuera de "
                 f"{target.low}-{target.high} %"
             )
     return None

@@ -25,11 +25,11 @@ class TestLoad:
     async def test_one_row_per_venue_and_asset(self):
         svc = DepositService({"nk": FakeDepositor("nk"), "nx": FakeDepositor("nx")})
         rows = await svc.load()
-        assert [(r.venue, r.asset, r.address.address) for r in rows] == [
+        assert [(row.venue, row.asset, row.address.address) for row in rows] == [
             ("nk", "BTC", "nk-BTC"), ("nk", "BTCB2", "nk-BTCB2"),
             ("nx", "BTC", "nx-BTC"), ("nx", "BTCB2", "nx-BTCB2"),
         ]  # fmt: skip
-        assert all(r.error == "" for r in rows)
+        assert all(row.error == "" for row in rows)
 
     async def test_error_stays_in_its_row(self):
         nk = FakeDepositor("nk", fail={"BTC": VenueError("NonKYC: HTTP 500")})
@@ -49,4 +49,4 @@ class TestLoad:
     async def test_only_given_venues(self):
         svc = DepositService({"nx": FakeDepositor("nx")})
         assert svc.venues == ("nx",)
-        assert {r.venue for r in await svc.load()} == {"nx"}
+        assert {row.venue for row in await svc.load()} == {"nx"}

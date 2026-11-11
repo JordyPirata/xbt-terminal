@@ -40,7 +40,7 @@ class FakeVenue(StreamingVenue):
         self.rest_calls = 0
         self.delays: list[float] = []
         delay = self._backoff.delay
-        self._backoff.delay = lambda n: self.delays.append(delay(n)) or delay(n)
+        self._backoff.delay = lambda attempt: self.delays.append(delay(attempt)) or delay(attempt)
 
     async def book_snapshot(self, depth):
         self.rest_calls += 1
@@ -101,7 +101,7 @@ async def run_for(venue, seconds):
 
 
 def states(events):
-    return [(e.source, e.status) for e in events if isinstance(e, ConnState)]
+    return [(event.source, event.status) for event in events if isinstance(event, ConnState)]
 
 
 def count(events, state):
@@ -111,8 +111,8 @@ def count(events, state):
 @pytest.mark.spec("RF-14")
 class TestBackoff:
     def test_exponential_up_to_cap(self):
-        b = Backoff(base_s=0.5, max_s=30, rng=lambda: 0.5)
-        assert [b.delay(n) for n in range(1, 9)] == [0.5, 1, 2, 4, 8, 16, 30, 30]
+        backoff = Backoff(base_s=0.5, max_s=30, rng=lambda: 0.5)
+        assert [backoff.delay(attempt) for attempt in range(1, 9)] == [0.5, 1, 2, 4, 8, 16, 30, 30]
 
     def test_jitter_20_percent(self):
         low = Backoff(base_s=0.5, max_s=30, rng=lambda: 0.0)
@@ -130,17 +130,17 @@ class TestBackoff:
 @pytest.mark.spec("RF-14")
 class TestLatency:
     def test_moving_average(self):
-        m = LatencyMeter(alpha=0.5)
-        assert m.ms is None
-        m.add(10)
-        m.add(20)
-        assert m.ms == pytest.approx(15)
+        meter = LatencyMeter(alpha=0.5)
+        assert meter.ms is None
+        meter.add(10)
+        meter.add(20)
+        assert meter.ms == pytest.approx(15)
 
     def test_ignores_invalid_samples(self):
-        m = LatencyMeter()
-        m.add(0)  # websockets gives 0.0 before the first ping
-        m.add(-1)
-        assert m.ms is None
+        meter = LatencyMeter()
+        meter.add(0)  # websockets gives 0.0 before the first ping
+        meter.add(-1)
+        assert meter.ms is None
 
 
 @pytest.mark.spec("RF-01", "RF-14", "CA-06")
@@ -214,19 +214,21 @@ class TestStreamLatency:
     async def test_heartbeat_with_ws_latency(self):
         venue = FakeVenue([WS_BOOK], ws_latency=0.012, latency_every_s=0.02)
         events = await run(venue, lambda evs: count(evs, ("ws", "up")) >= 3)
-        beats = [e for e in events if isinstance(e, ConnState)][1:]
-        assert all(b.latency_ms == pytest.approx(12) for b in beats)
+        beats = [event for event in events if isinstance(event, ConnState)][1:]
+        assert all(beat.latency_ms == pytest.approx(12) for beat in beats)
 
     async def test_heartbeat_with_rest_latency(self):
         venue = FakeVenue("fail", "fail", "fail", latency_every_s=0.02)
         events = await run(venue, lambda evs: count(evs, ("rest", "up")) >= 3)
-        beats = [e for e in events if isinstance(e, ConnState) and e.source == "rest"]
+        beats = [
+            event for event in events if isinstance(event, ConnState) and event.source == "rest"
+        ]
         assert beats[-1].latency_ms is not None and beats[-1].latency_ms >= 5
 
     async def test_no_measures_latency_is_none(self):
         venue = FakeVenue([WS_BOOK], latency_every_s=0.02)
         events = await run(venue, lambda evs: count(evs, ("ws", "up")) >= 2)
-        assert all(e.latency_ms is None for e in events if isinstance(e, ConnState))
+        assert all(event.latency_ms is None for event in events if isinstance(event, ConnState))
 
     async def test_no_heartbeat_while_reconnecting(self):
         """Reconnecting there is no latency to give: the state does not repeat."""

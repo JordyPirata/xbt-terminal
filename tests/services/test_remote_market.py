@@ -23,27 +23,30 @@ async def until(predicate, timeout=2.0):
             await asyncio.sleep(0.005)
 
 
-def candles(n=3, price="0.00725"):
-    p = D(price)
-    return [Candle(T0 + i * MIN, p, p, p, p, D("1")) for i in range(n)]
+def candles(count=3, price="0.00725"):
+    price_value = D(price)
+    return [
+        Candle(T0 + i * MIN, price_value, price_value, price_value, price_value, D("1"))
+        for i in range(count)
+    ]
 
 
-def trade(vid, price, ts, qty="0.5"):
-    return Trade(vid, D(price), D(qty), "buy", ts)
+def trade(venue_id, price, ts, quantity="0.5"):
+    return Trade(venue_id, D(price), D(quantity), "buy", ts)
 
 
-def book(vid, bids, asks, ts=NOW, seq=None):
-    lv = lambda rows: tuple(Level(D(p), D(q)) for p, q in rows)  # noqa: E731
-    return BookSnapshot(vid, lv(bids), lv(asks), ts, seq)
+def book(venue_id, bids, asks, ts=NOW, seq=None):
+    price_level = lambda rows: tuple(Level(D(price), D(qty)) for price, qty in rows)  # noqa: E731
+    return BookSnapshot(venue_id, price_level(bids), price_level(asks), ts, seq)
 
 
 class Daemon:
     def __init__(self, tmp_path, book_depth=50):
         self.s = Rig(tmp_path)
         self.hub = self.s.hub
-        for st in self.hub.state.values():
-            st.candles["1m"].load(candles())
-            st.ready, st.loaded_at = True, T0
+        for state in self.hub.state.values():
+            state.candles["1m"].load(candles())
+            state.ready, state.loaded_at = True, T0
         self.engine = Engine(self.hub, mode="dry-run", orders=self.s.orders, journal=self.s.journal)
         self.path = tmp_path / "m.sock"
         self.server = ControlServer(
@@ -54,7 +57,7 @@ class Daemon:
         await self.server.start()
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         await self.server.aclose()
 
 
@@ -69,16 +72,16 @@ async def linked(tmp_path):
         await remote.aclose()
 
 
-def same_book(a, b, n=50):
-    return a.top(n) == b.top(n) and a.ts == b.ts
+def same_book(first_book, second_book, count=50):
+    return first_book.top(count) == second_book.top(count) and first_book.ts == second_book.ts
 
 
 @pytest.mark.spec("RF-31", "CA-16")
 class TestSnapshotOnConnect:
     async def test_spec_book_candles_and_connection(self, linked):
         daemon, remote = linked
-        for vid in ("nk", "nx"):
-            mine, theirs = remote.market.state[vid], daemon.hub.state[vid]
+        for venue_id in ("nk", "nx"):
+            mine, theirs = remote.market.state[venue_id], daemon.hub.state[venue_id]
             assert mine.spec == theirs.spec
             assert same_book(mine.book, theirs.book)
             assert mine.book.valid == theirs.book.valid
@@ -87,10 +90,10 @@ class TestSnapshotOnConnect:
         assert remote.market.state["nk"].book.mid == daemon.hub.state["nk"].book.mid
 
     async def test_unloaded_venue_not_ready(self, tmp_path):
-        async with Daemon(tmp_path) as d:
-            d.hub.state["nx"].ready = False
-            d.hub.state["nx"].error = "HTTP 503"
-            remote = RemoteEngine(d.path, has_bot=False, retry_s=0.02)
+        async with Daemon(tmp_path) as daemon:
+            daemon.hub.state["nx"].ready = False
+            daemon.hub.state["nx"].error = "HTTP 503"
+            remote = RemoteEngine(daemon.path, has_bot=False, retry_s=0.02)
             task = asyncio.create_task(remote.run())
             await until(lambda: remote.market.state["nk"].ready)
             assert not remote.market.state["nx"].ready
@@ -99,15 +102,15 @@ class TestSnapshotOnConnect:
             await remote.aclose()
 
     async def test_late_loading_venue_sends_another_snapshot(self, tmp_path):
-        async with Daemon(tmp_path) as d:
-            d.hub.state["nx"].ready = False
-            remote = RemoteEngine(d.path, has_bot=False, retry_s=0.02)
+        async with Daemon(tmp_path) as daemon:
+            daemon.hub.state["nx"].ready = False
+            remote = RemoteEngine(daemon.path, has_bot=False, retry_s=0.02)
             seen = []
-            remote.market.subscribe(lambda vid, what: seen.append((vid, what)))
+            remote.market.subscribe(lambda venue_id, what: seen.append((venue_id, what)))
             task = asyncio.create_task(remote.run())
             await until(lambda: remote.market.state["nk"].ready)
-            d.hub.state["nx"].ready = True
-            d.hub._notify("nx", "market")
+            daemon.hub.state["nx"].ready = True
+            daemon.hub._notify("nx", "market")
             await until(lambda: remote.market.state["nx"].ready)
             assert ("nx", "market") in seen and ("nx", "candles") in seen
             task.cancel()
@@ -119,17 +122,17 @@ class TestEvents:
     async def test_new_book(self, linked):
         daemon, remote = linked
         seen = []
-        remote.market.subscribe(lambda vid, what: seen.append((vid, what)))
+        remote.market.subscribe(lambda venue_id, what: seen.append((venue_id, what)))
         daemon.hub.apply("nx", book("nx", [("0.0071", "2"), ("0.0070", "3")], [("0.0074", "1")]))
         await until(lambda: remote.market.state["nx"].book.mid == daemon.hub.state["nx"].book.mid)
         assert same_book(remote.market.state["nx"].book, daemon.hub.state["nx"].book)
         assert ("nx", "book") in seen
 
     async def test_book_travels_with_bounded_depth(self, tmp_path):
-        async with Daemon(tmp_path, book_depth=2) as d:
+        async with Daemon(tmp_path, book_depth=2) as daemon:
             bids = [(f"0.00{700 - i}", "1") for i in range(5)]
-            d.hub.apply("nx", book("nx", bids, [("0.0074", "1")]))
-            remote = RemoteEngine(d.path, has_bot=False, retry_s=0.02)
+            daemon.hub.apply("nx", book("nx", bids, [("0.0074", "1")]))
+            remote = RemoteEngine(daemon.path, has_bot=False, retry_s=0.02)
             task = asyncio.create_task(remote.run())
             await until(lambda: remote.market.state["nx"].book.valid)
             assert remote.market.state["nx"].book.depth == (2, 1)
@@ -145,9 +148,9 @@ class TestEvents:
 
     async def test_trade_moves_candles_and_last_trade(self, linked):
         daemon, remote = linked
-        t = trade("nk", "0.0080", T0 + 2 * MIN + 1)
-        daemon.hub.apply("nk", t)
-        await until(lambda: remote.market.state["nk"].last_trade == t)
+        last_trade = trade("nk", "0.0080", T0 + 2 * MIN + 1)
+        daemon.hub.apply("nk", last_trade)
+        await until(lambda: remote.market.state["nk"].last_trade == last_trade)
         theirs = daemon.hub.state["nk"].candles
         for tf, builder in remote.market.state["nk"].candles.items():
             assert builder.candles == theirs[tf].candles
@@ -174,14 +177,14 @@ class TestEvents:
 @pytest.mark.spec("RF-31")
 class TestReconnect:
     async def test_daemon_return_brings_another_snapshot(self, tmp_path):
-        async with Daemon(tmp_path) as d:
-            remote = RemoteEngine(d.path, has_bot=False, retry_s=0.02)
+        async with Daemon(tmp_path) as daemon:
+            remote = RemoteEngine(daemon.path, has_bot=False, retry_s=0.02)
             task = asyncio.create_task(remote.run())
             await until(lambda: remote.market.state["nk"].ready)
-            await d.server.aclose()
+            await daemon.server.aclose()
             await until(lambda: not remote.connected)
-            d.hub.apply("nk", book("nk", [("0.0060", "1")], [("0.0061", "1")]))
-            await d.server.start()
+            daemon.hub.apply("nk", book("nk", [("0.0060", "1")], [("0.0061", "1")]))
+            await daemon.server.start()
             await until(lambda: remote.market.state["nk"].book.best_bid == D("0.0060"))
             task.cancel()
             await remote.aclose()

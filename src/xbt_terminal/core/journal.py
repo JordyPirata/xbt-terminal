@@ -56,9 +56,9 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _iso_ms(ts: datetime) -> str:
-    ts = ts.astimezone(UTC)
-    return ts.strftime("%Y-%m-%dT%H:%M:%S.") + f"{ts.microsecond // 1000:03d}Z"
+def _iso_ms(timestamp: datetime) -> str:
+    timestamp = timestamp.astimezone(UTC)
+    return timestamp.strftime("%Y-%m-%dT%H:%M:%S.") + f"{timestamp.microsecond // 1000:03d}Z"
 
 
 class Journal:
@@ -109,7 +109,7 @@ class Journal:
     def __enter__(self) -> Journal:
         return self
 
-    def __exit__(self, *exc: object) -> None:
+    def __exit__(self, *error: object) -> None:
         self.close()
 
     def _open_for(self, now: datetime) -> IO[str]:
@@ -138,9 +138,12 @@ class Journal:
         if isinstance(value, datetime):
             return _iso_ms(value)
         if isinstance(value, Mapping):
-            return {self._plain(str(k)): self._plain(v) for k, v in value.items()}
+            return {self._plain(str(k)): self._plain(item) for k, item in value.items()}
         if isinstance(value, list | tuple | set | frozenset):
-            return [self._plain(v) for v in value]
+            return [self._plain(item) for item in value]
         if is_dataclass(value) and not isinstance(value, type):
-            return {f.name: self._plain(getattr(value, f.name)) for f in fields(value)}
+            return {
+                dc_field.name: self._plain(getattr(value, dc_field.name))
+                for dc_field in fields(value)
+            }
         raise TypeError(f"no se puede escribir en el journal: {type(value).__name__}")

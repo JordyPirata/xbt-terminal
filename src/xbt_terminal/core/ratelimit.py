@@ -85,10 +85,10 @@ class RateLimiter:
             if future.done():  # the waiting task was cancelled
                 continue
             windows = self._windows_for(kind)
-            wait = max(w.wait(now) for w in windows)
+            wait = max(window.wait(now) for window in windows)
             if wait == 0:
-                for w in windows:
-                    w.stamps.append(now)
+                for window in windows:
+                    window.stamps.append(now)
                 future.set_result(None)
                 continue
             waiting.append(item)

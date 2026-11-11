@@ -24,30 +24,30 @@ def heard(engine):
 @pytest.mark.spec("RF-07", "RF-30")
 class TestHangingLeg:
     async def test_warns_in_red_once(self, tmp_path):
-        s = double.Setup(tmp_path)
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        setup = double.Setup(tmp_path)
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
         notices = heard(engine)
-        sent = await s.orders.confirm_double(await s.orders.prepare_double(double.dbl()))
-        order = await s.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
-        s.orders.on_private_event("nk", order)
-        s.now += LIMITS.hanging_leg_after_s * 1000 + 1
+        sent = await setup.orders.confirm_double(await setup.orders.prepare_double(double.dbl()))
+        order = await setup.venues["nk"].simulate_fill(sent.state.buy.order_id, D("0.01"))
+        setup.orders.on_private_event("nk", order)
+        setup.now += LIMITS.hanging_leg_after_s * 1000 + 1
         engine.check_doubles()
         engine.check_doubles()
         (notice,) = notices
         assert notice.error and notice.text.startswith("⚠ pierna colgada en d-000001")
 
     async def test_failure_goes_to_faults_and_does_not_cut(self, tmp_path):
-        s = double.Setup(tmp_path)
+        setup = double.Setup(tmp_path)
         faults = []
-        s.orders.faults.subscribe(faults.append)
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        setup.orders.faults.subscribe(faults.append)
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
 
         def boom():
             raise RuntimeError("bug")
 
-        s.orders.check_doubles = boom
+        setup.orders.check_doubles = boom
         engine.check_doubles()
-        assert [f.where for f in faults] == ["engine"]
+        assert [fault.where for fault in faults] == ["engine"]
 
 
 @pytest.mark.spec("RNF-14", "RF-30")
@@ -55,42 +55,42 @@ class TestFailures:
     """With distinct registries in orders and hub (D-78), the engine joins them."""
 
     def test_each_service_brings_its_own(self, tmp_path):
-        s = double.Setup(tmp_path)
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
-        assert s.orders.faults is not s.hub.faults
-        assert engine.faults == [s.orders.faults, s.hub.faults]
+        setup = double.Setup(tmp_path)
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
+        assert setup.orders.faults is not setup.hub.faults
+        assert engine.faults == [setup.orders.faults, setup.hub.faults]
 
     def test_report_fault_notes_in_orders_registry(self, tmp_path):
-        s = double.Setup(tmp_path)
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        setup = double.Setup(tmp_path)
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
         fault = engine.report_fault("control", RuntimeError("bug"))
         assert fault.where == "control" and "bug" in fault.error
-        assert s.orders.faults.count == 1 and s.hub.faults.count == 0
+        assert setup.orders.faults.count == 1 and setup.hub.faults.count == 0
 
     def test_no_orders_notes_in_hub_registry(self, tmp_path):
-        s = double.Setup(tmp_path)
-        engine = Engine(s.hub, mode="dry-run")
+        setup = double.Setup(tmp_path)
+        engine = Engine(setup.hub, mode="dry-run")
         engine.report_fault("ui", RuntimeError("bug"))
-        assert s.hub.faults.count == 1
+        assert setup.hub.faults.count == 1
 
     def test_fault_count_adds_and_subscribe_faults_hears_all(self, tmp_path):
-        s = double.Setup(tmp_path)
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        setup = double.Setup(tmp_path)
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
         seen = []
         engine.subscribe_faults(seen.append)
-        s.orders.faults.report("journal", RuntimeError("a"))
-        s.hub.faults.report("market", RuntimeError("b"))
+        setup.orders.faults.report("journal", RuntimeError("a"))
+        setup.hub.faults.report("market", RuntimeError("b"))
         assert engine.fault_count == 2
-        assert [f.where for f in seen] == ["journal", "market"]
+        assert [fault.where for fault in seen] == ["journal", "market"]
 
 
 @pytest.mark.spec("RNF-12", "RF-30")
 class TestReconciliation:
     async def test_loop_reconciles_and_notifies(self, tmp_path):
-        s = Rig(tmp_path)
-        s.lose_reply()
-        await s.send(buy())
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders, reconcile_every_s=0.01)
+        setup = Rig(tmp_path)
+        setup.lose_reply()
+        await setup.send(buy())
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders, reconcile_every_s=0.01)
         notices = heard(engine)
         task = asyncio.create_task(engine.watch_uncertain())
         try:
@@ -102,11 +102,11 @@ class TestReconciliation:
             task.cancel()
         (notice,) = notices
         assert "existe" in notice.text and not notice.error
-        assert s.orders.uncertain == {}
+        assert setup.orders.uncertain == {}
 
     async def test_without_uncertain_does_not_ask(self, tmp_path):
-        s = Rig(tmp_path)
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
+        setup = Rig(tmp_path)
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
         assert await engine.reconcile() == []
 
 
@@ -117,9 +117,9 @@ class TestSkewCheck:
         [("live", "no se envían órdenes a NonKYC"), ("dry-run", "en live no se podría")],
     )
     def test_warns_once_per_venue(self, tmp_path, mode, effect):
-        s = Rig(tmp_path)
-        s.hub._venues["nk"].clock_skew_ms = 9_000
-        engine = Engine(s.hub, mode=mode, orders=s.orders, max_clock_skew_s=5)
+        setup = Rig(tmp_path)
+        setup.hub._venues["nk"].clock_skew_ms = 9_000
+        engine = Engine(setup.hub, mode=mode, orders=setup.orders, max_clock_skew_s=5)
         notices = heard(engine)
         engine.check_skew("nk")
         engine.check_skew("nk")
@@ -127,9 +127,9 @@ class TestSkewCheck:
         assert notice.error and "reloj desfasado +9 s" in notice.text and effect in notice.text
 
     def test_within_cap_or_uncapped_stays_silent(self, tmp_path):
-        s = Rig(tmp_path)
-        s.hub._venues["nk"].clock_skew_ms = 9_000
-        quiet = Engine(s.hub, mode="live", orders=s.orders)
+        setup = Rig(tmp_path)
+        setup.hub._venues["nk"].clock_skew_ms = 9_000
+        quiet = Engine(setup.hub, mode="live", orders=setup.orders)
         notices = heard(quiet)
         quiet.check_skew("nk")
         assert notices == []
@@ -138,19 +138,19 @@ class TestSkewCheck:
 @pytest.mark.spec("RNF-15", "RF-30")
 class TestClose:
     async def test_waits_for_send_in_flight(self, tmp_path):
-        s = Rig(tmp_path)
+        setup = Rig(tmp_path)
         gate = asyncio.Event()
-        real = s.venue.place_limit
+        real = setup.venue.place_limit
 
-        async def slow(req):
+        async def slow(order_request):
             await gate.wait()
-            return await real(req)
+            return await real(order_request)
 
-        s.venue.place_limit = slow
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
-        sending = asyncio.create_task(s.send(buy()))
+        setup.venue.place_limit = slow
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
+        sending = asyncio.create_task(setup.send(buy()))
         await asyncio.sleep(0)
-        while not s.orders.in_flight:
+        while not setup.orders.in_flight:
             await asyncio.sleep(0)
         closing = asyncio.create_task(engine.aclose())
         await asyncio.sleep(0.01)
@@ -158,23 +158,23 @@ class TestClose:
         gate.set()
         await closing
         await sending
-        assert s.events() == ["order_sent", "order_ack"]
+        assert setup.events() == ["order_sent", "order_ack"]
 
     async def test_uncertain_error_in_flight_is_noted(self, tmp_path):
-        s = Rig(tmp_path)
+        setup = Rig(tmp_path)
 
-        async def lost(req):
+        async def lost(order_request):
             await asyncio.sleep(0.01)
             raise UncertainError("NonKYC: sin respuesta (ReadTimeout)")
 
-        s.venue.place_limit = lost
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders)
-        sending = asyncio.create_task(s.send(buy()))
-        while not s.orders.in_flight:
+        setup.venue.place_limit = lost
+        engine = Engine(setup.hub, mode="dry-run", orders=setup.orders)
+        sending = asyncio.create_task(setup.send(buy()))
+        while not setup.orders.in_flight:
             await asyncio.sleep(0)
         await engine.aclose()
         await sending
-        assert s.events() == ["order_sent", "order_unknown"]
+        assert setup.events() == ["order_sent", "order_unknown"]
 
 
 @pytest.mark.spec("RF-32", "CA-17")
@@ -182,15 +182,15 @@ class TestAccountValue:
     def test_engine_samples_with_account_and_journal(self, tmp_path):
         from xbt_terminal.services.account import AccountService
 
-        s = Rig(tmp_path)
-        account = AccountService({"nk": s.venue}, journal=s.journal)
+        setup = Rig(tmp_path)
+        account = AccountService({"nk": setup.venue}, journal=setup.journal)
         engine = Engine(
-            s.hub, mode="dry-run", account=account, journal=s.journal, value_every_s=300
+            setup.hub, mode="dry-run", account=account, journal=setup.journal, value_every_s=300
         )
         assert "value" in [name for name, _ in engine.services()]
 
     def test_without_account_no_sampling(self, tmp_path):
-        s = Rig(tmp_path)
-        engine = Engine(s.hub, mode="read-only", value_every_s=300)
+        setup = Rig(tmp_path)
+        engine = Engine(setup.hub, mode="read-only", value_every_s=300)
         assert engine.values is None
         assert "value" not in [name for name, _ in engine.services()]

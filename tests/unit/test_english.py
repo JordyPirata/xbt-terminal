@@ -25,7 +25,7 @@ LOG_METHODS = frozenset({"debug", "info", "warning", "error", "exception", "crit
 
 def spanish(text: str) -> bool:
     words = re.findall(r"[a-záéíóúñ]+", text.lower())
-    return bool(ACCENTS.search(text)) or sum(w in WORDS for w in words) >= 2
+    return bool(ACCENTS.search(text)) or sum(word in WORDS for word in words) >= 2
 
 
 def named_spanish(name: str) -> bool:
@@ -70,10 +70,22 @@ def log_messages(tree: ast.AST):
 
 def findings(source: str):
     tree = ast.parse(source)
-    found = [(n, t) for n, t in comments(source) if spanish(t)]
-    found += [(n, t) for n, t in docstrings(tree) if spanish(t)]
+    found = [
+        (line_number, comment_text)
+        for line_number, comment_text in comments(source)
+        if spanish(comment_text)
+    ]
+    found += [
+        (line_number, comment_text)
+        for line_number, comment_text in docstrings(tree)
+        if spanish(comment_text)
+    ]
     found += list(spanish_names(tree))
-    found += [(n, t) for n, t in log_messages(tree) if spanish(t)]
+    found += [
+        (line_number, comment_text)
+        for line_number, comment_text in log_messages(tree)
+        if spanish(comment_text)
+    ]
     return found
 
 
@@ -85,7 +97,10 @@ def test_the_code_is_in_english():
             if path.name == "test_english.py":
                 continue
             rel = path.relative_to(ROOT)
-            bad += [f"{rel}:{n}: {t[:60]!r}" for n, t in findings(path.read_text())]
+            bad += [
+                f"{rel}:{line_number}: {comment_text[:60]!r}"
+                for line_number, comment_text in findings(path.read_text())
+            ]
     assert bad == []
 
 

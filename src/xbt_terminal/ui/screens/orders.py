@@ -67,15 +67,22 @@ class OrdersScreen(ModalScreen[None]):
         table.focus()
 
     def refresh_rows(self) -> None:
-        orders = [o for o in self._source() if self.venue in (None, o.venue)]
+        orders = [order for order in self._source() if self.venue in (None, order.venue)]
         table = self.query_one(DataTable)
         table.clear()
-        for o in orders:
+        for order in orders:
             table.add_row(
-                VENUE_NAME[o.venue], o.order_id, o.side, f"{o.qty:f}", f"{o.price:f}",
-                f"{o.filled:f}", o.status, o.client_id or "—", key=f"{o.venue}:{o.order_id}",
-            )  # fmt: skip
-        self.order_ids = [o.order_id for o in orders]
+                VENUE_NAME[order.venue],
+                order.order_id,
+                order.side,
+                f"{order.qty:f}",
+                f"{order.price:f}",
+                f"{order.filled:f}",
+                order.status,
+                order.client_id or "—",
+                key=f"{order.venue}:{order.order_id}",
+            )
+        self.order_ids = [order.order_id for order in orders]
 
     def action_close(self) -> None:
         self.dismiss(None)

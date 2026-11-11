@@ -45,8 +45,8 @@ ARMED = arm(BotState())
 def view(venue, bids=(), asks=(), quote="1", base="1000", blocked=None):
     return VenueView(
         spec=spec(venue),
-        bids=tuple(Level(D(p), D(q)) for p, q in bids),
-        asks=tuple(Level(D(p), D(q)) for p, q in asks),
+        bids=tuple(Level(D(price), D(qty)) for price, qty in bids),
+        asks=tuple(Level(D(price), D(qty)) for price, qty in asks),
         quote_available=D(quote),
         base_available=D(base),
         blocked=blocked,
@@ -119,7 +119,7 @@ class TestFire:
 @pytest.mark.spec("RF-20")
 class TestQuantity:
     @pytest.mark.parametrize(
-        ("change", "qty"),
+        ("change", "quantity"),
         [
             ({"nx": {"bids": (Level(D("0.00720000"), D("10")),)}}, "10.0000"),  # sell depth
             # 0.1 BTC / (0.007014 × 1.002) = 14.22873… at NonKYC's lot
@@ -127,8 +127,8 @@ class TestQuantity:
             ({"nx": {"base_available": D("7.5")}}, "7.5000"),  # BTCB2 on the sell venue
         ],
     )
-    def test_minimum_of_each_term(self, change, qty):
-        assert decide(crossed(**change), ARMED, LIMITS, NOW).qty == D(qty)
+    def test_minimum_of_each_term(self, change, quantity):
+        assert decide(crossed(**change), ARMED, LIMITS, NOW).qty == D(quantity)
 
     def test_max_qty(self):
         assert decide(crossed(), ARMED, replace(LIMITS, max_qty=D("5")), NOW).qty == D("5.0000")

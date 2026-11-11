@@ -4,8 +4,17 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
-## Estado (2026-11-07)
+## Estado (2026-11-09)
 
+- **M20 — Nombres descriptivos (D-83), rama `t-98-descriptive-names` (PR abierta):**
+  T-98 y T-99 hechas. Nombres completos en `src/`, `tests/` y `tools/`, con dos
+  excepciones (`tests/unit/bot_reference.py`, oráculo congelado, y el campo `t` de
+  `services/recording.py`); guarda en `tests/unit/test_names.py`. Comentarios: solo se
+  quitaron los que repetían el código (criterio elegido). Pendiente de la PR: revisión
+  y merge.
+- **Test de timing intermitente:** `tests/ui/test_orders_ui.py::test_dialog_does_not_wait_for_network`
+  (umbral de 0,3 s) falló una vez en la suite completa con carga; en aislado pasa
+  3 de 3. No tiene relación con los renombrados.
 - **M19 — Rendimiento, en `tasks.md`:** T-92, T-94 y T-97 hechas; T-93 descartada
   (en `cooldown` el bot no evalúa); quedan T-95 (agrupar evaluaciones, empieza por su
   D-NN) y T-96 (restos menores). Ninguna cambia decisiones del bot.
@@ -45,7 +54,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   en `src/`, `tests/` y `tools/`; lo vigila `tests/unit/test_english.py`. El AST de
   `src/` solo cambia en mensajes de log y en `DESCRIPTION` de `--help`, que sigue en
   español (antes salía del docstring del módulo).
-- **`main` y `origin` al día** (2026-11-07, hasta T-97). En el servidor siguen sin desplegar T-87, T-88, T-91, T-92, T-94 y T-97.
+- **Desplegado en el servidor hasta T-97** (`3bb6d43`, daemon en live desde el 2026-11-08 03:00 UTC; falta `bot on`). Reinstalar con `uv tool install --reinstall --python /usr/bin/python3.11 .`: con el Python 3.12 de uv, la unidad endurecida (`ProtectHome=tmpfs`) no ve el intérprete y da `203/EXEC`.
 - **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
   `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
   con venues simulados (`services/replay.py`) y `[replay]` en la config;

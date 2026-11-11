@@ -94,9 +94,6 @@ def _side(raw: Any) -> str:
     return side
 
 
-# --- signature -----------------------------------------------------------------
-
-
 def sign(key: str, secret: str, url: str, body: str, nonce: str) -> str:
     return hmac.new(
         secret.encode(), f"{key}{url}{body}{nonce}".encode(), hashlib.sha256
@@ -107,9 +104,6 @@ def login_frame(key: str, secret: str, nonce: str, req_id: int) -> str:
     signature = hmac.new(secret.encode(), nonce.encode(), hashlib.sha256).hexdigest()
     params = {"algo": "HS256", "pKey": key, "nonce": nonce, "signature": signature}
     return json.dumps({"method": "login", "params": params, "id": req_id})
-
-
-# --- pure parsing --------------------------------------------------------------
 
 
 def parse_market(
@@ -149,27 +143,33 @@ def parse_token_price(payload: dict[str, Any], symbol: str) -> Decimal:
 
 
 def _levels(raw: Iterable[dict[str, Any]], reverse: bool) -> tuple[Level, ...]:
-    levels = [Level(D(lv["price"]), D(lv["quantity"])) for lv in raw]
-    return tuple(sorted(levels, key=lambda lv: lv.price, reverse=reverse))
+    levels = [Level(D(price_level["price"]), D(price_level["quantity"])) for price_level in raw]
+    return tuple(sorted(levels, key=lambda price_level: price_level.price, reverse=reverse))
 
 
-def parse_book(payload: dict[str, Any], ts: int, seq: int | None) -> BookSnapshot:
+def parse_book(payload: dict[str, Any], timestamp: int, seq: int | None) -> BookSnapshot:
     return BookSnapshot(
         venue="nk",
         bids=_levels(payload.get("bids") or [], reverse=True),
         asks=_levels(payload.get("asks") or [], reverse=False),
-        ts=ts,
+        ts=timestamp,
         seq=seq,
     )
 
 
-def parse_delta(params: dict[str, Any], ts: int) -> BookDelta:
+def parse_delta(params: dict[str, Any], timestamp: int) -> BookDelta:
     """`quantity` comes as a string, or as number 0 when deleting a level."""
     return BookDelta(
         venue="nk",
-        bids=tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in params.get("bids") or []),
-        asks=tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in params.get("asks") or []),
-        ts=ts,
+        bids=tuple(
+            Level(D(price_level["price"]), D(price_level["quantity"]))
+            for price_level in params.get("bids") or []
+        ),
+        asks=tuple(
+            Level(D(price_level["price"]), D(price_level["quantity"]))
+            for price_level in params.get("asks") or []
+        ),
+        ts=timestamp,
         seq=int(params["sequence"]),
     )
 
@@ -211,27 +211,29 @@ def ws_message(msg: Any, symbol: str, frame: str) -> dict[str, Any] | None:
 def parse_candles(payload: dict[str, Any]) -> list[Candle]:
     candles = [
         Candle(
-            ts_open=int(b["time"]),
-            open=D(b["open"]),
-            high=D(b["high"]),
-            low=D(b["low"]),
-            close=D(b["close"]),
-            volume=D(b["volume"]),
+            ts_open=int(bar["time"]),
+            open=D(bar["open"]),
+            high=D(bar["high"]),
+            low=D(bar["low"]),
+            close=D(bar["close"]),
+            volume=D(bar["volume"]),
         )
-        for b in payload.get("bars") or []
+        for bar in payload.get("bars") or []
     ]
-    return sorted(candles, key=lambda c: c.ts_open)
+    return sorted(candles, key=lambda candle: candle.ts_open)
 
 
 def parse_balances(payload: list[dict[str, Any]], assets: Iterable[str]) -> dict[str, Balance]:
     """Only the assets asked for, the pair's and the fee token if any (RNF-10, D-63).
     `pending` are unconfirmed deposits: neither usable nor in orders, so they do not
     count."""
-    raw = {b.get("asset"): b for b in payload}
+    raw = {row.get("asset"): row for row in payload}
     out: dict[str, Balance] = {}
     for asset in assets:
-        b = raw.get(asset)
-        out[asset] = Balance(asset, D(b["available"]), D(b["held"])) if b else Balance(asset, ZERO)
+        row = raw.get(asset)
+        out[asset] = (
+            Balance(asset, D(row["available"]), D(row["held"])) if row else Balance(asset, ZERO)
+        )
     return out
 
 
@@ -284,7 +286,7 @@ def _status(raw: Any, executed: Decimal) -> OrderStatus:
 def parse_order(raw: dict[str, Any], now: int) -> Order:
     """Works for `Order` (createorder, getorder) and `Order2` (account/orders)."""
     executed = D(raw["executedQuantity"])
-    ts = raw.get("timestamp") or raw.get("createdAt")
+    timestamp = raw.get("timestamp") or raw.get("createdAt")
     return Order(
         venue="nk",
         order_id=str(raw["id"]),
@@ -294,7 +296,7 @@ def parse_order(raw: dict[str, Any], now: int) -> Order:
         qty=D(raw["quantity"]),
         filled=executed,
         status=_status(raw.get("status"), executed),
-        ts=int(ts) if ts else now,
+        ts=int(timestamp) if timestamp else now,
     )
 
 
@@ -329,15 +331,12 @@ def candles_from_trades(trades: list[Trade], limit: int, truncated: bool) -> lis
     """1m candles from the given trades. If the list is cut by the API cap, the oldest
     candle may be incomplete and is dropped."""
     builder = CandleBuilder("1m", max_candles=limit + 1)
-    for t in sorted(trades, key=lambda t: t.ts):
-        builder.on_trade(t)
+    for trade in sorted(trades, key=lambda trade: trade.ts):
+        builder.on_trade(trade)
     candles = list(builder.candles)
     if truncated and candles and len(candles) <= limit:
         candles = candles[1:]
     return candles[-limit:]
-
-
-# --- adapter -------------------------------------------------------------------
 
 
 class NonKYCVenue(StreamingVenue):
@@ -385,8 +384,6 @@ class NonKYCVenue(StreamingVenue):
 
     async def aclose(self) -> None:
         await self._http.aclose()
-
-    # -- REST ------------------------------------------------------------------
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         await self._limiter.acquire("market")
@@ -460,16 +457,19 @@ class NonKYCVenue(StreamingVenue):
 
     async def book_snapshot(self, depth: int) -> BookSnapshot:
         payload = await self._get("/market/orderbook", {"symbol": self.symbol, "limit": depth})
-        return self.parsing(lambda p: parse_book(p, int(p["timestamp"]), None), payload)
+        return self.parsing(
+            lambda book_payload: parse_book(book_payload, int(book_payload["timestamp"]), None),
+            payload,
+        )
 
     async def _fetch_trades(self, limit: int) -> list[tuple[str, Trade]]:
         payload = await self._get("/market/trades", {"symbol": self.symbol, "limit": limit})
-        return self.parsing(lambda rs: [parse_rest_trade(r) for r in rs], payload)
+        return self.parsing(lambda rs: [parse_rest_trade(row) for row in rs], payload)
 
     async def candles(self, tf: Timeframe, limit: int) -> list[Candle]:
         if tf == "1m":
             raw = await self._fetch_trades(MAX_TRADES)
-            trades = [t for _, t in raw]
+            trades = [trade for _, trade in raw]
             return candles_from_trades(trades, limit, truncated=len(raw) >= MAX_TRADES)
         params = {
             "symbol": self.symbol,
@@ -479,13 +479,13 @@ class NonKYCVenue(StreamingVenue):
         }
         return self.parsing(parse_candles, await self._get("/market/candles", params))
 
-    # -- private ---------------------------------------------------------------
-
     async def balances(self) -> dict[str, Balance]:
         payload = await self._signed("GET", "/balances", kind="private")
         balances = self.parsing(parse_balances, payload, self._balance_assets)
         self._asset_names = {
-            b["assetid"]: b["asset"] for b in payload if b.get("assetid") and b.get("asset")
+            row["assetid"]: row["asset"]
+            for row in payload
+            if row.get("assetid") and row.get("asset")
         }
         return balances
 
@@ -515,10 +515,10 @@ class NonKYCVenue(StreamingVenue):
         payload = await self._signed("GET", "/account/orders", kind="private", params=params)
         now = self._clock()
         orders = self.parsing(
-            lambda rs: [parse_order(r, now) for r in rs if not other_market(r, self.symbol)],
+            lambda rs: [parse_order(row, now) for row in rs if not other_market(row, self.symbol)],
             payload,
         )
-        return [o for o in orders if o.status in ("open", "partial")]
+        return [order for order in orders if order.status in ("open", "partial")]
 
     async def fetch_fills(self) -> list[Fill]:
         """Own trades of the pair; as in `fetch_active`, the venue brings every market even
@@ -528,7 +528,7 @@ class NonKYCVenue(StreamingVenue):
         quote, names = self._assets[1], self._asset_names
         return self.parsing(
             lambda rs: [
-                parse_fill(r, quote, names) for r in rs if not other_market(r, self.symbol)
+                parse_fill(row, quote, names) for row in rs if not other_market(row, self.symbol)
             ],
             payload,
         )
@@ -537,16 +537,16 @@ class NonKYCVenue(StreamingVenue):
         payload = await self._signed("GET", f"/getorder/{order_id}", kind="private")
         return self.parsing(parse_order, payload, self._clock())
 
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         """`strictValidate`: if price or quantity do not fit the grid, the venue rejects
         instead of truncating (RiskCheck already checked)."""
         body = {
             "symbol": self.symbol,
-            "side": req.side,
+            "side": order_request.side,
             "type": "limit",
-            "quantity": f"{req.qty:f}",
-            "price": f"{req.price:f}",
-            "userProvidedId": req.client_id,
+            "quantity": f"{order_request.qty:f}",
+            "price": f"{order_request.price:f}",
+            "userProvidedId": order_request.client_id,
             "strictValidate": True,
         }
         order = await self.sending(
@@ -560,10 +560,12 @@ class NonKYCVenue(StreamingVenue):
         """Active ones and, of own trades since `since`, their orders if not active: an
         order filled instantly never shows as active (D-26)."""
         active = await self.fetch_active()
-        known = {o.order_id for o in active}
-        recent = {f.order_id for f in await self.fetch_fills() if f.ts >= since and f.order_id}
+        known = {order.order_id for order in active}
+        recent = {
+            fill.order_id for fill in await self.fetch_fills() if fill.ts >= since and fill.order_id
+        }
         done = [await self.fetch_final(oid) for oid in sorted(recent - known)]
-        return active + [o for o in done if o is not None]
+        return active + [order for order in done if order is not None]
 
     async def cancel(self, order_id: str) -> None:
         await self._signed("POST", "/cancelorder", kind="cancel", body={"id": order_id})
@@ -651,8 +653,6 @@ class NonKYCVenue(StreamingVenue):
                 if msg.get("method") in ("activeOrders", "report"):
                     yield None
 
-    # -- WS --------------------------------------------------------------------
-
     async def resync(self) -> None:
         """Ask for the book again on the same WS, as on a gap (D-76). What arrives until the
         snapshot is dropped: it could chain onto the bad book."""
@@ -700,13 +700,13 @@ class NonKYCVenue(StreamingVenue):
             snap = self.parsing(parse_book, params, int(msg["timestamp"]), int(params["sequence"]))
             return book.snapshot(snap)
         if method == "updateOrderbook":
-            ts = params.get("timestamp")
+            timestamp = params.get("timestamp")
             return book.delta(
-                self.parsing(parse_delta, params, iso_ms(ts) if ts else self._clock())
+                self.parsing(parse_delta, params, iso_ms(timestamp) if timestamp else self._clock())
             )
         if method in ("snapshotTrades", "updateTrades"):
             raws = params.get("data") or []
-            return self.fresh(self.parsing(lambda rs: [parse_ws_trade(r) for r in rs], raws))
+            return self.fresh(self.parsing(lambda rs: [parse_ws_trade(row) for row in rs], raws))
         return []
 
 
@@ -730,7 +730,7 @@ class _BookOrder:
 
     def gap(self) -> list[BookDelta]:
         """Real gap: the pending ones, in order, then await a snapshot."""
-        out = sorted(self.pending.values(), key=lambda d: d.seq or 0)
+        out = sorted(self.pending.values(), key=lambda delta: delta.seq or 0)
         self.reset()
         return out
 
@@ -738,7 +738,9 @@ class _BookOrder:
         """The snapshot and the pending ones that chain onto it."""
         self.seq = snap.seq
         after = snap.seq
-        self.pending = {k: d for k, d in self.pending.items() if after is not None and k > after}
+        self.pending = {
+            k: delta for k, delta in self.pending.items() if after is not None and k > after
+        }
         return [snap, *self._drain()]
 
     def delta(self, delta: BookDelta) -> list[MarketEvent]:

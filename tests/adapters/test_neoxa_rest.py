@@ -62,12 +62,17 @@ def test_fulfils_the_common_interface(limiter):
 @pytest.mark.spec("RNF-09", "RNF-10")
 class TestMarket:
     async def test_pair_rules(self, venue, api):
-        m = await venue.market()
-        assert (m.venue, m.symbol, m.base, m.quote) == ("nx", "BTCB2_BTC", "BTCB2", "BTC")
-        assert m.tick_size == D("0.00000001") and m.lot_size == D("0.00000001")
-        assert m.min_qty == D("1e-8")
-        assert m.min_notional == D("0")
-        assert (m.maker_fee, m.taker_fee) == (D("0.001"), D("0.002"))
+        market = await venue.market()
+        assert (market.venue, market.symbol, market.base, market.quote) == (
+            "nx",
+            "BTCB2_BTC",
+            "BTCB2",
+            "BTC",
+        )
+        assert market.tick_size == D("0.00000001") and market.lot_size == D("0.00000001")
+        assert market.min_qty == D("1e-8")
+        assert market.min_notional == D("0")
+        assert (market.maker_fee, market.taker_fee) == (D("0.001"), D("0.002"))
 
     async def test_nonexistent_pair(self, limiter, api):
         async with httpx.AsyncClient(base_url=REST_URL) as http:
@@ -94,11 +99,14 @@ class TestBook:
         assert snap.bids[2] == Level(D("0.00705"), D("0.37077319"), amm=False)
         assert snap.asks[0] == Level(D("0.00722875"), D("0.0630941"), amm=False)
         assert snap.asks[-1] == Level(D("0.0075743"), D("0.46485224"), amm=True)
-        assert sum(lv.amm for lv in snap.bids + snap.asks) == 10
+        assert sum(price_level.amm for price_level in snap.bids + snap.asks) == 10
 
     async def test_level_order(self, venue, api):
         snap = await venue.book_snapshot(20)
-        bids, asks = [lv.price for lv in snap.bids], [lv.price for lv in snap.asks]
+        bids, asks = (
+            [price_level.price for price_level in snap.bids],
+            [price_level.price for price_level in snap.asks],
+        )
         assert bids == sorted(bids, reverse=True)
         assert asks == sorted(asks)
 
@@ -119,7 +127,7 @@ class TestTrades:
         trades = await venue.recent_trades(20)
         assert api.calls.last.request.url.params["limit"] == "20"
         assert len(trades) == 20
-        assert [t.ts for t in trades] == sorted(t.ts for t in trades)
+        assert [trade.ts for trade in trades] == sorted(trade.ts for trade in trades)
         newest = trades[-1]
         assert (newest.venue, newest.side, newest.ts) == ("nx", "sell", 1792506216539)
         assert (newest.price, newest.qty) == (D("0.00719377"), D("11.325293"))
@@ -147,8 +155,10 @@ class TestCandles:
         params = api.calls.last.request.url.params
         assert (params["interval"], params["limit"]) == (tf, "5")
         assert len(candles) == 5
-        assert all(c.ts_open % step == 0 for c in candles)
-        assert [c.ts_open for c in candles] == sorted(c.ts_open for c in candles)
+        assert all(candle.ts_open % step == 0 for candle in candles)
+        assert [candle.ts_open for candle in candles] == sorted(
+            candle.ts_open for candle in candles
+        )
 
     async def test_exact_values(self, venue, api):
         first = (await venue.candles("5m", 5))[0]

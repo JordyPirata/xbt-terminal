@@ -39,12 +39,14 @@ class TestMatch:
 
     def test_competitor_takes_whole_levels(self):
         first = ASKS[0]
-        taken = match("buy", D("0.011"), D("2"), ASKS, lambda lv: lv == first)
+        taken = match("buy", D("0.011"), D("2"), ASKS, lambda price_level: price_level == first)
         assert taken == [(D("0.011"), D("2"))]
 
     def test_only_asks_for_reachable_levels(self):
         asked = []
-        match("buy", D("0.010"), D("1"), ASKS, lambda lv: asked.append(lv) or False)
+        match(
+            "buy", D("0.010"), D("1"), ASKS, lambda price_level: asked.append(price_level) or False
+        )
         assert asked == [ASKS[0]]
 
 

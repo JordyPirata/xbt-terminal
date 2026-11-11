@@ -44,7 +44,7 @@ class Secret:
 class Redactor:
     def __init__(self, secrets: Iterable[Secret]) -> None:
         # longest first, in case one secret contains another
-        self.secrets = tuple(sorted(secrets, key=lambda s: len(s.reveal()), reverse=True))
+        self.secrets = tuple(sorted(secrets, key=lambda secret: len(secret.reveal()), reverse=True))
 
     def redact(self, text: str) -> str:
         for secret in self.secrets:

@@ -51,8 +51,12 @@ class L2Book:
             raise ValueError(f"evento de {event.venue} aplicado al book de {self.venue}")
 
         if isinstance(event, BookSnapshot):
-            self._bids = {lv.price: lv for lv in event.bids if lv.qty > 0}
-            self._asks = {lv.price: lv for lv in event.asks if lv.qty > 0}
+            self._bids = {
+                price_level.price: price_level for price_level in event.bids if price_level.qty > 0
+            }
+            self._asks = {
+                price_level.price: price_level for price_level in event.asks if price_level.qty > 0
+            }
             self.seq, self.ts, self.valid = event.seq, event.ts, True
             self.received_at = at
             return True
@@ -61,16 +65,16 @@ class L2Book:
             return False
         if event.seq is not None and self.seq is not None:
             if event.seq <= self.seq:
-                return True  # old or duplicate
+                return True
             if event.seq != self.seq + 1:
                 self.valid = False
                 return False
         for side, levels in ((self._bids, event.bids), (self._asks, event.asks)):
-            for lv in levels:
-                if lv.qty > 0:
-                    side[lv.price] = lv
+            for price_level in levels:
+                if price_level.qty > 0:
+                    side[price_level.price] = price_level
                 else:
-                    side.pop(lv.price, None)
+                    side.pop(price_level.price, None)
         self.seq = event.seq if event.seq is not None else self.seq
         self.ts, self.received_at = event.ts, at
         return True
@@ -102,45 +106,45 @@ class L2Book:
     def depth(self) -> tuple[int, int]:
         return len(self._bids), len(self._asks)
 
-    def top(self, n: int) -> tuple[tuple[BookRow, ...], tuple[BookRow, ...]]:
+    def top(self, count: int) -> tuple[tuple[BookRow, ...], tuple[BookRow, ...]]:
         """Best N levels per side (bids high to low, asks low to high)."""
         if not self.valid:
             return (), ()
-        bids, asks = self._best(n)
+        bids, asks = self._best(count)
         return _rows(bids), _rows(asks)
 
-    def best_levels(self, n: int) -> tuple[tuple[Level, ...], tuple[Level, ...]]:
+    def best_levels(self, count: int) -> tuple[tuple[Level, ...], tuple[Level, ...]]:
         """Best N levels per side as the book holds them, without the cumulative: the bot
         reads one per book change, and copying them cost more than deciding (T-92)."""
         if not self.valid:
             return (), ()
-        bids, asks = self._best(n)
+        bids, asks = self._best(count)
         return tuple(bids), tuple(asks)
 
-    def _best(self, n: int) -> tuple[list[Level], list[Level]]:
+    def _best(self, count: int) -> tuple[list[Level], list[Level]]:
         """Best N per side without sorting the whole book (D-70): `heapq` gives the
         same as `sorted(...)[:n]`, and prices do not repeat (they are keys)."""
-        bids = heapq.nlargest(n, self._bids.values(), key=_price)
-        asks = heapq.nsmallest(n, self._asks.values(), key=_price)
+        bids = heapq.nlargest(count, self._bids.values(), key=_price)
+        asks = heapq.nsmallest(count, self._asks.values(), key=_price)
         return bids, asks
 
-    def snapshot(self, n: int) -> BookSnapshot | None:
+    def snapshot(self, count: int) -> BookSnapshot | None:
         """Best N levels per side as a snapshot, to forward the book over the
         daemon socket (D-66); None if the book is invalid."""
         if not self.valid or self.ts is None:
             return None
-        bids, asks = self._best(n)
+        bids, asks = self._best(count)
         return BookSnapshot(self.venue, tuple(bids), tuple(asks), self.ts, self.seq)
 
 
-def _price(lv: Level) -> Decimal:
-    return lv.price
+def _price(price_level: Level) -> Decimal:
+    return price_level.price
 
 
 def _rows(levels: list[Level]) -> tuple[BookRow, ...]:
     total = ZERO
     rows = []
-    for lv in levels:
-        total += lv.qty
-        rows.append(BookRow(lv.price, lv.qty, total, lv.amm))
+    for price_level in levels:
+        total += price_level.qty
+        rows.append(BookRow(price_level.price, price_level.qty, total, price_level.amm))
     return tuple(rows)

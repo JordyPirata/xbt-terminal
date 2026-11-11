@@ -56,8 +56,8 @@ class TestScreen:
         app = make_app(service(), {"nk": NK, "nx": NX}, bot_limits=LIMITS)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
-            s = await opened(app, pilot)
-            text = s.text()
+            rebalance_screen = await opened(app, pilot)
+            text = rebalance_screen.text()
             assert "NonKYC" in text and "62.3 %" in text and "1.4 %" in text
             xbt = next(ln for ln in text.splitlines() if "XBT" in ln and "→" in ln)
             assert "NonKYC → Neoxa" in xbt and "0.0027" in xbt and "1 485 sats" in xbt
@@ -70,26 +70,33 @@ class TestScreen:
         app = make_app(service(BTCB2=VenueError("NonKYC: HTTP 500")), {"nk": NK, "nx": NX})
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
-            s = await opened(app, pilot)
-            xbt = next(ln for ln in s.text().splitlines() if "XBT" in ln and "→" in ln)
+            rebalance_screen = await opened(app, pilot)
+            xbt = next(
+                ln for ln in rebalance_screen.text().splitlines() if "XBT" in ln and "→" in ln
+            )
             assert "HTTP 500" in xbt
-            assert s.plan.best is not None and s.plan.best.asset == "BTC"
+            assert (
+                rebalance_screen.plan.best is not None and rebalance_screen.plan.best.asset == "BTC"
+            )
 
     async def test_warns_if_total_is_outside_band(self):
         target = InventoryTarget(D("50"), D("10"))  # the total is at 25.5 %
         app = make_app(service(), {"nk": NK, "nx": NX}, inventory_target=target)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
-            s = await opened(app, pilot)
-            assert "fuera de la banda" in s.text() and "no lo cambia" in s.text()
+            rebalance_screen = await opened(app, pilot)
+            assert (
+                "fuera de la banda" in rebalance_screen.text()
+                and "no lo cambia" in rebalance_screen.text()
+            )
 
     async def test_no_warning_if_total_in_band(self):
         target = InventoryTarget(D("25"), D("10"))
         app = make_app(service(), {"nk": NK, "nx": NX}, inventory_target=target)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("e")
-            s = await opened(app, pilot)
-            assert "fuera de la banda" not in s.text()
+            rebalance_screen = await opened(app, pilot)
+            assert "fuera de la banda" not in rebalance_screen.text()
 
     async def test_reopening_and_r_ask_again(self):
         nk = FakeFees("nk")

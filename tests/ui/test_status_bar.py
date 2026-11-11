@@ -29,7 +29,7 @@ def text(nk=None, nx=None, mode="read-only", now=NOW):
 
 def part(rendered: str, venue: str) -> str:
     """The bar's piece for a venue."""
-    return next(p for p in rendered.split("│") if venue in p)
+    return next(piece for piece in rendered.split("│") if venue in piece)
 
 
 @pytest.mark.spec("RF-14")
@@ -51,9 +51,11 @@ class TestMarketChannel:
         nk = part(rendered.plain, "NonKYC")
         assert "respaldo ✖ caído 30s" in nk
         styles = [
-            str(s.style) for s in rendered.spans if "caído" in rendered.plain[s.start : s.end]
+            str(text_span.style)
+            for text_span in rendered.spans
+            if "caído" in rendered.plain[text_span.start : text_span.end]
         ]
-        assert any("red" in st for st in styles)
+        assert any("red" in state for state in styles)
 
     def test_no_state_yet(self):
         assert "conectando…" in part(text().plain, "Neoxa")
@@ -115,7 +117,11 @@ class TestMode:
     def test_live_red_banner(self):
         rendered = text(mode="live")
         assert "LIVE · ÓRDENES REALES" in rendered.plain
-        span = next(s for s in rendered.spans if "LIVE" in rendered.plain[s.start : s.end])
+        span = next(
+            candidate
+            for candidate in rendered.spans
+            if "LIVE" in rendered.plain[candidate.start : candidate.end]
+        )
         assert "on red" in str(span.style)
 
 
@@ -161,7 +167,7 @@ class TestOnScreen:
             await pilot.pause()
             bar = app.query_one(StatusBar)
             assert bar.region.y == 0 and bar.region.height == 1 and bar.region.width == 160
-            assert all(p.region.height == 19 for p in app.query(BookPanel))
+            assert all(panel.region.height == 19 for panel in app.query(BookPanel))
             cross = app.query_one(CrossPanel).region
             assert cross.y + cross.height <= 45
 
@@ -214,10 +220,10 @@ def test_worst_case_fits_160_columns():
 
 
 @pytest.mark.spec("RNF-12")
-@pytest.mark.parametrize(("n", "label"), [(0, None), (1, "⚠ 1 incierta"), (3, "⚠ 3 inciertas")])
-def test_uncertain_orders(n, label):
+@pytest.mark.parametrize(("count", "label"), [(0, None), (1, "⚠ 1 incierta"), (3, "⚠ 3 inciertas")])
+def test_uncertain_orders(count, label):
     links = {"nk": VenueLink(None, None, False), "nx": VenueLink(None, None, False)}
-    rendered = render_status(links, "live", NOW, uncertain=n).plain
+    rendered = render_status(links, "live", NOW, uncertain=count).plain
     if label is None:
         assert "incierta" not in rendered
     else:
@@ -225,10 +231,10 @@ def test_uncertain_orders(n, label):
 
 
 @pytest.mark.spec("RNF-14")
-@pytest.mark.parametrize(("n", "label"), [(0, None), (1, "✖ 1 fallo "), (3, "✖ 3 fallos")])
-def test_internal_faults(n, label):
+@pytest.mark.parametrize(("count", "label"), [(0, None), (1, "✖ 1 fallo "), (3, "✖ 3 fallos")])
+def test_internal_faults(count, label):
     links = {"nk": VenueLink(None, None, False), "nx": VenueLink(None, None, False)}
-    rendered = render_status(links, "live", NOW, faults=n).plain
+    rendered = render_status(links, "live", NOW, faults=count).plain
     if label is None:
         assert "fallo" not in rendered
     else:
@@ -241,12 +247,12 @@ async def test_state_change_drawn_on_arrival(monkeypatch):
     from xbt_terminal.ui import app as app_module
 
     monkeypatch.setattr(app_module, "STATUS_EVERY_S", 60.0)
-    t = TestOnScreen()
-    app = t.make()
+    on_screen = TestOnScreen()
+    app = on_screen.make()
     async with app.run_test(size=(160, 45)) as pilot:
         bar = app.query_one(StatusBar)
         await pilot.pause()
-        t.feeds["nk"].push(ConnState("nk", "market", "ws", "up", 99.0, NOW))
+        on_screen.feeds["nk"].push(ConnState("nk", "market", "ws", "up", 99.0, NOW))
         await until(pilot, lambda: "99 ms" in part(bar.text, "NonKYC"), timeout=0.5)
 
 
@@ -265,13 +271,21 @@ class TestBot:
     def test_takes_the_mode_banner(self, status, label):
         rendered = render_status(self.links(), "live", NOW, bot=status)
         assert f" LIVE · {label} " in rendered.plain and "ÓRDENES REALES" not in rendered.plain
-        span = next(s for s in rendered.spans if "LIVE" in rendered.plain[s.start : s.end])
+        span = next(
+            text_span
+            for text_span in rendered.spans
+            if "LIVE" in rendered.plain[text_span.start : text_span.end]
+        )
         assert "on red" in str(span.style)  # still the live red banner
 
     def test_halted_red_in_dry_run_too(self):
         rendered = render_status(self.links(), "dry-run", NOW, bot="halted")
         assert " DRY-RUN · BOT ✖ PARADO " in rendered.plain
-        span = next(s for s in rendered.spans if "PARADO" in rendered.plain[s.start : s.end])
+        span = next(
+            text_span
+            for text_span in rendered.spans
+            if "PARADO" in rendered.plain[text_span.start : text_span.end]
+        )
         assert "on red" in str(span.style)
 
     @pytest.mark.spec("RNF-02")

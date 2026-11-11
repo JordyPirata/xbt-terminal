@@ -28,12 +28,14 @@ class DepositService:
 
     async def load(self) -> list[DepositRow]:
         """One row per venue and asset, in order; requests go in parallel."""
-        pairs = [(vid, asset) for vid in self.venues for asset in ASSETS]
-        return list(await asyncio.gather(*(self._row(vid, asset) for vid, asset in pairs)))
+        pairs = [(venue_id, asset) for venue_id in self.venues for asset in ASSETS]
+        return list(
+            await asyncio.gather(*(self._row(venue_id, asset) for venue_id, asset in pairs))
+        )
 
     async def _row(self, venue: VenueId, asset: str) -> DepositRow:
         try:
             address = await self._venues[venue].deposit_address(asset)
-        except (VenueError, httpx.HTTPError) as exc:
-            return DepositRow(venue, asset, None, describe(exc))
+        except (VenueError, httpx.HTTPError) as error:
+            return DepositRow(venue, asset, None, describe(error))
         return DepositRow(venue, asset, address)

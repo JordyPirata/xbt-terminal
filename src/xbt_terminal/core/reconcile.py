@@ -19,7 +19,7 @@ WINDOW_MS = 60_000
 
 
 def candidates(
-    req: OrderRequest,
+    order_request: OrderRequest,
     orders: Iterable[Order],
     sent_at: int,
     known: frozenset[str],
@@ -29,16 +29,18 @@ def candidates(
 ) -> list[Order]:
     """Candidates without repeats; if an order appears twice, the last one counts."""
     found: dict[str, Order] = {}
-    for o in orders:
-        if o.venue != req.venue or o.order_id in known:
+    for order in orders:
+        if order.venue != order_request.venue or order.order_id in known:
             continue
         if by_client_id:
-            same = o.client_id == req.client_id
+            same = order.client_id == order_request.client_id
         else:
-            same = (o.side, o.price, o.qty) == (req.side, req.price, req.qty) and abs(
-                o.ts - sent_at
-            ) <= window_ms
+            same = (order.side, order.price, order.qty) == (
+                order_request.side,
+                order_request.price,
+                order_request.qty,
+            ) and abs(order.ts - sent_at) <= window_ms
         if same:
-            found.pop(o.order_id, None)
-            found[o.order_id] = o
+            found.pop(order.order_id, None)
+            found[order.order_id] = order
     return list(found.values())

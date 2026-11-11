@@ -34,8 +34,8 @@ def update_book(seq: int, bids=(), asks=()) -> str:
             "jsonrpc": "2.0",
             "method": "updateOrderbook",
             "params": {
-                "asks": [{"price": p, "quantity": q} for p, q in asks],
-                "bids": [{"price": p, "quantity": q} for p, q in bids],
+                "asks": [{"price": price, "quantity": quantity} for price, quantity in asks],
+                "bids": [{"price": price, "quantity": quantity} for price, quantity in bids],
                 "symbol": "BTCB2/BTC",
                 "timestamp": "2026-10-20T15:30:00.000Z",
                 "sequence": seq,
@@ -92,7 +92,7 @@ class FakeNonKYC:
         if script == "resync":  # the book freezes and the venue restarts its sequence
             await ws.send(FRAMES["updateTrades"])
             await expect("subscribeOrderbook")  # asked by `resync()` (D-76)
-            await ws.send(update_book(LAST_SEQ + 1, bids=[("0.0070", "1")]))  # previous
+            await ws.send(update_book(LAST_SEQ + 1, bids=[("0.0070", "1")]))
             await ws.send(RESET_SNAPSHOT)
             await ws.send(update_book(6, bids=[("0.0071", "2")]))
             await ws.send(LAST_TRADE)
@@ -163,15 +163,15 @@ async def collect(server, until, timeout: float = 3.0, on_event=None):
 
 def is_last(events) -> bool:
     """LAST_TRADE is the last of each script."""
-    return any(isinstance(e, Trade) and e.qty == D("0.7777") for e in events)
+    return any(isinstance(event, Trade) and event.qty == D("0.7777") for event in events)
 
 
 def states(events):
-    return [(e.source, e.status) for e in events if isinstance(e, ConnState)]
+    return [(event.source, event.status) for event in events if isinstance(event, ConnState)]
 
 
 def book_events(events):
-    return [e for e in events if isinstance(e, BookSnapshot | BookDelta)]
+    return [event for event in events if isinstance(event, BookSnapshot | BookDelta)]
 
 
 def expected_book() -> L2Book:
@@ -181,20 +181,34 @@ def expected_book() -> L2Book:
     book.apply(
         BookSnapshot(
             "nk",
-            tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in snap["bids"]),
-            tuple(Level(D(lv["price"]), D(lv["quantity"])) for lv in snap["asks"]),
+            tuple(
+                Level(D(price_level["price"]), D(price_level["quantity"]))
+                for price_level in snap["bids"]
+            ),
+            tuple(
+                Level(D(price_level["price"]), D(price_level["quantity"]))
+                for price_level in snap["asks"]
+            ),
             ts=0,
             seq=SEQ,
         )
     )
-    for p in sorted((json.loads(u)["params"] for u in UPDATES), key=lambda p: p["sequence"]):
+    for params in sorted(
+        (json.loads(update)["params"] for update in UPDATES), key=lambda params: params["sequence"]
+    ):
         assert book.apply(
             BookDelta(
                 "nk",
-                tuple(Level(D(str(lv["price"])), D(str(lv["quantity"]))) for lv in p["bids"]),
-                tuple(Level(D(str(lv["price"])), D(str(lv["quantity"]))) for lv in p["asks"]),
+                tuple(
+                    Level(D(str(price_level["price"])), D(str(price_level["quantity"])))
+                    for price_level in params["bids"]
+                ),
+                tuple(
+                    Level(D(str(price_level["price"])), D(str(price_level["quantity"])))
+                    for price_level in params["asks"]
+                ),
                 ts=0,
-                seq=p["sequence"],
+                seq=params["sequence"],
             )
         )
     return book
@@ -219,8 +233,8 @@ class TestWebSocket:
     async def test_unordered_deltas_get_reordered(self, rest):
         server = FakeNonKYC("stay")
         events = await collect(server, is_last)
-        deltas = [e for e in events if isinstance(e, BookDelta)]
-        assert [d.seq for d in deltas] == list(range(SEQ + 1, LAST_SEQ + 1))
+        deltas = [event for event in events if isinstance(event, BookDelta)]
+        assert [delta.seq for delta in deltas] == list(range(SEQ + 1, LAST_SEQ + 1))
         assert deltas[0].ts == iso_ms("2026-10-20T15:14:43.717Z")
         assert deltas[0].asks == (Level(D("0.00724756"), D("0")),)  # quantity: numeric 0
         assert len(server.received[0]) == 2  # no resubscriptions: there was no gap
@@ -229,40 +243,40 @@ class TestWebSocket:
         server = FakeNonKYC("stay")
         events = await collect(server, is_last)
         book = L2Book("nk")
-        assert all(book.apply(e) for e in book_events(events))
+        assert all(book.apply(event) for event in book_events(events))
         want = expected_book()
         assert book.top(100) == want.top(100)
         assert book.seq == LAST_SEQ and book.mid is not None
 
     async def test_other_symbol_ignored(self, rest):
         events = await collect(FakeNonKYC("stay"), is_last)
-        assert all(e.venue == "nk" for e in events)
-        assert len([e for e in events if isinstance(e, BookDelta)]) == len(UPDATES)
+        assert all(event.venue == "nk" for event in events)
+        assert len([event for event in events if isinstance(event, BookDelta)]) == len(UPDATES)
 
     async def test_trades_listed(self, rest):
         events = await collect(FakeNonKYC("stay"), is_last)
-        trades = [e for e in events if isinstance(e, Trade)]
+        trades = [event for event in events if isinstance(event, Trade)]
         assert len(trades) == 52  # 50 of the snapshot + the real live one + the ending one
-        assert [t.ts for t in trades[:50]] == sorted(t.ts for t in trades[:50])
+        assert [trade.ts for trade in trades[:50]] == sorted(trade.ts for trade in trades[:50])
         assert trades[50] == Trade("nk", D("0.00724378"), D("0.5095"), "sell", 1792508806091)
 
     async def test_repeated_delta_ignored(self, rest):
         server = FakeNonKYC("dup")
         events = await collect(server, is_last)
-        deltas = [e for e in events if isinstance(e, BookDelta)]
-        assert [d.seq for d in deltas] == list(range(SEQ + 1, LAST_SEQ + 1))
+        deltas = [event for event in events if isinstance(event, BookDelta)]
+        assert [delta.seq for delta in deltas] == list(range(SEQ + 1, LAST_SEQ + 1))
         assert len(server.received[0]) == 2  # not taken for a gap
 
     async def test_real_gap_asks_new_snapshot(self, rest):
         server = FakeNonKYC("gap")
         events = await collect(server, is_last)
-        assert [m["method"] for m in server.received[0]] == [
+        assert [message["method"] for message in server.received[0]] == [
             "subscribeOrderbook",
             "subscribeTrades",
             "subscribeOrderbook",
         ]
         book = L2Book("nk")
-        valid = [book.apply(e) for e in book_events(events)]
+        valid = [book.apply(event) for event in book_events(events)]
         assert valid == [True, False, True]  # the gap invalidates, the snapshot repairs
         assert book.valid and book.seq == SEQ
 
@@ -274,23 +288,27 @@ class TestWebSocket:
         asked = []
 
         async def resync_after_live_trade(venue, events):
-            if not asked and any(isinstance(e, Trade) and e.qty == D("0.5095") for e in events):
+            if not asked and any(
+                isinstance(event, Trade) and event.qty == D("0.5095") for event in events
+            ):
                 asked.append(True)
                 await venue.resync()
 
         events = await collect(server, is_last, on_event=resync_after_live_trade)
         assert len(server.received) == 1  # the same connection
-        assert [m["method"] for m in server.received[0]] == [
+        assert [message["method"] for message in server.received[0]] == [
             "subscribeOrderbook",
             "subscribeTrades",
             "subscribeOrderbook",
         ]
         books = book_events(events)
-        assert [type(e).__name__ for e in books[-2:]] == ["BookSnapshot", "BookDelta"]
-        assert [e.seq for e in books[-2:]] == [5, 6]
-        assert all(e.seq <= LAST_SEQ or e.seq in (5, 6) for e in books)  # the previous one, out
+        assert [type(event).__name__ for event in books[-2:]] == ["BookSnapshot", "BookDelta"]
+        assert [event.seq for event in books[-2:]] == [5, 6]
+        assert all(
+            event.seq <= LAST_SEQ or event.seq in (5, 6) for event in books
+        )  # the previous one, out
         book = L2Book("nk")
-        assert all(book.apply(e) for e in books)
+        assert all(book.apply(event) for event in books)
         assert book.seq == 6 and book.valid
 
     async def test_initial_batch_repeats_no_trades(self, rest):
@@ -298,7 +316,7 @@ class TestWebSocket:
         events = await collect(
             server, lambda evs: states(evs).count(("ws", "up")) == 2 and is_last(evs)
         )
-        trades = [e for e in events if isinstance(e, Trade)]
+        trades = [event for event in events if isinstance(event, Trade)]
         assert len(trades) == len(set(trades))
 
 
@@ -322,8 +340,12 @@ class TestReconnection:
             ("rest", "up"),
             ("ws", "up"),
         ]
-        i = next(i for i, e in enumerate(events) if isinstance(e, ConnState) and e.source == "rest")
-        rest_books = [e for e in events[i:] if isinstance(e, BookSnapshot)]
+        i = next(
+            i
+            for i, event in enumerate(events)
+            if isinstance(event, ConnState) and event.source == "rest"
+        )
+        rest_books = [event for event in events[i:] if isinstance(event, BookSnapshot)]
         assert rest_books[0].seq is None and len(rest_books[0].bids) == 20
 
     async def test_no_snapshot_not_up(self, rest):

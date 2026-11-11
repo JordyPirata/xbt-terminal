@@ -113,7 +113,9 @@ def replay_venues(
 ) -> dict[VenueId, MarketData]:
     """The venues coming out of a recording, with a single time origin."""
     timeline = Timeline(info, clock, venues=len(info.specs))
-    return {vid: ReplayVenue(vid, recording, info, timeline, clock) for vid in info.specs}
+    return {
+        venue_id: ReplayVenue(venue_id, recording, info, timeline, clock) for venue_id in info.specs
+    }
 
 
 def trading_venues(
@@ -129,21 +131,27 @@ def trading_venues(
         cfg = settings.config.replay
         assert cfg is not None  # load_settings does not get here without it
         return {
-            vid: SimVenue(v, cfg, clock=clock)
-            for vid, v in venues.items()
-            if isinstance(v, ReplayVenue)
+            venue_id: SimVenue(venue_data, cfg, clock=clock)
+            for venue_id, venue_data in venues.items()
+            if isinstance(venue_data, ReplayVenue)
         }
-    tradable = {vid: v for vid, v in venues.items() if settings.can_trade(vid)}
+    tradable = {
+        venue_id: venue_data
+        for venue_id, venue_data in venues.items()
+        if settings.can_trade(venue_id)
+    }
     if settings.mode == "dry-run":
         return {
-            vid: DryRunVenue(v, spec=lambda vid=vid: hub.state[vid].spec, clock=clock)
-            for vid, v in tradable.items()
+            venue_id: DryRunVenue(
+                venue_data, spec=lambda venue_id=venue_id: hub.state[venue_id].spec, clock=clock
+            )
+            for venue_id, venue_data in tradable.items()
         }
     out: dict[VenueId, Venue] = {}
-    for vid, venue in tradable.items():
+    for venue_id, venue in tradable.items():
         if not isinstance(venue, Venue):
-            raise TypeError(f"{vid}: el adaptador no tiene parte privada")
-        out[vid] = venue
+            raise TypeError(f"{venue_id}: el adaptador no tiene parte privada")
+        out[venue_id] = venue
     return out
 
 
@@ -151,9 +159,9 @@ def deposit_service(settings: Settings, venues: dict[VenueId, MarketData]) -> De
     """Deposit addresses (RF-28) with the real adapters of venues with keys, in any
     mode: they are only read. Without keys, None."""
     readers = {
-        vid: v
-        for vid, v in venues.items()
-        if vid in settings.credentials and isinstance(v, Depositor)
+        venue_id: venue_data
+        for venue_id, venue_data in venues.items()
+        if venue_id in settings.credentials and isinstance(venue_data, Depositor)
     }
     return DepositService(readers) if readers else None
 
@@ -164,9 +172,9 @@ def rebalance_service(
     """Withdrawal fees for the rebalance plan (RF-29), like deposits: real adapters of
     venues with keys. Without keys, None."""
     readers = {
-        vid: v
-        for vid, v in venues.items()
-        if vid in settings.credentials and isinstance(v, WithdrawalFees)
+        venue_id: venue_data
+        for venue_id, venue_data in venues.items()
+        if venue_id in settings.credentials and isinstance(venue_data, WithdrawalFees)
     }
     return RebalanceService(readers) if readers else None
 
@@ -177,19 +185,23 @@ def results_service(
     """Results of the journal in `directory` (RF-25), with the fee token price of each
     venue that has one, to value its fees (D-65)."""
     pricers = {}
-    for vid, v in settings.config.venues.items():
-        venue = venues.get(vid)
-        if v.fee_token is not None and isinstance(venue, TokenPricer):
-            pricers[v.fee_token] = lambda venue=venue, token=v.fee_token: venue.token_price(token)
+    for venue_id, venue_config in settings.config.venues.items():
+        venue = venues.get(venue_id)
+        if venue_config.fee_token is not None and isinstance(venue, TokenPricer):
+            pricers[venue_config.fee_token] = lambda venue=venue, token=venue_config.fee_token: (
+                venue.token_price(token)
+            )
     return ResultsService(directory, pricers=pricers)
 
 
 def fee_tokens(venues: Mapping[VenueId, VenueConfig]) -> dict[VenueId, FeeToken]:
     """Venues paying fees in a token, for the bot (RF-24, D-63)."""
     return {
-        vid: FeeToken(v.fee_token, v.fee_token_min, v.fee_discount_pct)
-        for vid, v in venues.items()
-        if v.fee_token is not None and v.fee_token_min is not None
+        venue_id: FeeToken(
+            venue_config.fee_token, venue_config.fee_token_min, venue_config.fee_discount_pct
+        )
+        for venue_id, venue_config in venues.items()
+        if venue_config.fee_token is not None and venue_config.fee_token_min is not None
     }
 
 
@@ -254,7 +266,9 @@ def client_view(settings: Settings) -> ClientView:
     return ClientView(
         book_levels=cfg.ui.book_levels,
         timeframe=cfg.ui.default_timeframe,
-        fee_discounts={vid: v.fee_discount_pct for vid, v in cfg.venues.items()},
+        fee_discounts={
+            venue_id: venue_config.fee_discount_pct for venue_id, venue_config in cfg.venues.items()
+        },
         inventory=cfg.inventory,
         bot_limits=cfg.bot.limits if cfg.bot is not None else None,
     )
@@ -292,8 +306,8 @@ DEFAULT_VIEW = ClientView(15, "1m", {}, None, None)  # a daemon that does not se
 def client(data: Path, socket: Path) -> None:
     try:
         hello = asyncio.run(probe(socket))
-    except DaemonGoneError as exc:
-        raise SystemExit(f"No se puede conectar: {exc}.") from None
+    except DaemonGoneError as error:
+        raise SystemExit(f"No se puede conectar: {error}.") from None
     private_dir(data)
     # the client has no keys to redact
     diag = setup_diagnostics(data, Redactor([]), "INFO", name=CLIENT_LOG)
@@ -318,7 +332,9 @@ def replay_report(settings: Settings, recording: Path) -> ReplayReport:
             feeds = replay_venues(recording, info, loop.now_ms)
             engine = build_engine(settings, logs=Path(tmp), venues=feeds, clock=loop.now_ms)
             probe_ = CrossingProbe(engine.hub, bot.limits, loop.now_ms)
-            timeline = next(v.timeline for v in feeds.values() if isinstance(v, ReplayVenue))
+            timeline = next(
+                feed.timeline for feed in feeds.values() if isinstance(feed, ReplayVenue)
+            )
             loop.run_until_complete(run_report(engine, timeline))
             return summarize_journal(Path(tmp), probe_.count, info)
     finally:
@@ -380,8 +396,8 @@ def report(args: argparse.Namespace, config: Path, env: Path) -> None:
     try:
         settings = load_settings(config, env, False, replay=True)
         print(render(replay_report(settings, Path(args.replay).expanduser())))
-    except (ConfigError, RecordingError) as exc:
-        raise SystemExit(f"No se puede hacer el informe: {exc}") from None
+    except (ConfigError, RecordingError) as error:
+        raise SystemExit(f"No se puede hacer el informe: {error}") from None
 
 
 def main() -> None:
@@ -429,17 +445,17 @@ def main() -> None:
         if args.replay:
             recording = Path(args.replay).expanduser().absolute()
             venues = replay_venues(recording, scan_recording(recording))
-    except ConfigError as exc:
-        raise SystemExit(f"Configuración inválida: {exc}") from None
-    except RecordingError as exc:
-        raise SystemExit(f"Grabación inválida: {exc}") from None
+    except ConfigError as error:
+        raise SystemExit(f"Configuración inválida: {error}") from None
+    except RecordingError as error:
+        raise SystemExit(f"Grabación inválida: {error}") from None
     if problem := socket_problem(socket):
         raise SystemExit(f"No se puede abrir el socket: {problem}.")
     lock = InstanceLock(paths.data)
     try:
         lock.acquire()
-    except AlreadyRunningError as exc:
-        raise SystemExit(str(exc)) from None
+    except AlreadyRunningError as error:
+        raise SystemExit(str(error)) from None
     diag = setup_diagnostics(paths.data, settings.redactor, settings.config.log.level)
     logging.getLogger(__name__).info("starting in %s, data in %s", settings.mode, paths.data)
     try:

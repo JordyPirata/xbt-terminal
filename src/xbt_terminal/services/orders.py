@@ -181,9 +181,9 @@ class OrderService:
         """Write to the journal; on failure, report and go on (D-28)."""
         try:
             self._journal.write(event, **kw)
-        except OSError as exc:
+        except OSError as error:
             note = note or f"{event} sin escribir en el journal"
-            self.faults.report("journal", exc, venue=kw.get("venue"), note=note)
+            self.faults.report("journal", error, venue=kw.get("venue"), note=note)
 
     def _protected(self, work: Coroutine[Any, Any, T]) -> Awaitable[T]:
         """What goes out to the venue finishes even if its waiter is cancelled."""
@@ -208,45 +208,52 @@ class OrderService:
     def limits(self) -> RiskLimits:
         return self._limits
 
-    async def prepare(self, cmd: PlaceOrder) -> Pending | Rejected:
+    async def prepare(self, command: PlaceOrder) -> Pending | Rejected:
         client_id = self._new_client_id()
-        if not isinstance(cmd.qty, Percent):
-            req = OrderRequest(cmd.venue, cmd.side, cmd.qty, cmd.price, client_id)
-            return await self._validate(req)
-        sized = await self._size(cmd, cmd.qty, client_id)
+        if not isinstance(command.qty, Percent):
+            order_request = OrderRequest(
+                command.venue, command.side, command.qty, command.price, client_id
+            )
+            return await self._validate(order_request)
+        sized = await self._size(command, command.qty, client_id)
         if isinstance(sized, Rejected):
             return sized
-        req, basis = sized
-        return await self._validate(req, basis=basis)
+        order_request, basis = sized
+        return await self._validate(order_request, basis=basis)
 
     async def _size(
-        self, cmd: PlaceOrder, pct: Percent, client_id: str
+        self, command: PlaceOrder, percent: Percent, client_id: str
     ) -> tuple[OrderRequest, str] | Rejected:
         """Quantity from the % of the venue balance (RF-17, D-21), with the same balances
         validated against. Without enough for a lot, reject."""
-        req = OrderRequest(cmd.venue, cmd.side, ZERO, cmd.price, client_id)
-        if bad := self._unavailable(req):
-            return self._reject(req, bad)
-        venue, spec = self._venues[cmd.venue], self._hub.state[cmd.venue].spec
+        order_request = OrderRequest(command.venue, command.side, ZERO, command.price, client_id)
+        if bad := self._unavailable(order_request):
+            return self._reject(order_request, bad)
+        venue, spec = self._venues[command.venue], self._hub.state[command.venue].spec
         assert spec is not None  # _unavailable checks it
         try:
-            _, balances = await self._snapshot(cmd.venue, venue)
-        except (VenueError, httpx.HTTPError) as exc:
-            return self._reject(req, [self._unreadable(cmd.venue, exc)])
-        s = size_from_percent(cmd.side, pct.value, cmd.price, balances, spec)
-        basis = f"{s.pct} % de {s.basis:.8f} {asset_label(s.asset)} en {NAMES[cmd.venue]}"
-        req = OrderRequest(cmd.venue, cmd.side, s.qty, cmd.price, client_id)
-        if s.qty <= 0:
+            _, balances = await self._snapshot(command.venue, venue)
+        except (VenueError, httpx.HTTPError) as error:
+            return self._reject(order_request, [self._unreadable(command.venue, error)])
+        sizing = size_from_percent(command.side, percent.value, command.price, balances, spec)
+        basis = (
+            f"{sizing.pct} % de {sizing.basis:.8f} {asset_label(sizing.asset)} "
+            f"en {NAMES[command.venue]}"
+        )
+        order_request = OrderRequest(
+            command.venue, command.side, sizing.qty, command.price, client_id
+        )
+        if sizing.qty <= 0:
             msg = f"{basis}: no llega a un lote ({spec.lot_size:f} {asset_label(spec.base)})"
-            return self._reject(req, [Violation("insufficient_balance", msg)])
-        return req, basis
+            return self._reject(order_request, [Violation("insufficient_balance", msg)])
+        return order_request, basis
 
     @asynccontextmanager
     async def _sending(self, *venues: VenueId) -> AsyncIterator[None]:
         """The venues' locks, in fixed order so two doubles do not deadlock."""
         async with AsyncExitStack() as stack:
-            for vid in sorted(set(venues)):
-                await stack.enter_async_context(self._locks.setdefault(vid, asyncio.Lock()))
+            for venue_id in sorted(set(venues)):
+                await stack.enter_async_context(self._locks.setdefault(venue_id, asyncio.Lock()))
             yield
 
     async def confirm(self, pending: Pending) -> Sent | Failed | Uncertain | Rejected:
@@ -256,56 +263,67 @@ class OrderService:
                 return checked
             return await self._send(pending.req, {})
 
-    async def _send(self, req: OrderRequest, extra: dict[str, Any]) -> Sent | Failed | Uncertain:
-        return await self._protected(self._send_now(req, extra))
+    async def _send(
+        self, order_request: OrderRequest, extra: dict[str, Any]
+    ) -> Sent | Failed | Uncertain:
+        return await self._protected(self._send_now(order_request, extra))
 
     async def _send_now(
-        self, req: OrderRequest, extra: dict[str, Any]
+        self, order_request: OrderRequest, extra: dict[str, Any]
     ) -> Sent | Failed | Uncertain:
-        known, sent_at = self._known(req.venue), self._clock()
+        known, sent_at = self._known(order_request.venue), self._clock()
         try:
             self._journal.write(
                 "order_sent",
-                venue=req.venue,
-                client_id=req.client_id,
-                data={"side": req.side, "qty": req.qty, "price": req.price, **extra},
+                venue=order_request.venue,
+                client_id=order_request.client_id,
+                data={
+                    "side": order_request.side,
+                    "qty": order_request.qty,
+                    "price": order_request.price,
+                    **extra,
+                },
             )
-        except OSError as exc:
-            return Failed(req, f"no se pudo escribir el journal ({exc}); no se envió", local=True)
+        except OSError as exception:
+            return Failed(
+                order_request,
+                f"no se pudo escribir el journal ({exception}); no se envió",
+                local=True,
+            )
         try:
-            order = await self._venues[req.venue].place_limit(req)
-        except UncertainError as exc:
+            order = await self._venues[order_request.venue].place_limit(order_request)
+        except UncertainError as exception:
             self._record(
                 "order_unknown",
-                venue=req.venue,
-                client_id=req.client_id,
-                data={"error": describe(exc), **extra},
+                venue=order_request.venue,
+                client_id=order_request.client_id,
+                data={"error": describe(exception), **extra},
             )
-            self.uncertain[req.client_id] = UncertainOrder(req, sent_at, known, extra)
-            return Uncertain(req, describe(exc))
-        except (VenueError, httpx.HTTPError) as exc:
+            self.uncertain[order_request.client_id] = UncertainOrder(
+                order_request, sent_at, known, extra
+            )
+            return Uncertain(order_request, describe(exception))
+        except (VenueError, httpx.HTTPError) as exception:
             # unconnected, the order never left: it must not look like a venue rejection (D-51)
-            error = describe(exc)
-            if isinstance(exc, NOT_SENT):
+            error = describe(exception)
+            if isinstance(exception, NOT_SENT):
                 error = f"no enviada, sin conexión ({error})"
             self._record(
-                "order_error", venue=req.venue, client_id=req.client_id,
+                "order_error", venue=order_request.venue, client_id=order_request.client_id,
                 data={"error": error, **extra},
             )  # fmt: skip
-            return Failed(req, error)
+            return Failed(order_request, error)
         self._record(
             "order_ack",
             note=f"orden {order.order_id} enviada, pero sin order_ack en el journal",
-            venue=req.venue,
-            client_id=req.client_id,
+            venue=order_request.venue,
+            client_id=order_request.client_id,
             data={"order_id": order.order_id, "status": order.status, **extra},
         )
-        self._acked.setdefault(req.venue, set()).add(order.order_id)
+        self._acked.setdefault(order_request.venue, set()).add(order.order_id)
         if not order.is_done:
-            self._just_sent.setdefault(req.venue, {})[order.order_id] = order
+            self._just_sent.setdefault(order_request.venue, {})[order.order_id] = order
         return Sent(order)
-
-    # -- double order ------------------------------------------------------------
 
     def subscribe_doubles(self, listener: Callable[[str], None]) -> None:
         self._double_listeners.append(listener)
@@ -314,10 +332,14 @@ class OrderService:
         for listener in self._double_listeners:
             listener(double_id)
 
-    async def prepare_double(self, cmd: DoubleOrder) -> PendingDouble | DoubleRejected:
+    async def prepare_double(self, command: DoubleOrder) -> PendingDouble | DoubleRejected:
         double_id = self._new_double_id()
-        buy = OrderRequest(cmd.buy_venue, "buy", cmd.qty, cmd.buy_price, self._new_client_id())
-        sell = OrderRequest(cmd.sell_venue, "sell", cmd.qty, cmd.sell_price, self._new_client_id())
+        buy = OrderRequest(
+            command.buy_venue, "buy", command.qty, command.buy_price, self._new_client_id()
+        )
+        sell = OrderRequest(
+            command.sell_venue, "sell", command.qty, command.sell_price, self._new_client_id()
+        )
         return await self._validate_double(double_id, buy, sell)
 
     async def _validate_double(
@@ -325,12 +347,12 @@ class OrderService:
     ) -> PendingDouble | DoubleRejected:
         extra = {"double": double_id}
         checked = [await self._validate(buy, extra), await self._validate(sell, extra)]
-        rejected = tuple(c for c in checked if isinstance(c, Rejected))
+        rejected = tuple(outcome for outcome in checked if isinstance(outcome, Rejected))
         if rejected:
             return DoubleRejected(double_id, rejected)
-        b, s = checked
-        assert isinstance(b, Pending) and isinstance(s, Pending)
-        return PendingDouble(double_id, b, s)
+        buy_pending, sell_pending = checked
+        assert isinstance(buy_pending, Pending) and isinstance(sell_pending, Pending)
+        return PendingDouble(double_id, buy_pending, sell_pending)
 
     async def confirm_double(
         self, pending: PendingDouble, *, lead: VenueId | None = None
@@ -357,16 +379,16 @@ class OrderService:
         self._changed(pending.id)
         return DoubleSent(self.doubles[pending.id])
 
-    async def send_held(self, double_id: str, qty: Decimal) -> Sent | Failed | Uncertain:
+    async def send_held(self, double_id: str, quantity: Decimal) -> Sent | Failed | Uncertain:
         """Send the double's `held` leg for `qty` (D-75). It was validated with the first on
         confirming; `qty` does not exceed what was validated."""
         state = self.doubles[double_id]
-        (side,) = (leg.req.side for leg in state.legs if leg.status == "held")
-        state = state.resize(side, qty)
+        (side,) = (order_leg.req.side for order_leg in state.legs if order_leg.status == "held")
+        state = state.resize(side, quantity)
         self.doubles[double_id] = state
-        req = state.leg(side).req
-        async with self._sending(req.venue):
-            result = await self._send(req, {"double": double_id})
+        order_request = state.leg(side).req
+        async with self._sending(order_request.venue):
+            result = await self._send(order_request, {"double": double_id})
         self._apply(double_id, result)
         self._changed(double_id)
         return result
@@ -374,9 +396,9 @@ class OrderService:
     def skip_held(self, double_id: str) -> None:
         """The `held` leg is not sent (D-75): counts as closed with 0 filled."""
         state = self.doubles[double_id]
-        for leg in state.legs:
-            if leg.status == "held":
-                state = state.skip(leg.req.side)
+        for order_leg in state.legs:
+            if order_leg.status == "held":
+                state = state.skip(order_leg.req.side)
         self.doubles[double_id] = state
         self._changed(double_id)
 
@@ -424,15 +446,15 @@ class OrderService:
                     "double": double_id,
                     "reason": reason,
                     "legs": {
-                        leg.req.side: {
-                            "venue": leg.req.venue,
-                            "client_id": leg.req.client_id,
-                            "order_id": leg.order_id,
-                            "status": leg.status,
-                            "qty": leg.req.qty,
-                            "filled": leg.filled,
+                        order_leg.req.side: {
+                            "venue": order_leg.req.venue,
+                            "client_id": order_leg.req.client_id,
+                            "order_id": order_leg.order_id,
+                            "status": order_leg.status,
+                            "qty": order_leg.req.qty,
+                            "filled": order_leg.filled,
                         }
-                        for leg in state.legs
+                        for order_leg in state.legs
                     },
                 },
             )
@@ -442,131 +464,149 @@ class OrderService:
 
     # -- uncertain sends (RNF-12, D-26) ------------------------------------------
 
-    def _known(self, vid: VenueId) -> frozenset[str]:
+    def _known(self, venue_id: VenueId) -> frozenset[str]:
         """Venue orders already known: the account's open ones and those just sent."""
-        st = self._account.state.get(vid) if self._account is not None else None
-        ids = set(st.orders) if st is not None else set()
-        return frozenset(ids | set(self._just_sent.get(vid, {})))
+        state = self._account.state.get(venue_id) if self._account is not None else None
+        ids = set(state.orders) if state is not None else set()
+        return frozenset(ids | set(self._just_sent.get(venue_id, {})))
 
     async def reconcile(self) -> list[Reconciled]:
         """One round: each venue with uncertain orders is queried once. If it does not
         answer, it waits for the next (without looking, nothing is deemed nonexistent)."""
         by_venue: dict[VenueId, list[UncertainOrder]] = {}
-        for u in self.uncertain.values():
-            by_venue.setdefault(u.req.venue, []).append(u)
+        for uncertain_order in self.uncertain.values():
+            by_venue.setdefault(uncertain_order.req.venue, []).append(uncertain_order)
         out: list[Reconciled] = []
-        for vid, pending in by_venue.items():
-            venue = self._venues[vid]
-            since = min(u.sent_at for u in pending) - WINDOW_MS
+        for venue_id, pending in by_venue.items():
+            venue = self._venues[venue_id]
+            since = min(uncertain_order.sent_at for uncertain_order in pending) - WINDOW_MS
             try:
                 orders = await venue.recent_orders(since)
             except (VenueError, httpx.HTTPError):
                 continue
             now = self._clock()
-            for u in pending:
+            for uncertain_order in pending:
                 # neither those the terminal sent later with an ack: they are others
-                known = u.known | self._acked.get(vid, set())
+                known = uncertain_order.known | self._acked.get(venue_id, set())
                 by_id = venue.keeps_client_id
-                found = candidates(u.req, orders, u.sent_at, known, by_client_id=by_id)
+                found = candidates(
+                    uncertain_order.req, orders, uncertain_order.sent_at, known, by_client_id=by_id
+                )
                 if len(found) == 1:
-                    out.append(self._found(u, found[0]))
-                elif found and not u.warned:
-                    u.warned = True
+                    out.append(self._found(uncertain_order, found[0]))
+                elif found and not uncertain_order.warned:
+                    uncertain_order.warned = True
                     msg = (
-                        f"orden incierta {u.req.client_id}: {len(found)} órdenes iguales en "
-                        f"{NAMES[vid]} ({', '.join(o.order_id for o in found)}); sigue incierta, "
+                        f"orden incierta {uncertain_order.req.client_id}: "
+                        f"{len(found)} órdenes iguales en "
+                        f"{NAMES[venue_id]} ({', '.join(order.order_id for order in found)}); "
+                        "sigue incierta, "
                         "revísala a mano"
                     )
-                    out.append(Reconciled(u.req.client_id, vid, "ambiguous", msg))
-                elif not found and now - u.sent_at > GIVE_UP_MS:
-                    out.append(self._missing(u))
+                    out.append(
+                        Reconciled(uncertain_order.req.client_id, venue_id, "ambiguous", msg)
+                    )
+                elif not found and now - uncertain_order.sent_at > GIVE_UP_MS:
+                    out.append(self._missing(uncertain_order))
         return out
 
-    def _found(self, u: UncertainOrder, order: Order) -> Reconciled:
-        req = u.req
-        del self.uncertain[req.client_id]
-        order = replace(order, client_id=req.client_id)  # Neoxa does not return it (PA-09)
+    def _found(self, uncertain_order: UncertainOrder, order: Order) -> Reconciled:
+        order_request = uncertain_order.req
+        del self.uncertain[order_request.client_id]
+        order = replace(
+            order, client_id=order_request.client_id
+        )  # Neoxa does not return it (PA-09)
         self._record(
             "order_ack",
-            venue=req.venue,
-            client_id=req.client_id,
+            venue=order_request.venue,
+            client_id=order_request.client_id,
             data={
                 "order_id": order.order_id,
                 "status": order.status,
                 "reconciled": True,
-                **u.extra,
+                **uncertain_order.extra,
             },
         )
-        self._acked.setdefault(req.venue, set()).add(order.order_id)
+        self._acked.setdefault(order_request.venue, set()).add(order.order_id)
         if not order.is_done:
-            self._just_sent.setdefault(req.venue, {})[order.order_id] = order
+            self._just_sent.setdefault(order_request.venue, {})[order.order_id] = order
         self._update_doubles(order)
         msg = (
-            f"orden incierta {req.client_id}: existe en {NAMES[req.venue]} como "
+            f"orden incierta {order_request.client_id}: existe en "
+            f"{NAMES[order_request.venue]} como "
             f"{order.order_id} ({order.status})"
         )
-        return Reconciled(req.client_id, req.venue, "found", msg)
+        return Reconciled(order_request.client_id, order_request.venue, "found", msg)
 
-    def _missing(self, u: UncertainOrder) -> Reconciled:
-        req = u.req
-        del self.uncertain[req.client_id]
-        error = f"no existe en {NAMES[req.venue]} tras {GIVE_UP_MS // 1000} s"
+    def _missing(self, uncertain_order: UncertainOrder) -> Reconciled:
+        order_request = uncertain_order.req
+        del self.uncertain[order_request.client_id]
+        error = f"no existe en {NAMES[order_request.venue]} tras {GIVE_UP_MS // 1000} s"
         self._record(
             "order_error",
-            venue=req.venue,
-            client_id=req.client_id,
-            data={"error": error, "reconciled": True, **u.extra},
+            venue=order_request.venue,
+            client_id=order_request.client_id,
+            data={"error": error, "reconciled": True, **uncertain_order.extra},
         )
         for double_id, state in list(self.doubles.items()):
-            leg = state.leg(req.side)
-            if leg.req.client_id == req.client_id and leg.status == "unknown":
-                self.doubles[double_id] = state.fail(req.side, error)
+            order_leg = state.leg(order_request.side)
+            if order_leg.req.client_id == order_request.client_id and order_leg.status == "unknown":
+                self.doubles[double_id] = state.fail(order_request.side, error)
                 self._changed(double_id)
-        msg = f"orden incierta {req.client_id}: {error}; no se creó"
-        return Reconciled(req.client_id, req.venue, "missing", msg)
-
-    # -- cancelling ---------------------------------------------------------------
+        msg = f"orden incierta {order_request.client_id}: {error}; no se creó"
+        return Reconciled(order_request.client_id, order_request.venue, "missing", msg)
 
     async def plan_cancel(
-        self, cmd: CancelOrder | CancelVenue | CancelAll
+        self, command: CancelOrder | CancelVenue | CancelAll
     ) -> CancelPlan | CancelRefused:
-        if isinstance(cmd, CancelVenue) and cmd.venue not in self._venues:
-            return CancelRefused(f"{NAMES[cmd.venue]}: sin keys, solo lectura")
-        venues = [cmd.venue] if isinstance(cmd, CancelVenue) else list(self._venues)
+        if isinstance(command, CancelVenue) and command.venue not in self._venues:
+            return CancelRefused(f"{NAMES[command.venue]}: sin keys, solo lectura")
+        venues = [command.venue] if isinstance(command, CancelVenue) else list(self._venues)
         try:
-            found = {vid: tuple(await self._venues[vid].open_orders()) for vid in venues}
-        except (VenueError, httpx.HTTPError) as exc:
-            return CancelRefused(f"no se pudieron leer las órdenes abiertas ({describe(exc)})")
-        if isinstance(cmd, CancelOrder):
-            hits = {
-                vid: tuple(o for o in orders if o.order_id == cmd.order_id)
-                for vid, orders in found.items()
+            found = {
+                venue_id: tuple(await self._venues[venue_id].open_orders()) for venue_id in venues
             }
-            hits = {vid: o for vid, o in hits.items() if o}
+        except (VenueError, httpx.HTTPError) as error:
+            return CancelRefused(f"no se pudieron leer las órdenes abiertas ({describe(error)})")
+        if isinstance(command, CancelOrder):
+            hits = {
+                venue_id: tuple(order for order in orders if order.order_id == command.order_id)
+                for venue_id, orders in found.items()
+            }
+            hits = {venue_id: order for venue_id, order in hits.items() if order}
             if not hits:
-                return CancelRefused(f"no hay ninguna orden abierta {cmd.order_id}")
+                return CancelRefused(f"no hay ninguna orden abierta {command.order_id}")
             if len(hits) > 1:
-                return CancelRefused(f"{cmd.order_id} está en los dos venues: usa cancel <venue>")
+                return CancelRefused(
+                    f"{command.order_id} está en los dos venues: usa cancel <venue>"
+                )
             return CancelPlan("order", hits)
-        found = {vid: orders for vid, orders in found.items() if orders}
+        found = {venue_id: orders for venue_id, orders in found.items() if orders}
         if not found:
             return CancelRefused("no hay órdenes abiertas que cancelar")
-        return CancelPlan("venue" if isinstance(cmd, CancelVenue) else "all", found)
+        return CancelPlan("venue" if isinstance(command, CancelVenue) else "all", found)
 
     async def cancel_double(self, double_id: str) -> CancelResult:
         """Cancel a double's legs still open on their venue (the bot, past `fill_timeout_ms`).
         Uncertain ones have no id: left alone."""
         state = self.doubles[double_id]
         orders: dict[VenueId, tuple[Order, ...]] = {}
-        for leg in state.legs:
-            if leg.done or leg.order_id is None or leg.status == "unknown":
+        for order_leg in state.legs:
+            if order_leg.done or order_leg.order_id is None or order_leg.status == "unknown":
                 continue
-            r = leg.req
+            request = order_leg.req
             order = Order(
-                r.venue, leg.order_id, r.client_id, r.side, r.price, r.qty, leg.filled, "open",
+                request.venue,
+                order_leg.order_id,
+                request.client_id,
+                request.side,
+                request.price,
+                request.qty,
+                order_leg.filled,
+                "open",
                 self._clock(),
             )  # fmt: skip
-            orders[r.venue] = (order,)
+            orders[request.venue] = (order,)
         if not orders:
             return CancelResult({}, {})
         return await self.execute_cancel(CancelPlan("order", orders))
@@ -575,22 +615,25 @@ class OrderService:
         """All venues at once; each with its result even if another fails."""
         results = await asyncio.gather(
             *(
-                self._protected(self._cancel_in(vid, plan.scope, orders))
-                for vid, orders in plan.orders.items()
+                self._protected(self._cancel_in(venue_id, plan.scope, orders))
+                for venue_id, orders in plan.orders.items()
             )
         )
-        remaining = {vid: n for vid, n, _ in results}
-        errors = {vid: err for vid, _, err in results if err}
+        remaining = {venue_id: remaining_count for venue_id, remaining_count, _ in results}
+        errors = {venue_id: err for venue_id, _, err in results if err}
         return CancelResult(remaining, errors)
 
     async def _cancel_in(
-        self, vid: VenueId, scope: str, orders: tuple[Order, ...]
+        self, venue_id: VenueId, scope: str, orders: tuple[Order, ...]
     ) -> tuple[VenueId, int, str | None]:
-        venue = self._venues[vid]
-        ids = [o.order_id for o in orders]
+        venue = self._venues[venue_id]
+        ids = [order.order_id for order in orders]
         client_id = orders[0].client_id if scope == "order" else None
         self._record(
-            "cancel_sent", venue=vid, client_id=client_id, data={"scope": scope, "order_ids": ids}
+            "cancel_sent",
+            venue=venue_id,
+            client_id=client_id,
+            data={"scope": scope, "order_ids": ids},
         )
         try:
             if scope == "order":
@@ -599,131 +642,165 @@ class OrderService:
                 await venue.cancel_all()
             still = await venue.open_orders()
             # one order: if it remains; venue or all: any of the pair (CA-05)
-            left = sum(o.order_id in ids for o in still) if scope == "order" else len(still)
-        except (VenueError, httpx.HTTPError) as exc:
+            left = sum(order.order_id in ids for order in still) if scope == "order" else len(still)
+        except (VenueError, httpx.HTTPError) as error:
             self._record(
                 "error",
-                venue=vid,
+                venue=venue_id,
                 client_id=client_id,
-                data={"action": "cancel", "scope": scope, "order_ids": ids, "error": describe(exc)},
+                data={
+                    "action": "cancel",
+                    "scope": scope,
+                    "order_ids": ids,
+                    "error": describe(error),
+                },
             )
-            return vid, len(orders), describe(exc)
+            return venue_id, len(orders), describe(error)
         self._record(
-            "cancel_ack", venue=vid, client_id=client_id, data={"scope": scope, "remaining": left}
+            "cancel_ack",
+            venue=venue_id,
+            client_id=client_id,
+            data={"scope": scope, "remaining": left},
         )
-        return vid, left, None
-
-    # -- validation -------------------------------------------------------------
+        return venue_id, left, None
 
     async def _validate(
-        self, req: OrderRequest, extra: dict[str, Any] | None = None, *, basis: str | None = None
+        self,
+        order_request: OrderRequest,
+        extra: dict[str, Any] | None = None,
+        *,
+        basis: str | None = None,
     ) -> Pending | Rejected:
-        violations = await self._violations(req)
+        violations = await self._violations(order_request)
         if violations:
-            return self._reject(req, violations, extra)
-        spec = self._hub.state[req.venue].spec
+            return self._reject(order_request, violations, extra)
+        spec = self._hub.state[order_request.venue].spec
         assert spec is not None  # _violations checks it
-        return Pending(req, spec, req.notional, req.notional * spec.taker_fee, basis)
+        return Pending(
+            order_request,
+            spec,
+            order_request.notional,
+            order_request.notional * spec.taker_fee,
+            basis,
+        )
 
     def _reject(
-        self, req: OrderRequest, violations: list[Violation], extra: dict[str, Any] | None = None
+        self,
+        order_request: OrderRequest,
+        violations: list[Violation],
+        extra: dict[str, Any] | None = None,
     ) -> Rejected:
         self._record(
             "reject_local",
-            venue=req.venue,
-            client_id=req.client_id,
+            venue=order_request.venue,
+            client_id=order_request.client_id,
             data={
-                "side": req.side,
-                "qty": req.qty,
-                "price": req.price,
-                "violations": [{"code": v.code, "message": v.message} for v in violations],
+                "side": order_request.side,
+                "qty": order_request.qty,
+                "price": order_request.price,
+                "violations": [
+                    {"code": violation.code, "message": violation.message}
+                    for violation in violations
+                ],
                 **(extra or {}),
             },
         )
-        return Rejected(req, tuple(violations))
+        return Rejected(order_request, tuple(violations))
 
-    def _unavailable(self, req: OrderRequest) -> list[Violation]:
+    def _unavailable(self, order_request: OrderRequest) -> list[Violation]:
         """Without keys or a loaded market there is nothing more to validate."""
-        if req.venue not in self._venues:
-            return [Violation("read_only", f"{NAMES[req.venue]}: sin keys, solo lectura")]
-        if self._hub.state[req.venue].spec is None:
-            return [Violation("stale_data", f"{NAMES[req.venue]}: mercado aún sin cargar")]
+        if order_request.venue not in self._venues:
+            return [Violation("read_only", f"{NAMES[order_request.venue]}: sin keys, solo lectura")]
+        if self._hub.state[order_request.venue].spec is None:
+            return [
+                Violation("stale_data", f"{NAMES[order_request.venue]}: mercado aún sin cargar")
+            ]
         return []
 
     @staticmethod
-    def _unreadable(vid: VenueId, exc: Exception) -> Violation:
+    def _unreadable(venue_id: VenueId, error: Exception) -> Violation:
         # without balances or orders it cannot validate: when in doubt, do not send (D-16)
-        msg = f"{NAMES[vid]}: no se pudieron leer saldos u órdenes ({describe(exc)})"
+        msg = f"{NAMES[venue_id]}: no se pudieron leer saldos u órdenes ({describe(error)})"
         return Violation("venue_error", msg)
 
-    async def _violations(self, req: OrderRequest) -> list[Violation]:
-        if bad := self._unavailable(req):
+    async def _violations(self, order_request: OrderRequest) -> list[Violation]:
+        if bad := self._unavailable(order_request):
             return bad
-        st = self._hub.state[req.venue]
-        assert st.spec is not None
+        state = self._hub.state[order_request.venue]
+        assert state.spec is not None
         try:
             # all venues with keys: the per order cap is a % of the total (D-19)
-            snaps = {vid: await self._snapshot(vid, v) for vid, v in self._venues.items()}
-        except (VenueError, httpx.HTTPError) as exc:
-            return [self._unreadable(req.venue, exc)]
-        open_orders, balances = snaps[req.venue]
+            snaps = {
+                venue_id: await self._snapshot(venue_id, adapter)
+                for venue_id, adapter in self._venues.items()
+            }
+        except (VenueError, httpx.HTTPError) as error:
+            return [self._unreadable(order_request.venue, error)]
+        open_orders, balances = snaps[order_request.venue]
         total = inventory(
-            {vid: bal for vid, (_, bal) in snaps.items()},
-            {vid: self._hub.state[vid].book.mid for vid in snaps},
+            {venue_id: bal for venue_id, (_, bal) in snaps.items()},
+            {venue_id: self._hub.state[venue_id].book.mid for venue_id in snaps},
         )
         ctx = RiskContext(
-            market=st.spec,
-            best_bid=st.book.best_bid,
-            best_ask=st.book.best_ask,
-            book_ts=self.fresh_at(req.venue),
+            market=state.spec,
+            best_bid=state.book.best_bid,
+            best_ask=state.book.best_ask,
+            book_ts=self.fresh_at(order_request.venue),
             now=self._clock(),
             open_orders=open_orders,
             balances=balances,
             inventory_value=total.value,
         )
-        return check(req, ctx, self._limits) + self._skew(req.venue)
+        return check(order_request, ctx, self._limits) + self._skew(order_request.venue)
 
-    def _skew(self, vid: VenueId) -> list[Violation]:
+    def _skew(self, venue_id: VenueId) -> list[Violation]:
         if not self._live:
             return []
-        skew, cap = self._hub.clock_skew_ms(vid), self._limits.max_clock_skew_s
+        skew, cap = self._hub.clock_skew_ms(venue_id), self._limits.max_clock_skew_s
         if skew is None:
-            msg = f"{NAMES[vid]}: desfase de reloj sin medir; no se envía hasta saberlo"
+            msg = f"{NAMES[venue_id]}: desfase de reloj sin medir; no se envía hasta saberlo"
             return [Violation("clock_skew", msg)]
         if abs(skew) > cap * 1000:
             msg = (
-                f"{NAMES[vid]}: reloj desfasado {skew / 1000:+.0f} s (máx. {cap} s); "
+                f"{NAMES[venue_id]}: reloj desfasado {skew / 1000:+.0f} s (máx. {cap} s); "
                 "sincroniza el reloj del sistema (NTP)"
             )
             return [Violation("clock_skew", msg)]
         return []
 
     async def _snapshot(
-        self, vid: VenueId, venue: Venue
+        self, venue_id: VenueId, venue: Venue
     ) -> tuple[tuple[Order, ...], dict[str, Balance]]:
         """Open orders and balances for RiskCheck: the account's if up to date, plus that
         venue's uncertain ones (they may exist, D-27)."""
-        st = self._account.state.get(vid) if self._account is not None else None
+        state = self._account.state.get(venue_id) if self._account is not None else None
         if (
-            st is not None
-            and st.balances is not None
-            and st.balances_at is not None
-            and self._clock() - st.balances_at <= CACHE_MAX_AGE_MS
+            state is not None
+            and state.balances is not None
+            and state.balances_at is not None
+            and self._clock() - state.balances_at <= CACHE_MAX_AGE_MS
         ):
-            orders = dict(st.orders)
-            for oid, order in self._just_sent.get(vid, {}).items():
+            orders = dict(state.orders)
+            for oid, order in self._just_sent.get(venue_id, {}).items():
                 orders.setdefault(oid, order)
-            balances = dict(st.balances)
+            balances = dict(state.balances)
         else:
-            orders = {o.order_id: o for o in await venue.open_orders()}
+            orders = {open_order.order_id: open_order for open_order in await venue.open_orders()}
             balances = await venue.balances()
-        seen = {o.client_id for o in orders.values()}
-        for u in self.uncertain.values():
-            r = u.req
-            if r.venue == vid and r.client_id not in seen:
-                orders[f"?{r.client_id}"] = Order(
-                    vid, f"?{r.client_id}", r.client_id, r.side, r.price, r.qty, ZERO, "open",
-                    u.sent_at,
+        seen = {open_order.client_id for open_order in orders.values()}
+        for uncertain_order in self.uncertain.values():
+            request = uncertain_order.req
+            if request.venue == venue_id and request.client_id not in seen:
+                orders[f"?{request.client_id}"] = Order(
+                    venue_id,
+                    f"?{request.client_id}",
+                    request.client_id,
+                    request.side,
+                    request.price,
+                    request.qty,
+                    ZERO,
+                    "open",
+                    uncertain_order.sent_at,
                 )  # fmt: skip
         return tuple(orders.values()), balances
 
@@ -731,8 +808,10 @@ class OrderService:
         """Last moment the book is known to be current: its last message or the last REST
         check that matched. A live connection is no longer enough (D-76, fixes D-13); a
         book in doubt is not current."""
-        st = self._hub.state[venue]
-        if not st.book.valid or st.suspect:
+        state = self._hub.state[venue]
+        if not state.book.valid or state.suspect:
             return None
-        times = [t for t in (st.book.received_at, st.checked_at) if t is not None]
+        times = [
+            moment for moment in (state.book.received_at, state.checked_at) if moment is not None
+        ]
         return max(times) if times else None

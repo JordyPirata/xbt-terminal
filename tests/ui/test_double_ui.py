@@ -38,7 +38,8 @@ class Rig:
         self.hub = MarketHub(self.feeds, history=50, retry_s=0.01, clock=lambda: self.now)
         bal = {"BTC": Balance("BTC", D("0.005")), "BTCB2": Balance("BTCB2", D("0.5"))}
         self.venues = {
-            vid: DryRunVenue(self.feeds[vid], bal, clock=lambda: self.now) for vid in ("nk", "nx")
+            venue_id: DryRunVenue(self.feeds[venue_id], bal, clock=lambda: self.now)
+            for venue_id in ("nk", "nx")
         }
         self.logs = tmp_path / "logs"
         journal = Journal(self.logs, "dry-run", Redactor([]))
@@ -58,16 +59,20 @@ class Rig:
         )
 
     def feed_books(self):
-        for vid, (bid, ask) in {
+        for venue_id, (bid, ask) in {
             "nk": ("0.00720000", "0.00730000"),
             "nx": ("0.00722000", "0.00732000"),
         }.items():
-            snap = BookSnapshot(vid, (Level(D(bid), D("1")),), (Level(D(ask), D("1")),), self.now)
-            self.feeds[vid].push(ConnState(vid, "market", "ws", "up", 100.0, self.now), snap)
+            snap = BookSnapshot(
+                venue_id, (Level(D(bid), D("1")),), (Level(D(ask), D("1")),), self.now
+            )
+            self.feeds[venue_id].push(
+                ConnState(venue_id, "market", "ws", "up", 100.0, self.now), snap
+            )
 
     def events(self):
         files = sorted(self.logs.glob("journal-*.jsonl"))
-        return [json.loads(ln)["event"] for f in files for ln in f.read_text().splitlines()]
+        return [json.loads(ln)["event"] for file in files for ln in file.read_text().splitlines()]
 
 
 async def until(pilot, predicate, timeout=2.0):
@@ -81,15 +86,16 @@ async def ready(rig, pilot):
     await until(
         pilot,
         lambda: all(
-            rig.hub.state[v].ready and rig.hub.state[v].book.valid for v in "nk nx".split()
+            rig.hub.state[venue].ready and rig.hub.state[venue].book.valid
+            for venue in "nk nx".split()
         ),
     )
 
 
 async def send_double(rig, pilot):
-    cmd = rig.app.query_one(CommandLine)
-    cmd.focus()
-    cmd.value = DBL
+    command = rig.app.query_one(CommandLine)
+    command.focus()
+    command.value = DBL
     await pilot.press("enter")
     await until(pilot, lambda: isinstance(rig.app.screen, ConfirmScreen))
 
@@ -108,7 +114,7 @@ class TestDoubleOrder:
             await pilot.press("y")
             await until(pilot, lambda: "orden doble" in rig.app.last_message)
             assert "enviada" in rig.app.last_message
-            assert [len(await v.open_orders()) for v in rig.venues.values()] == [1, 1]
+            assert [len(await venue.open_orders()) for venue in rig.venues.values()] == [1, 1]
             assert rig.events().count("order_ack") == 2
 
     async def test_cancelling_the_dialog_sends_nothing(self, tmp_path):
@@ -124,9 +130,9 @@ class TestDoubleOrder:
         rig = Rig(tmp_path)
         async with rig.app.run_test(size=(160, 45)) as pilot:
             await ready(rig, pilot)
-            cmd = rig.app.query_one(CommandLine)
-            cmd.focus()
-            cmd.value = "dbl 0.6 nk 0.00725000 nx 0.00726000"  # > 25 % of the inventory
+            command = rig.app.query_one(CommandLine)
+            command.focus()
+            command.value = "dbl 0.6 nk 0.00725000 nx 0.00726000"  # > 25 % of the inventory
             await pilot.press("enter")
             await until(pilot, lambda: "no se envía ninguna pierna" in rig.app.last_message)
             assert not isinstance(rig.app.screen, ConfirmScreen)
@@ -162,8 +168,8 @@ class TestLegsPanel:
             balances = rig.app.query_one(BalancesPanel).region
             assert (region.y, region.height) == (balances.y, balances.height)
             assert balances.right == region.x and region.right == 160 and region.width == 64
-            assert all(c.region.height >= 8 for c in rig.app.query(ChartPanel))
-            assert all(b.region.height == 19 for b in rig.app.query(BookPanel))
+            assert all(chart.region.height >= 8 for chart in rig.app.query(ChartPanel))
+            assert all(book_panel.region.height == 19 for book_panel in rig.app.query(BookPanel))
 
     async def test_fill_shows_on_leg(self, tmp_path):
         rig = Rig(tmp_path)

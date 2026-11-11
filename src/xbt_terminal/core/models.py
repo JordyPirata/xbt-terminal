@@ -51,7 +51,9 @@ def _check_decimals(obj: object) -> None:
     names = _DECIMAL_FIELDS.get(cls)
     if names is None:
         # `fields()` per instance was most of the bot's cost per book change (T-92)
-        names = tuple(f.name for f in fields(obj) if f.type in ("Decimal", Decimal))  # type: ignore[arg-type]
+        names = tuple(
+            dc_field.name for dc_field in fields(obj) if dc_field.type in ("Decimal", Decimal)
+        )  # type: ignore[arg-type]
         _DECIMAL_FIELDS[cls] = names
     for name in names:
         value = getattr(obj, name)
@@ -94,9 +96,9 @@ class MarketSpec:
             return _snap(price, self.tick_size, ROUND_FLOOR)
         raise ValueError(f"lado inválido: {side!r}")
 
-    def quantize_qty(self, qty: Decimal) -> Decimal:
+    def quantize_qty(self, quantity: Decimal) -> Decimal:
         """Truncate to the lot: never send more than asked."""
-        return _snap(qty, self.lot_size, ROUND_FLOOR)
+        return _snap(quantity, self.lot_size, ROUND_FLOOR)
 
 
 @dataclass(frozen=True, slots=True)

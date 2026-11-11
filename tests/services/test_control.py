@@ -83,14 +83,16 @@ class Client:
 
 @pytest.fixture
 async def rig(tmp_path):
-    s = Rig(tmp_path)
-    s.bot = FakeBot()
-    s.engine = Engine(s.hub, mode="dry-run", orders=s.orders, bot=s.bot, journal=s.journal)
-    s.path = tmp_path / "xbt.sock"
-    s.server = ControlServer(s.engine, s.path, every_s=0.05)
-    await s.server.start()
-    yield s
-    await s.server.aclose()
+    rig_obj = Rig(tmp_path)
+    rig_obj.bot = FakeBot()
+    rig_obj.engine = Engine(
+        rig_obj.hub, mode="dry-run", orders=rig_obj.orders, bot=rig_obj.bot, journal=rig_obj.journal
+    )
+    rig_obj.path = tmp_path / "xbt.sock"
+    rig_obj.server = ControlServer(rig_obj.engine, rig_obj.path, every_s=0.05)
+    await rig_obj.server.start()
+    yield rig_obj
+    await rig_obj.server.aclose()
 
 
 @pytest.mark.spec("RF-31")
@@ -99,21 +101,23 @@ class TestConnect:
         assert stat.S_IMODE(rig.path.stat().st_mode) == 0o600
 
     async def test_hello_and_snapshot(self, rig):
-        c = await Client.open(rig.path)
-        hello = await c.recv()
+        client = await Client.open(rig.path)
+        hello = await client.recv()
         assert hello["type"] == "hello" and hello["mode"] == "dry-run" and hello["version"]
-        state = await c.recv()
+        state = await client.recv()
         assert state["type"] == "state"
         snap = decode(Snapshot, state["state"])
         assert snap.bot.state.status == "off" and snap.bot.summary.startswith("BOT")
         assert snap.can_trade == {"nk": True, "nx": False}
-        await c.close()
+        await client.close()
 
     async def test_several_connections_at_once(self, rig):
-        a, b = await Client.open(rig.path), await Client.open(rig.path)
-        assert (await a.recv())["type"] == (await b.recv())["type"] == "hello"
-        await a.close()
-        await b.close()
+        first_client, second_client = await Client.open(rig.path), await Client.open(rig.path)
+        assert (
+            (await first_client.recv())["type"] == (await second_client.recv())["type"] == "hello"
+        )
+        await first_client.close()
+        await second_client.close()
 
     async def test_closing_removes_socket(self, tmp_path, rig):
         await rig.server.aclose()
@@ -124,34 +128,34 @@ class TestConnect:
         await rig.server.aclose()
         rig.path.write_text("viejo")
         await rig.server.start()
-        c = await Client.open(rig.path)
-        assert (await c.recv())["type"] == "hello"
-        await c.close()
+        client = await Client.open(rig.path)
+        assert (await client.recv())["type"] == "hello"
+        await client.close()
 
 
 @pytest.mark.spec("RF-31", "RF-18")
 class TestOrders:
     async def test_bot_on_and_off(self, rig):
-        c = await Client.open(rig.path)
-        await c.send({"cmd": "bot_on"})
-        reply = await c.until("reply")
+        client = await Client.open(rig.path)
+        await client.send({"cmd": "bot_on"})
+        reply = await client.until("reply")
         assert reply == {"type": "reply", "cmd": "bot_on", "error": None}
         assert rig.bot.state.status == "armed"
-        state = await c.until("state")
+        state = await client.until("state")
         while decode(Snapshot, state["state"]).bot.state.status != "armed":
-            state = await c.until("state")
-        await c.send({"cmd": "bot_off"})
-        assert (await c.until("reply"))["cmd"] == "bot_off"
+            state = await client.until("state")
+        await client.send({"cmd": "bot_off"})
+        assert (await client.until("reply"))["cmd"] == "bot_off"
         assert rig.bot.state.status == "off"
-        await c.close()
+        await client.close()
 
     async def test_refused_bot_on_says_why(self, rig):
         rig.bot._refusal = "en live el bot solo se arma con bot.enabled = true"
-        c = await Client.open(rig.path)
-        await c.send({"cmd": "bot_on"})
-        assert "bot.enabled" in (await c.until("reply"))["error"]
+        client = await Client.open(rig.path)
+        await client.send({"cmd": "bot_on"})
+        assert "bot.enabled" in (await client.until("reply"))["error"]
         assert rig.bot.state.status == "off"
-        await c.close()
+        await client.close()
 
     @pytest.mark.parametrize(
         "raw",
@@ -163,39 +167,39 @@ class TestOrders:
         ],
     )
     async def test_rest_rejected_and_connection_stays(self, rig, raw):
-        c = await Client.open(rig.path)
-        await c.send(raw)
-        assert (await c.until("error"))["error"]
-        await c.send({"cmd": "ping"})
-        assert (await c.until("pong"))["type"] == "pong"
+        client = await Client.open(rig.path)
+        await client.send(raw)
+        assert (await client.until("error"))["error"]
+        await client.send({"cmd": "ping"})
+        assert (await client.until("pong"))["type"] == "pong"
         assert rig.journal_dir.glob("journal-*.jsonl")  # nothing sent to the venue
         assert rig.events() == []
-        await c.close()
+        await client.close()
 
 
 @pytest.mark.spec("RF-31")
 class TestEvents:
     async def test_notices_and_faults(self, rig):
-        c = await Client.open(rig.path)
-        await c.until("state")
+        client = await Client.open(rig.path)
+        await client.until("state")
         rig.engine._say("⚠ pierna colgada en d-1", error=True)
-        notice = await c.until("notice")
+        notice = await client.until("notice")
         assert notice == {"type": "notice", "text": "⚠ pierna colgada en d-1", "error": True}
         rig.orders.faults.report("ui", RuntimeError("bug"))
-        assert "bug" in (await c.until("fault"))["message"]
-        await c.close()
+        assert "bug" in (await client.until("fault"))["message"]
+        await client.close()
 
     async def test_state_repeats_even_if_unchanged(self, rig):
         """The bar shows ages: the snapshot arrives at least every `every_s`."""
-        c = await Client.open(rig.path)
-        await c.until("state")
-        await c.until("state", timeout=0.5)
-        await c.close()
+        client = await Client.open(rig.path)
+        await client.until("state")
+        await client.until("state", timeout=0.5)
+        await client.close()
 
     async def test_non_reading_client_disconnected(self, tmp_path):
         """Its buffer fills, so does its queue, and it gets closed; the other goes on."""
-        s = Rig(tmp_path)
-        engine = Engine(s.hub, mode="dry-run", orders=s.orders, journal=s.journal)
+        rig = Rig(tmp_path)
+        engine = Engine(rig.hub, mode="dry-run", orders=rig.orders, journal=rig.journal)
         path = tmp_path / "c.sock"
         server = ControlServer(engine, path, every_s=60, queue_max=3)
         await server.start()
@@ -226,22 +230,22 @@ class TestEvents:
 @pytest.mark.spec("RF-31", "CA-07")
 async def test_no_secret_leaves_by_socket(tmp_path):
     canary = Secret("k_CANARIO_socket")
-    s = Rig(tmp_path)
+    rig = Rig(tmp_path)
     journal = Journal(tmp_path / "j", "dry-run", Redactor([canary]))
     faults = Faults(journal)
-    s.orders.faults = faults
-    engine = Engine(s.hub, mode="dry-run", orders=s.orders, journal=journal)
+    rig.orders.faults = faults
+    engine = Engine(rig.hub, mode="dry-run", orders=rig.orders, journal=journal)
     path = tmp_path / "c.sock"
     server = ControlServer(engine, path, every_s=0.05)
     await server.start()
-    c = await Client.open(path)
-    await c.until("state")  # already registered
+    client = await Client.open(path)
+    await client.until("state")  # already registered
     faults.report("private", RuntimeError(f"401 con key {canary.reveal()}"))
     engine._say(f"aviso con {canary.reveal()}", error=True)
     raw = b""
     async with asyncio.timeout(1):
         while b"notice" not in raw:
-            raw += await c.reader.readline()
+            raw += await client.reader.readline()
     assert b"CANARIO" not in raw and b"***" in raw
-    await c.close()
+    await client.close()
     await server.aclose()

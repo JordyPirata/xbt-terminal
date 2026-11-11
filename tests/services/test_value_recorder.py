@@ -35,7 +35,10 @@ class Rig:
         )
         mids = {"nk": D("0.005"), "nx": D(nx_mid) if nx_mid else None}
         self.hub = SimpleNamespace(
-            state={vid: SimpleNamespace(book=SimpleNamespace(mid=m)) for vid, m in mids.items()}
+            state={
+                venue_id: SimpleNamespace(book=SimpleNamespace(mid=mid_price))
+                for venue_id, mid_price in mids.items()
+            }
         )
         self.dir = tmp_path
         self.journal = Journal(
@@ -57,8 +60,8 @@ class Rig:
 
     def rows(self):
         lines = []
-        for p in sorted(self.dir.glob("journal-*.jsonl")):
-            lines += p.read_text().splitlines()
+        for path in sorted(self.dir.glob("journal-*.jsonl")):
+            lines += path.read_text().splitlines()
         return read_rows(lines)[0]
 
 
@@ -70,19 +73,21 @@ class TestRecorder:
             await rig.recorder.run()
         got, bad = series(rig.rows(), None)
         assert bad == 0
-        assert [s.ts for s in got] == [T0 + k * EVERY_S * 1000 for k in (1, 2, 3)]
+        assert [value_sample.ts for value_sample in got] == [
+            T0 + k * EVERY_S * 1000 for k in (1, 2, 3)
+        ]
         assert rig.slept[0] == pytest.approx(EVERY_S - 12.345)
         assert rig.slept[1] == pytest.approx(EVERY_S)
-        s = got[0]
-        assert s.value == D("0.334") and s.every_ms == EVERY_S * 1000
-        assert [v.venue for v in s.venues] == ["nk", "nx"]
+        value_sample = got[0]
+        assert value_sample.value == D("0.334") and value_sample.every_ms == EVERY_S * 1000
+        assert [venue.venue for venue in value_sample.venues] == ["nk", "nx"]
 
     async def test_mode_goes_in_the_row(self, tmp_path):
         rig = Rig(tmp_path)
         rig.recorder.record(T0)
         (row,) = rig.rows()
         assert row["event"] == "value" and row["mode"] == "live"
-        assert json.dumps(row["data"]["value"]) == '"0.334"'  # Decimal as string
+        assert json.dumps(row["data"]["value"]) == '"0.334"'
 
     async def test_no_mid_is_skipped(self, tmp_path):
         rig = Rig(tmp_path, nx_mid=None)
@@ -106,4 +111,4 @@ class TestRecorder:
         with pytest.raises(asyncio.CancelledError):
             await rig.recorder.run()
         assert len(calls) == 3
-        assert any(f.where == "value" for f in rig.faults.recent)
+        assert any(fault.where == "value" for fault in rig.faults.recent)

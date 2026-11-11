@@ -92,7 +92,6 @@ class FakeVenue:
         if not self.keys:
             raise ReadOnlyError("fake: sin keys")
 
-    # -- public --------------------------------------------------------------
 
     async def market(self) -> MarketSpec:
         await self.hit("market")
@@ -141,7 +140,6 @@ class FakeVenue:
     async def aclose(self) -> None:
         pass
 
-    # -- private -------------------------------------------------------------
 
     async def balances(self) -> dict[str, Balance]:
         self.need_keys()
@@ -156,10 +154,10 @@ class FakeVenue:
         await self.hit("private")
         return list(self.active)
 
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         self.need_keys()
         await self.hit("order")
-        self.sent = f"{req.price:f} {req.qty:f}"
+        self.sent = f"{order_request.price:f} {order_request.qty:f}"
         outcome, self.outcome = self.outcome, None
         if outcome == "rejected":
             raise VenueError("fake: rechazada", status=400)
@@ -167,7 +165,17 @@ class FakeVenue:
             raise httpx.ConnectError("refused")
         if outcome is not None:
             raise UncertainError(f"fake: {outcome}")
-        return Order("nk", "B2", req.client_id, req.side, req.price, req.qty, D("0"), "open", NOW)
+        return Order(
+            "nk",
+            "B2",
+            order_request.client_id,
+            order_request.side,
+            order_request.price,
+            order_request.qty,
+            D("0"),
+            "open",
+            NOW,
+        )
 
     async def cancel(self, order_id: str) -> None:
         self.need_keys()
@@ -188,7 +196,7 @@ class FakeVenue:
 
     async def private_stream(self) -> AsyncIterator[Any]:
         self.need_keys()
-        known = {o.order_id: o for o in self.active}
+        known = {open_item.order_id: open_item for open_item in self.active}
         yield self.state("up", "rest", "private")
         sent = 0
         while True:
@@ -197,11 +205,10 @@ class FakeVenue:
                 yield fill
             sent = len(self.fills)
             for oid, order in list(known.items()):
-                if oid not in {o.order_id for o in self.active}:
+                if oid not in {open_item.order_id for open_item in self.active}:
                     del known[oid]
                     yield replace(order, status="cancelled")
 
-    # -- optional ------------------------------------------------------------
 
     async def deposit_address(self, asset: str) -> DepositAddress:
         self.need_keys()
@@ -235,7 +242,7 @@ class FakeHarness(Harness):
         self.read_only = self.cls(self.limiter, keys=False)
         return self
 
-    async def __aexit__(self, *exc: object) -> None:
+    async def __aexit__(self, *error: object) -> None:
         pass
 
     @asynccontextmanager
@@ -394,31 +401,31 @@ class ReportsDeadOrders(FakeVenue):
 
 
 class LosesClientId(FakeVenue):
-    async def place_limit(self, req: OrderRequest) -> Order:
-        return replace(await super().place_limit(req), client_id=None)
+    async def place_limit(self, order_request: OrderRequest) -> Order:
+        return replace(await super().place_limit(order_request), client_id=None)
 
 
 class FloatOnTheWire(FakeVenue):
-    async def place_limit(self, req: OrderRequest) -> Order:
-        order = await super().place_limit(req)
-        self.sent = f"{float(req.price) * 1.0000001} {float(req.qty)!r:.6}"
+    async def place_limit(self, order_request: OrderRequest) -> Order:
+        order = await super().place_limit(order_request)
+        self.sent = f"{float(order_request.price) * 1.0000001} {float(order_request.qty)!r:.6}"
         return order
 
 
 class RefusedIsUncertain(FakeVenue):
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         try:
-            return await super().place_limit(req)
-        except httpx.ConnectError as exc:
-            raise UncertainError("fake: incierta") from exc
+            return await super().place_limit(order_request)
+        except httpx.ConnectError as error:
+            raise UncertainError("fake: incierta") from error
 
 
 class UncertainIsPlainError(FakeVenue):
-    async def place_limit(self, req: OrderRequest) -> Order:
+    async def place_limit(self, order_request: OrderRequest) -> Order:
         try:
-            return await super().place_limit(req)
-        except UncertainError as exc:
-            raise VenueError(str(exc)) from exc
+            return await super().place_limit(order_request)
+        except UncertainError as error:
+            raise VenueError(str(error)) from error
 
 
 class CancelGoesNowhere(FakeVenue):

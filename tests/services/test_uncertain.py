@@ -41,16 +41,16 @@ class Rig(Setup):
         """The next send loses its response; with `create`, the order is created."""
         real = self.venue.place_limit
 
-        async def lost(req):
+        async def lost(order_request):
             self.venue.place_limit = real
             if create:
-                await real(req)
+                await real(order_request)
             raise UncertainError("NonKYC: sin respuesta (ReadTimeout)")
 
         self.venue.place_limit = lost
 
-    async def send(self, cmd):
-        return await self.orders.confirm(await self.orders.prepare(cmd))
+    async def send(self, command):
+        return await self.orders.confirm(await self.orders.prepare(command))
 
     def events(self):
         return [ln["event"] for ln in self.lines()]
@@ -59,81 +59,81 @@ class Rig(Setup):
 @pytest.mark.spec("RNF-12", "RF-11")
 class TestUncertainSend:
     async def test_not_a_failure(self, tmp_path):
-        s = Rig(tmp_path)
-        s.lose_reply()
-        result = await s.send(buy())
+        rig = Rig(tmp_path)
+        rig.lose_reply()
+        result = await rig.send(buy())
         assert isinstance(result, Uncertain) and "ReadTimeout" in result.error
-        assert s.events() == ["order_sent", "order_unknown"]
-        assert s.lines()[1]["client_id"] == "t-000001"
-        assert s.lines()[1]["data"] == {"error": "NonKYC: sin respuesta (ReadTimeout)"}
-        assert list(s.orders.uncertain) == ["t-000001"]
+        assert rig.events() == ["order_sent", "order_unknown"]
+        assert rig.lines()[1]["client_id"] == "t-000001"
+        assert rig.lines()[1]["data"] == {"error": "NonKYC: sin respuesta (ReadTimeout)"}
+        assert list(rig.orders.uncertain) == ["t-000001"]
 
     async def test_clear_rejection_stays_a_failure(self, tmp_path):
-        s = Rig(tmp_path)
+        rig = Rig(tmp_path)
 
-        async def boom(req):
+        async def boom(order_request):
             raise VenueError("Insufficient funds")
 
-        s.venue.place_limit = boom
-        await s.send(buy())
-        assert s.events() == ["order_sent", "order_error"]
-        assert s.orders.uncertain == {}
+        rig.venue.place_limit = boom
+        await rig.send(buy())
+        assert rig.events() == ["order_sent", "order_error"]
+        assert rig.orders.uncertain == {}
 
 
 @pytest.mark.spec("RNF-12", "RF-11")
 class TestReconcile:
     async def test_shows_up_by_client_id(self, tmp_path):
-        s = Rig(tmp_path)
-        s.lose_reply()
-        await s.send(buy())
-        (r,) = await s.orders.reconcile()
-        assert (r.client_id, r.outcome) == ("t-000001", "found")
-        assert "dry-nk-1" in r.message
-        ack = s.lines()[-1]
+        rig = Rig(tmp_path)
+        rig.lose_reply()
+        await rig.send(buy())
+        (reconciled,) = await rig.orders.reconcile()
+        assert (reconciled.client_id, reconciled.outcome) == ("t-000001", "found")
+        assert "dry-nk-1" in reconciled.message
+        ack = rig.lines()[-1]
         assert (ack["event"], ack["client_id"]) == ("order_ack", "t-000001")
         assert ack["data"] == {"order_id": "dry-nk-1", "status": "open", "reconciled": True}
-        assert s.orders.uncertain == {}
+        assert rig.orders.uncertain == {}
 
     async def test_reconciled_counts_for_validating(self, tmp_path):
         """Once found, a sell crossing it is rejected (self_cross)."""
-        s = Rig(tmp_path)
-        s.lose_reply()
-        await s.send(buy(price="0.00725000"))
-        await s.orders.reconcile()
-        result = await s.orders.prepare(sell(price="0.00724000"))
+        rig = Rig(tmp_path)
+        rig.lose_reply()
+        await rig.send(buy(price="0.00725000"))
+        await rig.orders.reconcile()
+        result = await rig.orders.prepare(sell(price="0.00724000"))
         assert isinstance(result, Rejected) and "self_cross" in result.codes
 
     async def test_no_trace_stays_uncertain_until_60_s(self, tmp_path):
-        s = Rig(tmp_path)
-        s.lose_reply(create=False)
-        await s.send(buy())
-        s.now = NOW + 59_000
-        assert await s.orders.reconcile() == []
-        assert s.events() == ["order_sent", "order_unknown"]
-        s.now = NOW + 61_000
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "missing"
-        err = s.lines()[-1]
+        rig = Rig(tmp_path)
+        rig.lose_reply(create=False)
+        await rig.send(buy())
+        rig.now = NOW + 59_000
+        assert await rig.orders.reconcile() == []
+        assert rig.events() == ["order_sent", "order_unknown"]
+        rig.now = NOW + 61_000
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "missing"
+        err = rig.lines()[-1]
         assert (err["event"], err["client_id"]) == ("order_error", "t-000001")
         assert err["data"]["reconciled"] is True and "no existe" in err["data"]["error"]
-        assert s.orders.uncertain == {}
+        assert rig.orders.uncertain == {}
 
     async def test_unresponsive_venue_is_retried(self, tmp_path):
-        s = Rig(tmp_path)
-        s.lose_reply()
-        await s.send(buy())
+        rig = Rig(tmp_path)
+        rig.lose_reply()
+        await rig.send(buy())
 
         async def down(since):
             raise VenueError("caído")
 
-        real, s.venue.recent_orders = s.venue.recent_orders, down
+        real, rig.venue.recent_orders = rig.venue.recent_orders, down
         # not even past the deadline is it deemed nonexistent without being able to look
-        s.now = NOW + 120_000
-        assert await s.orders.reconcile() == []
-        assert list(s.orders.uncertain) == ["t-000001"]
-        s.venue.recent_orders = real
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "found"
+        rig.now = NOW + 120_000
+        assert await rig.orders.reconcile() == []
+        assert list(rig.orders.uncertain) == ["t-000001"]
+        rig.venue.recent_orders = real
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "found"
 
 
 @pytest.mark.spec("RNF-12")
@@ -141,73 +141,73 @@ class TestWithoutClientId:
     """Neoxa (PA-09): by side, price and quantity, without already known orders."""
 
     async def test_equal_known_one_not_confused(self, tmp_path):
-        s = Rig(tmp_path)
-        s.venue.keeps_client_id = False
-        first = await s.send(buy())
+        rig = Rig(tmp_path)
+        rig.venue.keeps_client_id = False
+        first = await rig.send(buy())
         assert isinstance(first, Sent)
-        s.lose_reply()
-        await s.send(buy())
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "found" and "dry-nk-2" in r.message
+        rig.lose_reply()
+        await rig.send(buy())
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "found" and "dry-nk-2" in reconciled.message
 
     async def test_equal_one_sent_later_by_terminal_not_confused(self, tmp_path):
-        s = Rig(tmp_path)
-        s.venue.keeps_client_id = False
-        s.lose_reply()
-        await s.send(buy())
-        assert isinstance(await s.send(buy()), Sent)  # dry-nk-2, with its ack
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "found" and "dry-nk-1" in r.message
+        rig = Rig(tmp_path)
+        rig.venue.keeps_client_id = False
+        rig.lose_reply()
+        await rig.send(buy())
+        assert isinstance(await rig.send(buy()), Sent)  # dry-nk-2, with its ack
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "found" and "dry-nk-1" in reconciled.message
 
     async def test_two_candidates_stays_uncertain_and_warns_once(self, tmp_path):
-        s = Rig(tmp_path)
-        s.venue.keeps_client_id = False
-        s.lose_reply()
-        await s.send(buy())
+        rig = Rig(tmp_path)
+        rig.venue.keeps_client_id = False
+        rig.lose_reply()
+        await rig.send(buy())
         # another identical, created outside the terminal in the same window
-        await s.venue.place_limit(OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "x"))
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "ambiguous" and "2" in r.message
-        assert await s.orders.reconcile() == []
-        assert list(s.orders.uncertain) == ["t-000001"]
-        assert s.events() == ["order_sent", "order_unknown"]
+        await rig.venue.place_limit(OrderRequest("nk", "buy", D("0.01"), D("0.00725"), "x"))
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "ambiguous" and "2" in reconciled.message
+        assert await rig.orders.reconcile() == []
+        assert list(rig.orders.uncertain) == ["t-000001"]
+        assert rig.events() == ["order_sent", "order_unknown"]
 
 
 @pytest.mark.spec("RNF-12", "RF-07")
 class TestDoubleOrder:
     async def test_uncertain_leg_stays_unknown_and_resolves(self, tmp_path):
-        s = double.Setup(tmp_path)
-        real = s.venues["nx"].place_limit
+        rig = double.Setup(tmp_path)
+        real = rig.venues["nx"].place_limit
 
-        async def lost(req):
-            await real(req)
+        async def lost(order_request):
+            await real(order_request)
             raise UncertainError("Neoxa: sin respuesta (ReadTimeout)")
 
-        s.venues["nx"].place_limit = lost
-        cmd = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
-        result = await s.orders.confirm_double(await s.orders.prepare_double(cmd))
+        rig.venues["nx"].place_limit = lost
+        command = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
+        result = await rig.orders.confirm_double(await rig.orders.prepare_double(command))
         assert isinstance(result, DoubleSent)
         assert (result.state.buy.status, result.state.sell.status) == ("open", "unknown")
         assert "ReadTimeout" in result.state.sell.error
-        unknown = next(ln for ln in s.lines() if ln["event"] == "order_unknown")
+        unknown = next(ln for ln in rig.lines() if ln["event"] == "order_unknown")
         assert unknown["data"]["double"] == "d-000001"
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "found"
-        leg = s.orders.doubles["d-000001"].sell
-        assert (leg.status, leg.order_id, leg.error) == ("open", "dry-nx-1", None)
-        ack = s.lines()[-1]
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "found"
+        order_leg = rig.orders.doubles["d-000001"].sell
+        assert (order_leg.status, order_leg.order_id, order_leg.error) == ("open", "dry-nx-1", None)
+        ack = rig.lines()[-1]
         assert ack["event"] == "order_ack" and ack["data"]["double"] == "d-000001"
 
     async def test_missing_leg_is_rejected(self, tmp_path):
-        s = double.Setup(tmp_path)
+        rig = double.Setup(tmp_path)
 
-        async def lost(req):
+        async def lost(order_request):
             raise UncertainError("Neoxa: sin respuesta (ReadTimeout)")
 
-        s.venues["nx"].place_limit = lost
-        cmd = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
-        await s.orders.confirm_double(await s.orders.prepare_double(cmd))
-        s.now = NOW + 61_000
-        (r,) = await s.orders.reconcile()
-        assert r.outcome == "missing"
-        assert s.orders.doubles["d-000001"].sell.status == "rejected"
+        rig.venues["nx"].place_limit = lost
+        command = DoubleOrder(D("0.01"), "nk", D("0.00725000"), "nx", D("0.00726000"))
+        await rig.orders.confirm_double(await rig.orders.prepare_double(command))
+        rig.now = NOW + 61_000
+        (reconciled,) = await rig.orders.reconcile()
+        assert reconciled.outcome == "missing"
+        assert rig.orders.doubles["d-000001"].sell.status == "rejected"

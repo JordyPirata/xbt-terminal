@@ -89,10 +89,10 @@ class _Order:
     filled: Decimal = ZERO
     rejected: bool = False
 
-    def takes(self, venue: str, side: str, qty: Decimal, price: Decimal, at: int) -> bool:
+    def takes(self, venue: str, side: str, quantity: Decimal, price: Decimal, at: int) -> bool:
         if self.rejected or self.venue != venue or self.side != side or self.sent_at > at:
             return False
-        if self.filled + qty > self.qty:
+        if self.filled + quantity > self.qty:
             return False
         return price <= self.price if side == "buy" else price >= self.price
 
@@ -165,24 +165,28 @@ class Report:
     values: tuple[ValueSample, ...] = ()
 
 
-def _part(leg: _Leg, qty: Decimal) -> Decimal:
+def _part(order_leg: _Leg, quantity: Decimal) -> Decimal:
     """What `qty` of the leg paid or collected, at its average price."""
-    return leg.cost if qty == leg.filled else qty * leg.cost / leg.filled
+    return (
+        order_leg.cost
+        if quantity == order_leg.filled
+        else quantity * order_leg.cost / order_leg.filled
+    )
 
 
-def _add_fee(d: _Double, fee: Decimal, asset: str | None, price: Decimal) -> None:
+def _add_fee(double: _Double, fee: Decimal, asset: str | None, price: Decimal) -> None:
     """Add (or subtract, with a negative fee) a fill's fee: in BTC, BTCB2 at its price;
     another asset's apart and unvalued."""
     if fee == 0 or asset in (None, QUOTE):
-        d.fees += fee
+        double.fees += fee
     elif asset == BASE:
-        d.fees += fee * price
+        double.fees += fee * price
     else:
-        left = d.other_fees.get(asset, ZERO) + fee
+        left = double.other_fees.get(asset, ZERO) + fee
         if left == 0:
-            d.other_fees.pop(asset, None)
+            double.other_fees.pop(asset, None)
         else:
-            d.other_fees[asset] = left
+            double.other_fees[asset] = left
 
 
 def _ms(stamp: str) -> int:
@@ -238,8 +242,8 @@ class _Builder:
         if order.filled < order.qty:
             self.open.setdefault((order.venue, order.side), {})[cid] = None
         if double is not None:
-            d = self.doubles.setdefault(double, _Double(double, at))
-            getattr(d, order.side).venue = order.venue
+            double_state = self.doubles.setdefault(double, _Double(double, at))
+            getattr(double_state, order.side).venue = order.venue
 
     def _on_order_ack(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
         if row["client_id"] is not None and data.get("order_id"):
@@ -254,37 +258,37 @@ class _Builder:
             self._close(row["client_id"])
 
     def _on_bot_fire(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
-        pct = data.get("net_pct")
-        self.fired[data["double"]] = _dec(pct) if pct is not None else None
+        percent = data.get("net_pct")
+        self.fired[data["double"]] = _dec(percent) if percent is not None else None
 
     def _on_hanging_leg(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
         self.hanging.add(data["double"])
 
     def _on_fill(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
         venue, side = row["venue"], data["side"]
-        qty, price, at = _dec(data["qty"]), _dec(data["price"]), _ms(row["ts"])
+        quantity, price, at = _dec(data["qty"]), _dec(data["price"]), _ms(row["ts"])
         fee = _dec(data.get("fee") or 0)
         key = (venue, str(data["trade_id"]))
         if key in self.trades:
             return
         self.trades.add(key)
-        cid = self._owner(row, data, venue, side, qty, price, at)
+        cid = self._owner(row, data, venue, side, quantity, price, at)
         order = self.orders.get(cid) if cid is not None else None
         if order is None:
             self.unassigned += 1
             return
-        order.filled += qty
+        order.filled += quantity
         if cid is not None and order.filled >= order.qty:
             self._close(cid)
         if order.double is None:
             return
-        d = self.doubles[order.double]
-        leg = getattr(d, order.side)
-        leg.filled += qty
-        leg.cost += qty * price
+        double_state = self.doubles[order.double]
+        order_leg = getattr(double_state, order.side)
+        order_leg.filled += quantity
+        order_leg.cost += quantity * price
         asset = data.get("fee_asset")
-        _add_fee(d, fee, asset, price)
-        self.fill_fees[key] = (d, price, fee, asset)
+        _add_fee(double_state, fee, asset, price)
+        self.fill_fees[key] = (double_state, price, fee, asset)
 
     def _on_fill_fee(self, row: Mapping[str, Any], data: Mapping[str, Any]) -> None:
         """The venue corrected a fill's fee (D-64): it replaces the written one. For a
@@ -293,11 +297,11 @@ class _Builder:
         known = self.fill_fees.get(key)
         if known is None:
             return
-        d, price, old_fee, old_asset = known
+        double_state, price, old_fee, old_asset = known
         fee, asset = _dec(data.get("fee") or 0), data.get("fee_asset")
-        _add_fee(d, -old_fee, old_asset, price)
-        _add_fee(d, fee, asset, price)
-        self.fill_fees[key] = (d, price, fee, asset)
+        _add_fee(double_state, -old_fee, old_asset, price)
+        _add_fee(double_state, fee, asset, price)
+        self.fill_fees[key] = (double_state, price, fee, asset)
 
     def _owner(
         self,
@@ -305,7 +309,7 @@ class _Builder:
         data: Mapping[str, Any],
         venue: str,
         side: str,
-        qty: Decimal,
+        quantity: Decimal,
         price: Decimal,
         at: int,
     ) -> str | None:
@@ -317,10 +321,16 @@ class _Builder:
             return self.acks[(venue, str(oid))]
         # no ids (Neoxa, D-45): the only compatible order, or the only recent one. A full
         # order can still take a zero or negative quantity: those look at all of them
-        pool = self.open.get((venue, side), {}) if qty > 0 else self.orders
-        fits = [c for c in pool if self.orders[c].takes(venue, side, qty, price, at)]
+        pool = self.open.get((venue, side), {}) if quantity > 0 else self.orders
+        fits = [
+            candidate
+            for candidate in pool
+            if self.orders[candidate].takes(venue, side, quantity, price, at)
+        ]
         if len(fits) > 1:
-            fits = [c for c in fits if at - self.orders[c].sent_at <= RECENT_MS]
+            fits = [
+                candidate for candidate in fits if at - self.orders[candidate].sent_at <= RECENT_MS
+            ]
         return fits[0] if len(fits) == 1 else None
 
     def _close(self, cid: str) -> None:
@@ -328,12 +338,12 @@ class _Builder:
         if order is not None:
             self.open.get((order.venue, order.side), {}).pop(cid, None)
 
-    def result(self, d: _Double, prices: Mapping[str, Decimal]) -> DoubleResult:
-        buy, sell = d.buy, d.sell
+    def result(self, double: _Double, prices: Mapping[str, Decimal]) -> DoubleResult:
+        buy, sell = double.buy, double.sell
         token_fees = ZERO
-        for asset, qty in d.other_fees.items():
+        for asset, quantity in double.other_fees.items():
             if asset in prices:
-                token_fees += qty * prices[asset]
+                token_fees += quantity * prices[asset]
         buy_avg = buy.cost / buy.filled if buy.filled else None
         sell_avg = sell.cost / sell.filled if sell.filled else None
         matched = min(buy.filled, sell.filled)
@@ -341,20 +351,20 @@ class _Builder:
         status: Status
         if buy_avg is None or sell_avg is None:
             status = "no_fills"
-        elif d.id in self.hanging and mismatch != 0:
+        elif double.id in self.hanging and mismatch != 0:
             status = "hanging"
         else:
             status = "closed"
-        result = pct = None
+        result = percent = None
         if status == "closed":
             # with the whole leg matched, its exact cost: the average carries a division
             paid, got = _part(buy, matched), _part(sell, matched)
-            result = got - paid - d.fees - token_fees
-            pct = result / paid * 100
+            result = got - paid - double.fees - token_fees
+            percent = result / paid * 100
         return DoubleResult(
-            id=d.id,
-            origin="bot" if d.id in self.fired else "manual",
-            started=d.started,
+            id=double.id,
+            origin="bot" if double.id in self.fired else "manual",
+            started=double.started,
             buy_venue=buy.venue,
             sell_venue=sell.venue,
             buy_filled=buy.filled,
@@ -362,13 +372,13 @@ class _Builder:
             buy_avg=buy_avg,
             sell_avg=sell_avg,
             matched=matched,
-            fees=d.fees,
-            other_fees=tuple(sorted(d.other_fees.items())),
+            fees=double.fees,
+            other_fees=tuple(sorted(double.other_fees.items())),
             mismatch=mismatch,
             status=status,
             result=result,
-            result_pct=pct,
-            expected_pct=self.fired.get(d.id),
+            result_pct=percent,
+            expected_pct=self.fired.get(double.id),
             token_fees=token_fees,
         )
 
@@ -389,41 +399,43 @@ def compute(
     rows count; a replay report reads the dry-run ones (RF-35)."""
     prices = prices or {}
     rows = list(rows)
-    b = _Builder(mode)
+    builder = _Builder(mode)
     for row in rows:
-        b.feed(row)
+        builder.feed(row)
     values, bad_values = series(rows, since_ms)
     doubles = tuple(
-        b.result(d, prices)
-        for d in sorted(b.doubles.values(), key=lambda d: (d.started, d.id))
-        if since_ms is None or d.started >= since_ms
+        builder.result(double, prices)
+        for double in sorted(
+            builder.doubles.values(), key=lambda double: (double.started, double.id)
+        )
+        if since_ms is None or double.started >= since_ms
     )
-    closed = [d.result for d in doubles if d.result is not None]
+    closed = [double.result for double in doubles if double.result is not None]
     other: dict[str, Decimal] = {}
     used: dict[str, Decimal] = {}
-    for d in doubles:
-        if d.result is not None:
-            for asset, qty in d.other_fees:
+    for double in doubles:
+        if double.result is not None:
+            for asset, quantity in double.other_fees:
                 if asset in prices:
                     used[asset] = prices[asset]
                 else:
-                    other[asset] = other.get(asset, ZERO) + qty
+                    other[asset] = other.get(asset, ZERO) + quantity
     curve: list[tuple[int, Decimal]] = []
     acc = ZERO
-    for d in doubles:
-        if d.result is not None:
-            acc += d.result
-            curve.append((d.started, acc))
+    for double in doubles:
+        if double.result is not None:
+            acc += double.result
+            curve.append((double.started, acc))
     summary = Summary(
         closed=len(closed),
         total=sum(closed, ZERO),
         mean=sum(closed, ZERO) / len(closed) if closed else None,
         best=max(closed) if closed else None,
         worst=min(closed) if closed else None,
-        hanging=sum(d.status == "hanging" for d in doubles),
-        no_fills=sum(d.status == "no_fills" for d in doubles),
-        unassigned=b.unassigned,
-        bad_rows=b.bad + bad_lines + bad_values,
+        hanging=sum(double.status == "hanging" for double in doubles),
+        no_fills=sum(double.status == "no_fills" for double in doubles),
+        unassigned=builder.unassigned,
+        bad_rows=builder.bad + bad_lines + bad_values,
         other_fees=tuple(sorted(other.items())),
         prices=tuple(sorted(used.items())),
     )

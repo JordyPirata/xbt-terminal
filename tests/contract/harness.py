@@ -51,7 +51,7 @@ class Harness:
     async def __aenter__(self) -> Harness:
         raise NotImplementedError
 
-    async def __aexit__(self, *exc: object) -> None:
+    async def __aexit__(self, *error: object) -> None:
         raise NotImplementedError
 
     @asynccontextmanager

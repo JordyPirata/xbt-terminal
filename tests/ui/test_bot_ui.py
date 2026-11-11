@@ -111,7 +111,7 @@ class TestStopping:
 
 @pytest.mark.spec("RF-21", "RF-23")
 async def test_stop_by_rejected_leg_shows_red(tmp_path):
-    async def refuse(req):
+    async def refuse(order_request):
         raise VenueError("Neoxa: [400] rechazada")
 
     async with BotRig(tmp_path) as rig:

@@ -100,22 +100,22 @@ class BookPanel(Static):
     def on_mount(self) -> None:
         self.show(None, None)
 
-    def level_at(self, x: int, y: int) -> tuple[str, Decimal, Decimal] | None:
+    def level_at(self, column: int, line: int) -> tuple[str, Decimal, Decimal] | None:
         """(side, price, quantity) of the level at content (x, y); None off a level. Row 0:
         header; 1..levels: levels; left of the separator, bid. In the cumulative column the
         quantity is the cumulative one."""
-        if not 1 <= y <= self.levels:
+        if not 1 <= line <= self.levels:
             return None
         bids, asks = self._rows
-        x -= self.ladder_x  # bars end up negative (bids) or past the asks
+        column -= self.ladder_x  # bars end up negative (bids) or past the asks
         ask_x = SIDE_W + len(SEP)
-        if -self.ladder_x <= x < SIDE_W:
-            side, rows, cumulative = "bid", bids, x < QTY_W
-        elif x >= ask_x:
-            side, rows, cumulative = "ask", asks, x >= ask_x + PRICE_W + QTY_W
+        if -self.ladder_x <= column < SIDE_W:
+            side, rows, cumulative = "bid", bids, column < QTY_W
+        elif column >= ask_x:
+            side, rows, cumulative = "ask", asks, column >= ask_x + PRICE_W + QTY_W
         else:
             return None
-        i = y - 1
+        i = line - 1
         if i >= len(rows):
             return None
         row = rows[i]
@@ -191,13 +191,13 @@ class BookPanel(Static):
         if row is None:
             return Text(" " * SIDE_W)
         price = f"{row.price:.{pd}f}"
-        qty, cum = f"{row.qty:.{qd}f}", f"{row.cumulative:.{qd}f}"
+        quantity, cum = f"{row.qty:.{qd}f}", f"{row.cumulative:.{qd}f}"
         tag = AMM_TAG if row.amm else " " * len(AMM_TAG)
         if side == "bid":
-            line = f"{cum:>{QTY_W}}{qty:>{QTY_W}}{price:>{PRICE_W}}{tag}"
+            line = f"{cum:>{QTY_W}}{quantity:>{QTY_W}}{price:>{PRICE_W}}{tag}"
             style = "green"
         else:
-            line = f"{price:<{PRICE_W}}{qty:>{QTY_W}}{cum:>{QTY_W}}{tag}"
+            line = f"{price:<{PRICE_W}}{quantity:>{QTY_W}}{cum:>{QTY_W}}{tag}"
             style = "red"
         return Text(line, style=f"{style} dim" if row.amm else style)
 
@@ -206,10 +206,10 @@ class BookPanel(Static):
         bid, ask, spread, mid = book.best_bid, book.best_ask, book.spread, book.mid
         if spread is None or mid is None:
             return Text("sin spread: falta un lado o el book está cruzado", style="yellow")
-        pct = spread / mid * HUNDRED
+        percent = spread / mid * HUNDRED
         return Text(
             f"bid {bid:.{pd}f} · ask {ask:.{pd}f} · spread {spread:.{pd}f} "
-            f"({sats(spread):.0f} sats · {pct:.2f} %)",
+            f"({sats(spread):.0f} sats · {percent:.2f} %)",
             style="bold",
         )
 
@@ -236,7 +236,7 @@ def _price_ticks(low: float, high: float) -> tuple[list[float], list[str]]:
     gap = (high - low) / (Y_TICKS - 1)
     decimals = max(0, 1 - math.floor(math.log10(gap)))
     ticks = [low + gap * i for i in range(Y_TICKS)]
-    return ticks, [f"{t:.{decimals}f}" for t in ticks]
+    return ticks, [f"{tick:.{decimals}f}" for tick in ticks]
 
 
 class ChartPanel(PlotextPlot):
@@ -284,10 +284,10 @@ class ChartPanel(PlotextPlot):
         plt.candlestick(
             xs,
             {
-                "Open": [float(c.open) for c in candles],
-                "Close": [float(c.close) for c in candles],
-                "High": [float(c.high) for c in candles],
-                "Low": [float(c.low) for c in candles],
+                "Open": [float(candle.open) for candle in candles],
+                "Close": [float(candle.close) for candle in candles],
+                "High": [float(candle.high) for candle in candles],
+                "Low": [float(candle.low) for candle in candles],
             },
         )
         # With this range, plotext puts candle i in column canvas-1-step·(n-1-i)
@@ -309,7 +309,7 @@ class ChartPanel(PlotextPlot):
     def _range(candles: tuple[Candle, ...]) -> tuple[float, float]:
         """Range of the bodies, not the wicks: a stray wick would crush every candle; the
         one sticking out is cut at the border (D-67)."""
-        bodies = [p for c in candles for p in (c.open, c.close)]
+        bodies = [price for candle in candles for price in (candle.open, candle.close)]
         return float(min(bodies)), float(max(bodies))
 
 
@@ -409,12 +409,12 @@ class AccountView:
     error: str | None
 
 
-def _ratio(pct: Decimal | None, target: InventoryTarget | None) -> Text:
+def _ratio(percent: Decimal | None, target: InventoryTarget | None) -> Text:
     """% of the value in BTCB2 (RF-27): green inside the band, yellow outside."""
-    if pct is None:
+    if percent is None:
         return Text(f"{BASE_LABEL} — %")
-    style = "" if target is None else "green" if target.in_band(pct) else "yellow"
-    return Text(f"{BASE_LABEL} {pct:.1f} %", style=style)
+    style = "" if target is None else "green" if target.in_band(percent) else "yellow"
+    return Text(f"{BASE_LABEL} {percent:.1f} %", style=style)
 
 
 def render_balances(
@@ -426,11 +426,11 @@ def render_balances(
     """(title, lines). One line per venue: available + in orders of each asset, its BTC
     value at the mid and the % in BTCB2; in the title, the total net inventory."""
     out = Text()
-    for i, vid in enumerate(("nk", "nx")):
+    for i, venue_id in enumerate(("nk", "nx")):
         if i:
             out.append("\n")
-        out.append(f" {VENUE_NAME[vid]:<7}", style="bold")
-        view = views.get(vid)
+        out.append(f" {VENUE_NAME[venue_id]:<7}", style="bold")
+        view = views.get(venue_id)
         if view is None:
             out.append("sin keys", style="dim")
             continue
@@ -440,7 +440,7 @@ def render_balances(
             # always 8 decimals: the balance may have more than the order lot
             out.append(f"BTC {_pair(view.balances.get('BTC'), 8)}")
             out.append(f" · {BASE_LABEL} {_pair(view.balances.get('BTCB2'), 8)}")
-            item = inv.venues.get(vid)
+            item = inv.venues.get(venue_id)
             value = item.value if item else None
             out.append(" · valor ")
             out.append(f"{value:.8f} BTC" if value is not None else "—")
@@ -500,22 +500,24 @@ LEG_SIDE = {"buy": "COMPRA", "sell": "VENTA"}
 VENUE_NAME: dict[VenueId, str] = {"nk": "NonKYC", "nx": "Neoxa"}
 
 
-def _leg_line(leg: Leg, spec: MarketSpec | None) -> Text:
-    req = leg.req
+def _leg_line(order_leg: Leg, spec: MarketSpec | None) -> Text:
+    order_request = order_leg.req
     qd = _decimals(spec.lot_size) if spec else None
     pd = _decimals(spec.tick_size) if spec else None
 
-    def num(value: Decimal, d: int | None) -> str:
-        return f"{value:.{d}f}" if d is not None else f"{value:f}"
+    def num(value: Decimal, decimals: int | None) -> str:
+        return f"{value:.{decimals}f}" if decimals is not None else f"{value:f}"
 
-    label, color = LEG_STATUS[leg.status]
-    out = Text(f" {LEG_SIDE[req.side]:<6} {VENUE_NAME[req.venue]:<6} ", style="bold")
-    out.append(f"{num(req.qty, qd)} @ {num(req.price, pd)} · ")
+    label, color = LEG_STATUS[order_leg.status]
+    out = Text(
+        f" {LEG_SIDE[order_request.side]:<6} {VENUE_NAME[order_request.venue]:<6} ", style="bold"
+    )
+    out.append(f"{num(order_request.qty, qd)} @ {num(order_request.price, pd)} · ")
     out.append(label, style=color)
     # what filled (the amount asked is before the @); the order id is under `o` (D-67)
-    out.append(f" {num(leg.filled, qd)}")
-    if leg.error:
-        out.append(f" · {leg.error}", style="red")
+    out.append(f" {num(order_leg.filled, qd)}")
+    if order_leg.error:
+        out.append(f" · {order_leg.error}", style="red")
     return out
 
 
@@ -523,8 +525,8 @@ def render_legs(
     state: DoubleState, reason: str | None, specs: dict[VenueId, MarketSpec | None]
 ) -> Text:
     out = Text()
-    for leg in state.legs:
-        out.append_text(_leg_line(leg, specs.get(leg.req.venue)))
+    for order_leg in state.legs:
+        out.append_text(_leg_line(order_leg, specs.get(order_leg.req.venue)))
         out.append("\n")
     if reason:
         out.append(f" ⚠ PIERNA COLGADA: {reason}", style="bold white on red")
@@ -600,7 +602,7 @@ class ResultsChart(PlotextPlot):
         self.border_title = "Acumulado (sats)" if kind == "cum" else "Por doble (sats)"
 
     def show(self, doubles: tuple[DoubleResult, ...]) -> None:
-        self.doubles = tuple(d for d in doubles if d.result is not None)
+        self.doubles = tuple(double for double in doubles if double.result is not None)
         self.refresh()
 
     def render(self) -> RenderResult:
@@ -614,19 +616,28 @@ class ResultsChart(PlotextPlot):
             plt.title("sin dobles cerradas en el rango")
             return
         xs = list(range(len(self.doubles)))
-        values = [float(sats(d.result or 0)) for d in self.doubles]
+        values = [float(sats(double.result or 0)) for double in self.doubles]
         if self.kind == "cum":
             acc, cum = 0.0, []
-            for v in values:
-                acc += v
+            for value in values:
+                acc += value
                 cum.append(acc)
             plt.plot(xs, cum, color="cyan", marker="braille")
             plt.title(f"total {acc:+.0f} sats")
         else:
             for sign, color in ((1, "green"), (-1, "red")):
-                pts = [(x, v) for x, v in zip(xs, values, strict=True) if (v >= 0) == (sign > 0)]
+                pts = [
+                    (index, value)
+                    for index, value in zip(xs, values, strict=True)
+                    if (value >= 0) == (sign > 0)
+                ]
                 if pts:
-                    plt.bar([x for x, _ in pts], [v for _, v in pts], color=color, width=0.6)
+                    plt.bar(
+                        [index for index, _ in pts],
+                        [value for _, value in pts],
+                        color=color,
+                        width=0.6,
+                    )
             plt.title(f"{len(values)} dobles")
         span = self.doubles[-1].started - self.doubles[0].started
         fmt = "%H:%M" if span < 86_400_000 else "%m-%d %H:%M"
@@ -634,8 +645,8 @@ class ResultsChart(PlotextPlot):
         plt.xticks(
             xs[::every],
             [
-                datetime.fromtimestamp(d.started / 1000, UTC).strftime(fmt)
-                for d in self.doubles[::every]
+                datetime.fromtimestamp(double.started / 1000, UTC).strftime(fmt)
+                for double in self.doubles[::every]
             ],
         )
 
@@ -674,8 +685,8 @@ class ValueChart(PlotextPlot):
     def segments(self) -> list[tuple[ValueSample, ...]]:
         """Stretches without gaps, each reduced in proportion to its size."""
         found = segments(self.values)
-        n = len(self.values)
-        return [thin(seg, max(2, MAX_POINTS * len(seg) // max(n, 1))) for seg in found]
+        sample_count = len(self.values)
+        return [thin(seg, max(2, MAX_POINTS * len(seg) // max(sample_count, 1))) for seg in found]
 
     def render(self) -> RenderResult:
         self._draw()
@@ -691,25 +702,29 @@ class ValueChart(PlotextPlot):
             plt.title("aún sin muestras")
             return
         first_sample, last = self.values[0], self.values[-1]
-        bases = {v.venue: v.value for v in first_sample.venues}
+        bases = {venue_value.venue: venue_value.value for venue_value in first_sample.venues}
         labelled: set[str] = set()
         all_ys: list[float] = []
         for seg in self.segments():
-            xs = [s.ts / 1000 for s in seg]
+            xs = [sample.ts / 1000 for sample in seg]
             if self.kind == "total":
-                ys = [self._y(s.value, first_sample.value) for s in seg]
+                ys = [self._y(sample.value, first_sample.value) for sample in seg]
                 all_ys += ys
                 plt.plot(xs, ys, color="cyan", marker="braille")
                 continue
-            for i, vid in enumerate(v.venue for v in seg[0].venues):
-                base = bases.get(vid, ZERO)
-                ys = [self._y(s.venues[i].value, base) for s in seg if len(s.venues) > i]
+            for i, venue_id in enumerate(venue_value.venue for venue_value in seg[0].venues):
+                base = bases.get(venue_id, ZERO)
+                ys = [
+                    self._y(sample.venues[i].value, base)
+                    for sample in seg
+                    if len(sample.venues) > i
+                ]
                 all_ys += ys
-                name = VENUE_NAME.get(vid, vid)
+                name = VENUE_NAME.get(venue_id, venue_id)
                 label = None if name in labelled else name
                 labelled.add(name)
                 plt.plot(
-                    xs[: len(ys)], ys, color=VENUE_COLOR.get(vid, "white"),
+                    xs[: len(ys)], ys, color=VENUE_COLOR.get(venue_id, "white"),
                     marker="braille", label=label,
                 )  # fmt: skip
         # axis fitted to the data; when flat, plotext would open it ±50 %
@@ -725,18 +740,19 @@ class ValueChart(PlotextPlot):
                 plt.title(f"{last.value:.8f} BTC")
         else:
             names = []
-            for v in last.venues:
-                name = VENUE_NAME.get(v.venue, v.venue)
+            for venue_value in last.venues:
+                name = VENUE_NAME.get(venue_value.venue, venue_value.venue)
                 if self.relative:
-                    names.append(f"{name} {sats(v.value - bases.get(v.venue, ZERO)):+.0f} sats")
+                    base = bases.get(venue_value.venue, ZERO)
+                    names.append(f"{name} {sats(venue_value.value - base):+.0f} sats")
                 else:
-                    names.append(f"{name} {v.value:.8f}")
+                    names.append(f"{name} {venue_value.value:.8f}")
             plt.title(" · ".join(names))
         first = first_sample.ts
         span = last.ts - first
         fmt = "%H:%M" if span < 86_400_000 else "%m-%d %H:%M"
         ticks = [first + span * k // 4 for k in range(5)] if span else [first]
         plt.xticks(
-            [t / 1000 for t in ticks],
-            [datetime.fromtimestamp(t / 1000, UTC).strftime(fmt) for t in ticks],
+            [tick / 1000 for tick in ticks],
+            [datetime.fromtimestamp(tick / 1000, UTC).strftime(fmt) for tick in ticks],
         )

@@ -1255,3 +1255,30 @@ ni los textos que ve el usuario.
   `tests/perf/test_results_latency.py`: `compute` con 1500 dobles de 622 ms a 60 ms
   (presupuesto 150 ms). Con lectura incluida y 1545 dobles en 10 días, `todo` de
   ~0,58 s a ~0,07 s y `7d` de ~0,50 s a ~0,05 s.
+
+### T-98 Renombrar identificadores abreviados · `done` · RNF-21 · D-83
+- Hecho en `src/`, `tests/` y `tools/`: locales, parámetros y funciones internas con
+  nombres completos. Abreviaturas de varias letras (`vid`, `req`, `qty`, `pct`, `st`,
+  `lv`, `leg`, `ts`, `tp`, `cmd`, `exc`) y letras sueltas (salvo `_`, `i`, `j`, `k`,
+  `D` y el TypeVar `T`).
+- Renombrado por tokens dentro de cada función, con guard de colisión (nunca regex
+  global). Cada fichero se verificó contra el commit: cadenas, atributos, keywords y
+  campos de clase intactos, salvo los nombres de `parametrize` que siguen a un
+  parámetro renombrado y los campos de prueba de `tests/services/test_wire.py`.
+- Excepciones: `tests/unit/bot_reference.py` (oráculo congelado, su cabecera pide no
+  tocarlo; queda como referencia de D-70) y `t` en `services/recording.py` (campo de
+  dataclass del formato de grabación).
+- Guarda: `tests/unit/test_names.py` falla ante cualquier nombre de una letra fuera de
+  la lista permitida, excepto los campos de clase y el oráculo.
+
+### T-99 Quitar comentarios que repiten el código · `done` · RNF-21 · D-83 · dep T-98
+- Criterio (elegido por el dueño): quitar solo los comentarios que repiten el código.
+  Se conservan directivas (`# fmt:`, `# type:`, `# noqa`), referencias a la spec
+  (RF/RNF/CA/PA/D/T), unidades de los campos, porqués, escenarios y ejemplos numéricos.
+- Hecho: 41 banners de sección sin spec en `src/` y `tests/`; cinco notas que repetían
+  la línea de al lado (`src/`); y etiquetas de paso (`# subscribe`, `# pong`,
+  `# venue time`, `# warm up`, `# previous`, `# restart`, `# 40/exchange,`) y dos
+  comentarios que repetían el assert (`# Decimal as string`, `# starts with the date`).
+- Revisado: los 313 comentarios de texto libre de `src/` y los de `tests/` y `tools/`
+  cortos o con cifras; los más largos de `tests/` se repasaron en listado.
+- Sin cambio de comportamiento: tests, ruff y `spec_trace` iguales.

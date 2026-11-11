@@ -39,11 +39,15 @@ class DaemonRig(BotRig):
         )  # fmt: skip
         self.daemon = asyncio.create_task(run_daemon(self.engine, self.stop, socket=self.socket))
         await self.until(self.socket.exists)
-        await self.until(lambda: all(s.ready for s in self.hub.state.values()))
-        await self.until(lambda: all(s.balances for s in self.account.state.values()))
+        await self.until(
+            lambda: all(market_state.ready for market_state in self.hub.state.values())
+        )
+        await self.until(
+            lambda: all(market_state.balances for market_state in self.account.state.values())
+        )
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         self.stop.set()
         await asyncio.wait_for(self.daemon, 2)
 
@@ -89,7 +93,7 @@ async def test_bot_stays_armed_and_fires_after_closing_tui(tmp_path):
         # the TUI left: the daemon stays the same
         await asyncio.sleep(0.1)
         assert rig.bot.state.status == "armed"
-        assert [e["data"]["status"] for e in rig.events("bot_state")] == ["armed"]
+        assert [entry["data"]["status"] for entry in rig.events("bot_state")] == ["armed"]
         assert rig.events("order_sent") == []  # nothing sent before the cross
 
         # and fires when the market crosses
@@ -122,9 +126,9 @@ async def test_stop_waits_for_double_in_flight(tmp_path):
         venue = rig.venues["nx"]
         real = venue.place_limit
 
-        async def slow(req):
+        async def slow(order_request):
             await gate.wait()
-            return await real(req)
+            return await real(order_request)
 
         venue.place_limit = slow
         rig.bot.arm()
@@ -136,8 +140,8 @@ async def test_stop_waits_for_double_in_flight(tmp_path):
         gate.set()
     sent = rig.events("order_sent")
     assert len(sent) == 2
-    acks = {e["client_id"] for e in rig.events("order_ack")}
-    assert {e["client_id"] for e in sent} <= acks
+    acks = {entry["client_id"] for entry in rig.events("order_ack")}
+    assert {entry["client_id"] for entry in sent} <= acks
 
 
 @pytest.mark.spec("CA-15", "RF-30", "RF-07", "RF-21")
@@ -151,12 +155,12 @@ async def test_filled_legs_do_not_stop_bot(tmp_path):
         rig.books()
         await rig.until(lambda: rig.orders.doubles)
         (double,) = rig.orders.doubles.values()
-        await rig.until(lambda: all(leg.order_id for leg in double.legs))
-        for leg in double.legs:
-            await rig.venues[leg.req.venue].simulate_fill(leg.order_id, D("10"))
+        await rig.until(lambda: all(order_leg.order_id for order_leg in double.legs))
+        for order_leg in double.legs:
+            await rig.venues[order_leg.req.venue].simulate_fill(order_leg.order_id, D("10"))
         await rig.until(lambda: rig.bot.state.status == "cooldown")
         (double,) = rig.orders.doubles.values()
-        assert {leg.status for leg in double.legs} == {"filled"}
+        assert {order_leg.status for order_leg in double.legs} == {"filled"}
         rig.clock.now += 60_000  # past hanging_leg_after_s
         rig.engine.check_doubles()
         assert rig.events("cancel_sent") == [] and rig.events("hanging_leg") == []

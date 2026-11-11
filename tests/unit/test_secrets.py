@@ -11,13 +11,20 @@ CANARY = "nex_CANARIO_9f3a1c77d2"
 @pytest.mark.spec("RF-12", "CA-07")
 class TestSecretNotPrinted:
     def test_str_repr_and_fstring(self):
-        s = Secret(CANARY)
-        for rendered in (str(s), repr(s), f"{s}", f"{s!r}", "%s" % s, "{}".format(s)):  # noqa: UP031, UP032
+        secret = Secret(CANARY)
+        for rendered in (
+            str(secret),
+            repr(secret),
+            f"{secret}",
+            f"{secret!r}",
+            "%s" % secret,  # noqa: UP031
+            "{}".format(secret),  # noqa: UP032
+        ):
             assert CANARY not in rendered
 
     def test_inside_containers(self):
-        s = Secret(CANARY)
-        assert CANARY not in repr({"key": s}) + repr([s]) + repr((s,))
+        secret = Secret(CANARY)
+        assert CANARY not in repr({"key": secret}) + repr([secret]) + repr((secret,))
 
     def test_into_logging(self, caplog):
         with caplog.at_level(logging.INFO):
@@ -39,8 +46,10 @@ class TestSecretNotPrinted:
 @pytest.mark.spec("RF-12", "CA-07")
 class TestRedactor:
     def test_replaces_each_occurrence(self):
-        r = Redactor([Secret(CANARY), Secret("otro_secreto_123")])
-        out = r.redact(f'{{"err": "401 key={CANARY}", "s": "otro_secreto_123", "k": "{CANARY}"}}')
+        redactor = Redactor([Secret(CANARY), Secret("otro_secreto_123")])
+        out = redactor.redact(
+            f'{{"err": "401 key={CANARY}", "s": "otro_secreto_123", "k": "{CANARY}"}}'
+        )
         assert CANARY not in out and "otro_secreto_123" not in out
         assert out.count("***") == 3
 
@@ -49,5 +58,5 @@ class TestRedactor:
 
     def test_secret_inside_another(self):
         # longest first: otherwise a piece of the long one would stay exposed
-        r = Redactor([Secret("abc123"), Secret("abc123XYZ")])
-        assert r.redact("abc123XYZ") == "***"
+        redactor = Redactor([Secret("abc123"), Secret("abc123XYZ")])
+        assert redactor.redact("abc123XYZ") == "***"

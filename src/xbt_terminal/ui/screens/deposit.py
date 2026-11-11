@@ -81,33 +81,44 @@ class DepositScreen(ModalScreen[None]):
         rows = await self._source.load()
         table = self.query_one(DataTable)
         table.clear()
-        for r in rows:
-            table.add_row(*self._cells(r))
+        for row in rows:
+            table.add_row(*self._cells(row))
         self.rows = rows
-        failed = sum(r.address is None for r in rows)
+        failed = sum(row.address is None for row in rows)
         self._status(f"{failed} sin dirección" if failed else "")
         self._show_qr(table.cursor_row)
 
     @staticmethod
-    def _cells(r: DepositRow) -> tuple[str | Text, ...]:
-        label = asset_label(r.asset)
-        asset = f"{label} ({r.asset})" if label != r.asset else r.asset
-        a = r.address
-        if a is None:
-            return VENUE_NAME[r.venue], asset, "—", Text(f"⚠ {r.error}", style="yellow"), "—", "—"
+    def _cells(row: DepositRow) -> tuple[str | Text, ...]:
+        label = asset_label(row.asset)
+        asset = f"{label} ({row.asset})" if label != row.asset else row.asset
+        deposit_address = row.address
+        if deposit_address is None:
+            return (
+                VENUE_NAME[row.venue],
+                asset,
+                "—",
+                Text(f"⚠ {row.error}", style="yellow"),
+                "—",
+                "—",
+            )
         network = (
-            a.network if a.ticker.lower() == a.network.lower() else f"{a.network} · {a.ticker}"
+            deposit_address.network
+            if deposit_address.ticker.lower() == deposit_address.network.lower()
+            else f"{deposit_address.network} · {deposit_address.ticker}"
         )
-        address = a.address + (f"  (memo {a.memo})" if a.memo else "")
-        minimum = "—" if a.min_deposit is None else f"{a.min_deposit:f}"
-        confs = "—" if a.confirmations is None else str(a.confirmations)
-        return VENUE_NAME[r.venue], asset, network, address, minimum, confs
+        address = deposit_address.address + (
+            f"  (memo {deposit_address.memo})" if deposit_address.memo else ""
+        )
+        minimum = "—" if deposit_address.min_deposit is None else f"{deposit_address.min_deposit:f}"
+        confs = "—" if deposit_address.confirmations is None else str(deposit_address.confirmations)
+        return VENUE_NAME[row.venue], asset, network, address, minimum, confs
 
     def table_text(self) -> str:
         """Rows as plain text (tests and debugging)."""
         table = self.query_one(DataTable)
         return "\n".join(
-            " | ".join(str(c) for c in table.get_row_at(i)) for i in range(table.row_count)
+            " | ".join(str(cell) for cell in table.get_row_at(i)) for i in range(table.row_count)
         )
 
     def status_text(self) -> str:
@@ -127,14 +138,14 @@ class DepositScreen(ModalScreen[None]):
         """Only the address, without `bitcoin:`: BTCB2 is not bitcoin (D-52)."""
         if not self.rows or not 0 <= index < len(self.rows):
             return
-        r = self.rows[index]
+        row = self.rows[index]
         widget = self.query_one("#deposit-qr", Static)
-        if r.address is None:
+        if row.address is None:
             self._qr = "sin QR: la fila no tiene dirección"
             widget.update(self._qr)
             return
-        self._qr = "\n".join(qr_lines(r.address.address))
-        caption = f"\n{asset_label(r.asset)} en {VENUE_NAME[r.venue]} ({r.address.ticker})"
+        self._qr = "\n".join(qr_lines(row.address.address))
+        caption = f"\n{asset_label(row.asset)} en {VENUE_NAME[row.venue]} ({row.address.ticker})"
         widget.update(Text(self._qr, style="#ffffff on #000000") + Text(caption))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -143,21 +154,25 @@ class DepositScreen(ModalScreen[None]):
     def action_copy(self) -> None:
         if not self.rows:
             return
-        r = self.rows[self.query_one(DataTable).cursor_row]
-        where = f"{asset_label(r.asset)} en {VENUE_NAME[r.venue]}"
-        if r.address is None:
+        row = self.rows[self.query_one(DataTable).cursor_row]
+        where = f"{asset_label(row.asset)} en {VENUE_NAME[row.venue]}"
+        if row.address is None:
             self._status(f"{where}: sin dirección, no se copia nada")
             return
-        self.run_worker(self._copy_address(where, r.address), group="copy")
+        self.run_worker(self._copy_address(where, row.address), group="copy")
 
-    async def _copy_address(self, where: str, a: DepositAddress) -> None:
-        tool = await self._copy(a.address)
+    async def _copy_address(self, where: str, deposit_address: DepositAddress) -> None:
+        tool = await self._copy(deposit_address.address)
         if tool is not None:
-            self._status(f"copiada con {tool} la dirección de {where} ({a.ticker}): {a.address}")
+            self._status(
+                f"copiada con {tool} la dirección de {where} "
+                f"({deposit_address.ticker}): {deposit_address.address}"
+            )
         else:
             self._status(
                 f"enviada solo a la terminal (OSC 52), que puede ignorarla; si no se pega, "
-                f"selecciónala con Shift + arrastrar · {where} ({a.ticker}): {a.address}"
+                f"selecciónala con Shift + arrastrar · {where} "
+                f"({deposit_address.ticker}): {deposit_address.address}"
             )
 
     def action_close(self) -> None:

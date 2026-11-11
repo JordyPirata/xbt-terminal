@@ -65,8 +65,8 @@ class Engine:
         self._skew_warned: set[VenueId] = set()
         self._listeners: list[Callable[[Notice], None]] = []
         # fault registries of orders, account and hub (one shared in the real app)
-        found = (s.faults for s in (orders, account, hub) if s is not None)
-        self.faults: list[Faults] = list({id(f): f for f in found}.values())
+        found = (service.faults for service in (orders, account, hub) if service is not None)
+        self.faults: list[Faults] = list({id(registry): registry for registry in found}.values())
         # account value in the journal (RF-32, D-69): needs the account
         self.values: ValueRecorder | None = None
         if value_every_s is not None and account is not None and journal is not None:
@@ -85,10 +85,10 @@ class Engine:
 
     # -- faults (RNF-14, D-78) ----------------------------------------------------
 
-    def report_fault(self, where: str, exc: BaseException) -> Fault:
+    def report_fault(self, where: str, error: BaseException) -> Fault:
         """Note a fault in the main registry: the orders' if any, else the account's, else
         the hub's (there is always one)."""
-        return self._main_faults.report(where, exc)
+        return self._main_faults.report(where, error)
 
     @property
     def _main_faults(self) -> Faults:
@@ -97,7 +97,7 @@ class Engine:
     @property
     def fault_count(self) -> int:
         """Session faults, added across all registries."""
-        return sum(f.count for f in self.faults)
+        return sum(faults.count for faults in self.faults)
 
     def subscribe_faults(self, listener: Callable[[Fault], None]) -> None:
         for faults in self.faults:
@@ -107,8 +107,6 @@ class Engine:
         notice = Notice(text, error)
         for listener in self._listeners:
             listener(notice)
-
-    # -- tasks -------------------------------------------------------------------
 
     def services(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]:
         """Market, account, bot and value sampling, each named; each service isolates its
@@ -138,8 +136,8 @@ class Engine:
             await asyncio.sleep(self._reconcile_every_s)
             try:
                 await self.reconcile()
-            except Exception as exc:  # a bug here cannot stop the search
-                self.report_fault("reconcile", exc)
+            except Exception as error:  # a bug here cannot stop the search
+                self.report_fault("reconcile", error)
 
     # -- hanging legs (RF-07) -------------------------------------------------
 
@@ -148,8 +146,8 @@ class Engine:
             return
         try:
             new = self.orders.check_doubles()
-        except Exception as exc:  # every second: a bug here cannot close anything
-            self.report_fault("engine", exc)
+        except Exception as exception:  # every second: a bug here cannot close anything
+            self.report_fault("engine", exception)
             return
         for double_id in new:
             self._say(
@@ -162,8 +160,8 @@ class Engine:
         if self.orders is None or not self.orders.uncertain:
             return []
         results = await self.orders.reconcile()
-        for r in results:
-            self._say(r.message, error=r.error)
+        for reconciled in results:
+            self._say(reconciled.message, error=reconciled.error)
         return results
 
     # -- clock (RNF-16, D-30) -----------------------------------------------------

@@ -40,9 +40,9 @@ class TestCatchUp:
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
-            n = len(rig.lines())
+            line_count = len(rig.lines())
             rig.venue.push(PastFill(trade(fee="0.0000893166", asset="NKYC")))
-            await until(lambda: len(rig.lines()) == n + 1)
+            await until(lambda: len(rig.lines()) == line_count + 1)
             line = rig.lines()[-1]
             assert (line["event"], line["client_id"]) == ("fill_fee", "t-abc123")
             assert line["data"] == {
@@ -54,10 +54,10 @@ class TestCatchUp:
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
-            n = len(rig.lines())
+            line_count = len(rig.lines())
             rig.venue.push(PastFill(trade()), order("o-2"))  # the order: to know it happened
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
-            assert len(rig.lines()) == n
+            assert len(rig.lines()) == line_count
 
     async def test_last_correction_counts(self, tmp_path):
         async with Rig(tmp_path) as rig:
@@ -68,18 +68,18 @@ class TestCatchUp:
                 data={"trade_id": "f-1", "order_id": "o-1", "fee": "0.0000893166",
                       "fee_asset": "NKYC"},
             )  # fmt: skip
-            n = len(rig.lines())
+            line_count = len(rig.lines())
             rig.venue.push(PastFill(trade(fee="0.0000893166", asset="NKYC")), order("o-2"))
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
-            assert len(rig.lines()) == n
+            assert len(rig.lines()) == line_count
 
     async def test_our_fill_while_stopped(self, tmp_path):
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
-            n = len(rig.lines())
+            line_count = len(rig.lines())
             rig.venue.push(PastFill(trade("f-2", ts=T0 + 7)))
-            await until(lambda: len(rig.lines()) == n + 1)
+            await until(lambda: len(rig.lines()) == line_count + 1)
             line = rig.lines()[-1]
             assert (line["event"], line["client_id"]) == ("fill", "t-abc123")
             assert line["data"]["trade_id"] == "f-2" and line["data"]["recovered"] is True
@@ -89,10 +89,10 @@ class TestCatchUp:
         async with Rig(tmp_path) as rig:
             await settled(rig)
             before(rig)
-            n = len(rig.lines())
+            line_count = len(rig.lines())
             rig.venue.push(PastFill(trade("f-9", oid="de-la-web")), order("o-2"))
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
-            assert len(rig.lines()) == n
+            assert len(rig.lines()) == line_count
 
     async def test_not_in_dry_run(self, tmp_path):
         rig = Rig(tmp_path)
@@ -103,15 +103,15 @@ class TestCatchUp:
         async with rig:
             await settled(rig)
             before(rig)
-            n = len(rig.lines())
+            line_count = len(rig.lines())
             rig.venue.push(PastFill(trade(fee="0.0000893166", asset="NKYC")), order("o-2"))
             await until(lambda: "o-2" in rig.account.state["nk"].orders)
-            assert len(rig.lines()) == n
+            assert len(rig.lines()) == line_count
 
     async def test_past_is_no_fill_for_anyone_else(self, tmp_path):
         async with Rig(tmp_path) as rig:
             seen = []
-            rig.account.subscribe_events(lambda vid, ev: seen.append(ev))
+            rig.account.subscribe_events(lambda venue_id, ev: seen.append(ev))
             await settled(rig)
             rig.venue.push(PastFill(trade()))
             await until(lambda: seen)

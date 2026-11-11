@@ -80,7 +80,9 @@ class ResultsService:
             return
         self._priced_at = now
         assets = list(self._pricers)
-        got = await asyncio.gather(*(self._pricers[a]() for a in assets), return_exceptions=True)
+        got = await asyncio.gather(
+            *(self._pricers[token]() for token in assets), return_exceptions=True
+        )
         for asset, price in zip(assets, got, strict=True):
             if isinstance(price, (VenueError, httpx.HTTPError)):
                 self.price_errors[asset] = describe(price)

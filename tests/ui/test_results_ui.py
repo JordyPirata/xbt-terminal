@@ -20,8 +20,8 @@ from .test_orders_ui import Rig, type_command, until
 def write(directory, day, rows):
     directory.mkdir(exist_ok=True)
     with (directory / f"journal-{day}.jsonl").open("a") as out:
-        for r in rows:
-            out.write(json.dumps(r) + "\n")
+        for row in rows:
+            out.write(json.dumps(row) + "\n")
 
 
 def make_app(tmp_path):
@@ -47,10 +47,10 @@ class TestScreen:
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.press("r")
             await until(pilot, lambda: isinstance(app.screen, ResultsScreen))
-            s = screen(app)
-            assert s.range == "dia"
-            assert [d.id for d in s.report.doubles] == ["d-1"]
-            assert "+200 sats" in s.summary_text()
+            results_screen = screen(app)
+            assert results_screen.range == "dia"
+            assert [double.id for double in results_screen.report.doubles] == ["d-1"]
+            assert "+200 sats" in results_screen.summary_text()
             await pilot.press("escape")
             await until(pilot, lambda: not isinstance(app.screen, ResultsScreen))
 
@@ -120,9 +120,9 @@ def test_summary_warns_of_token_fees(tmp_path):
     rows = plain_double("d-1", T0)
     rows[2] = fill("nx", "buy", "0.01", "0.0050", fee="0.0025", asset="NKYC")
     write(tmp_path, "20261022", rows)
-    s = ResultsScreen(ResultsService(tmp_path, clock=lambda: T0), "dia", print)
-    s.report = s._source.load("dia")
-    assert "+ 0.0025 NKYC en fees, sin descontar" in s.summary_text()
+    results_screen = ResultsScreen(ResultsService(tmp_path, clock=lambda: T0), "dia", print)
+    results_screen.report = results_screen._source.load("dia")
+    assert "+ 0.0025 NKYC en fees, sin descontar" in results_screen.summary_text()
 
 
 @pytest.mark.spec("RF-24", "RF-25")
@@ -148,13 +148,13 @@ async def test_on_open_asks_price_and_subtracts_fee(tmp_path):
     async with app.run_test(size=(160, 45)) as pilot:
         await pilot.press("r")
         await until(pilot, lambda: isinstance(app.screen, ResultsScreen))
-        s = screen(app)
-        await until(pilot, lambda: s.report.summary.prices)
-        assert "+175 sats" in s.summary_text()
-        assert "NKYC a 0.00010000 BTC" in s.summary_text()
-        assert "sin descontar" not in s.summary_text()
-        (d,) = s.report.doubles
-        assert ResultsScreen._cells(d, {"NKYC"})[7] == "25 (0.0025 NKYC)"
+        results_screen = screen(app)
+        await until(pilot, lambda: results_screen.report.summary.prices)
+        assert "+175 sats" in results_screen.summary_text()
+        assert "NKYC a 0.00010000 BTC" in results_screen.summary_text()
+        assert "sin descontar" not in results_screen.summary_text()
+        (double,) = results_screen.report.doubles
+        assert ResultsScreen._cells(double, {"NKYC"})[7] == "25 (0.0025 NKYC)"
 
 
 @pytest.mark.spec("RF-25", "RF-32")

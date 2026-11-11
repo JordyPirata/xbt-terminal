@@ -40,7 +40,7 @@ def fmt_share(value: Decimal | None) -> str:
     return fmt_pct(value, decimals=1, signed=False)
 
 
-def fmt_btc_sats_pct(value: Decimal, pct: Decimal, *, signed: bool) -> str:
+def fmt_btc_sats_pct(value: Decimal, percent: Decimal, *, signed: bool) -> str:
     """BTC · sats · %, with the % `core/cross.py` already computes."""
     sign = "+" if signed else ""
-    return f"{value:{sign}.8f} · {sats(value):{sign}.0f} sats · {pct:{sign}.2f} %"
+    return f"{value:{sign}.8f} · {sats(value):{sign}.0f} sats · {percent:{sign}.2f} %"

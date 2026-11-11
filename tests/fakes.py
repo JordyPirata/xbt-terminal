@@ -38,10 +38,10 @@ def book(venue: str, bid: str, ask: str, seq: int | None = None, ts: int = T0) -
     )
 
 
-def history(step_ms: int, n: int = 5, start: int = T0) -> list[Candle]:
+def history(step_ms: int, count: int = 5, start: int = T0) -> list[Candle]:
     return [
         Candle(start + i * step_ms, D("0.0072"), D("0.0073"), D("0.0071"), D("0.00725"), D("1"))
-        for i in range(n)
+        for i in range(count)
     ]
 
 

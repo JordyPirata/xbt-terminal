@@ -33,11 +33,11 @@ class DaemonRig:
         await self.server.start()
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *error):
         await self.server.aclose()
 
     async def open_orders(self):
-        return {vid: await v.open_orders() for vid, v in self.s.venues.items()}
+        return {venue_id: await venue.open_orders() for venue_id, venue in self.s.venues.items()}
 
 
 def client_app(rig) -> XbtApp:
@@ -87,7 +87,7 @@ async def test_trades_over_socket_and_orders_stay_after_closing(tmp_path):
         # the TUI left: the simple order stays open in the daemon
         await asyncio.sleep(0.05)
         open_now = await rig.open_orders()
-        assert D("0.00710000") in {o.price for o in open_now["nk"]}
+        assert D("0.00710000") in {order.price for order in open_now["nk"]}
         events = [ln["event"] for ln in rig.s.lines()]
         assert events.count("order_sent") == 3  # the simple one and both legs
 
