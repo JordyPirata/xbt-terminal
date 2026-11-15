@@ -73,6 +73,13 @@ class TestAddress:
     async def test_unused_address(self, http):
         assert await ask(http, payload()) == AddressStats(D("0"), False)
 
+    async def test_sends_its_own_user_agent(self, http):
+        with respx.mock() as mock:
+            route = mock.get(f"{URL}/address/{ADDRESS}").respond(json=payload())
+            await Explorer(http, URL).address(ADDRESS)
+        agent = route.calls.last.request.headers["User-Agent"]
+        assert agent == "xbt-terminal" and "httpx" not in agent
+
     async def test_trailing_slash_in_the_url(self, http):
         with respx.mock() as mock:
             mock.get(f"{URL}/address/{ADDRESS}").respond(json=payload())

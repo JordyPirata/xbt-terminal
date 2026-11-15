@@ -102,6 +102,13 @@ class TestScan:
         assert await rig.service.scan() == CustodyBalance(D("0.1"), D("7.5"), T0)
         assert not any(asked.startswith("second") for asked in btc.asked)
 
+    async def test_failure_names_the_chain_as_the_screen_does(self, tmp_path):
+        explorer = FakeExplorer()
+        explorer.failing.add("first/0/0")
+        rig = Rig(tmp_path, {"BTCB2": (FIRST,)}, {"BTCB2": explorer})
+        with pytest.raises(ExplorerError, match=r"^XBT: "):
+            await rig.service.scan()
+
     async def test_chain_without_wallets_is_zero(self, tmp_path):
         rig = Rig(tmp_path, {"BTCB2": (FIRST,)}, {"BTCB2": FakeExplorer({"first/0/0": "2"})})
         assert await rig.service.scan() == CustodyBalance(D("0"), D("2"), T0)
@@ -140,7 +147,7 @@ class TestFailuresAndAge:
         good = await rig.service.scan()
         rig.now += EVERY_S * 1000
         explorer.failing.add("first/1/0")
-        with pytest.raises(ExplorerError):
+        with pytest.raises(ExplorerError, match=r"^BTC: el explorador respondió HTTP 503$"):
             await rig.service.scan()
         assert rig.service.balance() == good == CustodyBalance(D("3"), D("0"), T0)
 

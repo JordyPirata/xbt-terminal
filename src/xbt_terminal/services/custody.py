@@ -28,7 +28,7 @@ from decimal import Decimal
 from functools import cache
 from typing import Protocol
 
-from ..adapters.explorer import AddressStats
+from ..adapters.explorer import AddressStats, ExplorerError
 from ..adapters.streaming import now_ms
 from ..core.inventory import BASE, QUOTE, CustodyBalance
 from ..core.models import ZERO
@@ -38,6 +38,7 @@ from .faults import Faults
 CUSTODY_EVERY_S = 300  # the user wants the total fresh; the pause is after each scan (D-84)
 GAP_LIMIT = 20
 REQUEST_EVERY_MS = 3000  # public explorers answer 429 to queries close together (D-84)
+CHAIN_NAME = {QUOTE: "BTC", BASE: "XBT"}  # as the screen names them (D-48)
 MAX_AGE_INTERVALS = 3  # a balance older than this many intervals no longer counts
 
 
@@ -109,7 +110,11 @@ class CustodyService:
             total = ZERO
             for key in keys:
                 for branch in (RECEIVE, CHANGE):
-                    total += await self._branch_balance(explorer, key, branch)
+                    try:
+                        total += await self._branch_balance(explorer, key, branch)
+                    except ExplorerError as error:
+                        # which chain failed; still never the address (RNF-25)
+                        raise ExplorerError(f"{CHAIN_NAME[asset]}: {error}") from None
             totals[asset] = total
         self.last = CustodyBalance(
             totals.get(QUOTE, ZERO), totals.get(BASE, ZERO), self._clock()

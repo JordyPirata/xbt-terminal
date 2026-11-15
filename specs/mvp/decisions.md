@@ -2187,3 +2187,10 @@ cuenta desde el final de cada escaneo, así que dos escaneos nunca se solapan
 aunque uno tarde más de 5 min. El explorador ve el historial de direcciones
 cada ~5 min más lo que dure el escaneo, y el riesgo de 429 en mempool.space
 crece; un saldo vale 15 min (`3 × every_s`). Corrige la adenda anterior.
+**Adenda (2026-11-14, primer escaneo en el servidor):** el escaneo de BTC en
+mempool.space terminó (~14 min, sin 429), pero la primera consulta a
+mempool.guide dio HTTP 403: rechaza el agente por defecto de httpx
+(`python-httpx/…`) y acepta otros. Las pruebas anteriores se hicieron con
+`curl`, por eso no salió. El cliente manda ahora `User-Agent: xbt-terminal`:
+nombra el programa y nada de quien lo usa. El error de un escaneo dice además
+la cadena (BTC o XBT), sin la dirección.

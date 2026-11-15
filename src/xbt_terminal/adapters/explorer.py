@@ -23,6 +23,9 @@ import httpx
 
 SATS_PER_COIN = Decimal(100_000_000)
 TIMEOUT_S = 10.0
+# mempool.guide answers 403 to httpx's default agent (2026-11-14). Generic on purpose:
+# it names the program, nothing about who runs it
+USER_AGENT = "xbt-terminal"
 
 
 class ExplorerError(Exception):
@@ -42,7 +45,11 @@ class Explorer:
 
     async def address(self, address: str) -> AddressStats:
         try:
-            response = await self._http.get(f"{self._url}/address/{address}", timeout=TIMEOUT_S)
+            response = await self._http.get(
+                f"{self._url}/address/{address}",
+                headers={"User-Agent": USER_AGENT},
+                timeout=TIMEOUT_S,
+            )
         except httpx.HTTPError as error:
             # `from None`: httpx errors carry the request, whose url has the address
             raise ExplorerError(f"sin respuesta del explorador ({type(error).__name__})") from None
