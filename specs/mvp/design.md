@@ -24,15 +24,16 @@ Versión 0.17 · 2026-10-24 · Implementa `requirements.md` v0.17 (empezado el
 ├──────────────────────────────────────────────────────────────┤
 │ services/  market (MarketHub) · account · orders · bot ·     │  estado vivo,
 │            faults · results · deposits · rebalance ·         │  tareas asyncio
+│            custody · valuation ·                             │
 │            engine · daemon · control · wire · remote         │
 ├──────────────────────────────────────────────────────────────┤
 │ core/      models · book · candles · cross · risk · bot ·    │  puro, sin red
 │            double · inventory · sizing · reconcile ·         │  (salvo journal,
 │            results · rebalance · commands · journal ·        │  ver abajo)
-│            ratelimit · secrets                               │
+│            ratelimit · secrets · wallet                      │
 ├──────────────────────────────────────────────────────────────┤
 │ adapters/  base · streaming · private · socketio ·           │  httpx /
-│            nonkyc · neoxa · dryrun                           │  websockets
+│            nonkyc · neoxa · dryrun · explorer                │  websockets
 └──────────────────────────────────────────────────────────────┘
 fuera de capas: config · paths · diaglog · __main__ (arranque e I/O de ficheros)
 ```
@@ -333,6 +334,21 @@ los saldos de `AccountService` y el mid del hub, y si el total existe apunta
 `value` en el journal (`core/valuation.py` arma la muestra). `ResultsService`
 lee esas filas con las de las dobles y las devuelve en `Report.values`, así que
 la serie viaja al cliente con `results {range}` sin comando nuevo.
+
+Autocustodia (RF-37 a RF-39, D-84): `core/wallet.py` decodifica un xpub o zpub
+de nivel cuenta y deriva las direcciones P2WPKH de sus ramas `/0` y `/1`
+(BIP32 público, HASH160 y bech32 con la biblioteca estándar).
+`adapters/explorer.py` pide `GET <url>/address/<dirección>` a una API tipo
+Esplora y devuelve el saldo (confirmado + mempool) y si la dirección tiene
+transacciones. `CustodyService` (`services/custody.py`) escanea al arrancar y
+cada `every_s`: por cada xpub y rama, direcciones seguidas hasta `gap_limit`
+sin uso, con `request_every_ms` de pausa antes de cada consulta. Guarda `CustodyBalance(btc, btcb2, at)` del último escaneo completo;
+si una consulta falla, lo conserva y reporta el fallo. `inventory(balances,
+mids, custody)` añade `Inventory.custody` y lo suma al total, valorando su
+BTCB2 a la media de los mids; con autocustodia configurada y sin saldo válido
+(más de `3 × every_s`), el total es `None`. Quien no pasa `custody` (el tope de
+RF-10 en `services/orders.py`, el bot) calcula como antes. `ValueRecorder` sí
+lo pasa, y la muestra `value` lleva `custody {btc, btcb2, mid, value}`.
 
 ### 6.6 Panel cruzado (RF-04)
 
@@ -698,7 +714,8 @@ Dos formas de arrancar el mismo binario:
   - Del daemon, sin pedirlo: `hello {mode, version, view}`, donde `view` es lo
     que la pantalla necesita de la config (niveles del book, fees y descuentos
     por venue, objetivo de inventario, límites del bot), nunca keys; `state` con el
-    `Snapshot` (bot, cuentas, dobles, colgadas, inciertas, en vuelo, fallos,
+    `Snapshot` (bot, cuentas, autocustodia (`custody`: saldos y hora, nunca
+    xpubs ni direcciones), dobles, colgadas, inciertas, en vuelo, fallos,
     `can_trade`) al conectar, tras cada cambio (agrupado 20 ms) y cada 1 s;
     `notice`; `fault`; mercado: `market_init {venue, spec, book, candles,
     last_trade, conn, ready, error}` al conectar, `book {venue, snapshot}`
@@ -784,10 +801,15 @@ y no coincidiría.
   riesgo, cadencias, niveles de book. Validado al arrancar; un error para la app.
   Validación estricta (D-05): importes como string, clave desconocida = error,
   `balances_every_s ≤ 10` (RF-05) y límites de Neoxa ≤ 80% de lo publicado (RNF-03).
-  `risk.max_clock_skew_s` es obligatoria (D-30); `[log]`, `[bot]`, `[inventory]`
+  `risk.max_clock_skew_s` es obligatoria (D-30); `[log]`, `[bot]`, `[inventory]`,
+  `[custody]` (RF-38: `btc_url`, `btcb2_url`, `every_s`, `gap_limit`, `request_every_ms`)
   y `fee_discount_pct` son opcionales; una sección `[dryrun]` que quede de la
   v0.1 es error (D-16).
-- `.env`: `NONKYC_API_KEY`, `NONKYC_API_SECRET`, `NEOXA_API_KEY`, `NEOXA_API_SECRET`.
+- `.env`: `NONKYC_API_KEY`, `NONKYC_API_SECRET`, `NEOXA_API_KEY`, `NEOXA_API_SECRET`
+  y, opcionales, `WALLET_BTC_XPUBS` y `WALLET_BTCB2_XPUBS` (RF-37): listas
+  separadas por comas, cargadas como `Secret` y dadas al `Redactor` (RNF-25).
+  No cambian el modo: con xpubs y sin keys sigue siendo solo lectura, y la
+  autocustodia no se escanea (no hay inventario que mostrar).
 - Rutas (`paths.py`, RNF-20, D-32): sin flags, `config.toml` y `.env` en
   `$XDG_CONFIG_HOME/xbt` (`~/.config/xbt`) y los datos (journal y lock) en
   `$XDG_STATE_HOME/xbt` (`~/.local/state/xbt`). `--config`, `--env` y
@@ -851,7 +873,8 @@ columna de acumulado); con texto, inserta solo el precio en el cursor.
 Barra inferior (D-17, D-67): panel cruzado; una fila de 5 con los balances a
 la izquierda (una línea por venue, con su % de BTCB2 coloreado según
 `[inventory]` (RF-27) y `+ en órdenes` solo si hay algo en órdenes; el
-inventario neto y el % total en el título; oculto en solo lectura) y, a la
+inventario neto y el % total en el título; con autocustodia, una línea
+`wallet` más y el total la incluye (RF-39); oculto en solo lectura) y, a la
 derecha, las piernas de la última orden doble, del bot o manual (64 columnas;
 una línea por pierna sin el id de orden, que está en `o`, y otra de estado;
 oculto hasta la primera, y entonces los balances ocupan todo el ancho); y la

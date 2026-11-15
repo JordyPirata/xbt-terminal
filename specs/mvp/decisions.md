@@ -93,6 +93,7 @@ dicen en su propia nota.
 | D-81 | 2026-11-04 | El código va todo en inglés; en español, lo que ve el usuario, los docs y la spec (T-91) |
 | D-82 | 2026-11-04 | Contrato de venue: documento público, batería común y una variante rota por cláusula (requirements v0.32, T-88) |
 | D-83 | 2026-11-09 | Nombres que dicen qué son; comentarios solo para el porqué (T-98, T-99) |
+| D-84 | 2026-11-14 | Autocustodia por xpub native segwit en el inventario total (requirements v0.33, T-100) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -2090,3 +2091,88 @@ en funciones largas. Objetivo: entender qué hace cada nombre sin comentario.
 - Renombrar no cambia comportamiento: el criterio de cierre es que los tests, el
   `spec_trace` y el ruff sigan igual, y que `git diff` no toque literales de las fronteras.
 **Toca:** T-98, T-99, `CLAUDE.md` (regla de comentarios, ya vigente).
+
+## D-84 · 2026-11-14 · Autocustodia por xpub native segwit en el inventario total (requirements v0.33, T-100)
+**Contexto:** el usuario guarda parte del BTC y del BTCB2 en wallets propias. El
+inventario solo cuenta los venues (RF-05), así que el % total de BTCB2 y el aviso
+de banda del plan de reequilibrio salen mal, y reequilibrar al 25 % (D-46) se
+decide con un dato incompleto. Pidió poder añadir xpubs de BTC y de BTCB2, solo
+native segwit, ni nested ni taproot. §Fuera de alcance excluía los nodos propios
+y cualquier envío de datos fuera de la máquina, y los supuestos daban todo el
+inventario por depositado en los venues.
+**Decisión** (las cuatro primeras, elegidas por el usuario):
+- **Fuente de saldos:** una API tipo Esplora con la URL en la config, una por
+  cadena (`[custody] btc_url`, `btcb2_url`). Puede ser un explorador público o un
+  servidor del usuario. Se descartan una URL fija en el código (no se podría
+  cambiar de tercero) y un cliente Electrum (más trabajo y exige servidor propio
+  en las dos cadenas).
+- **Dónde cuenta:** en el inventario neto total, el % total del panel, el aviso
+  de banda de RF-29 y la serie del valor de la cuenta (RF-32). **No** cuenta en
+  el tope por orden de RF-10, en la exposición por venue ni en el filtro de
+  RF-26: son fondos con los que el bot no puede operar, y un tope que creciera
+  con ellos permitiría órdenes mayores que lo que hay en los venues justifica.
+- **Dónde viven los xpubs:** en `.env` (`WALLET_BTC_XPUBS`, `WALLET_BTCB2_XPUBS`),
+  como `Secret` y en el `Redactor`. No dejan gastar, pero revelan todas las
+  direcciones y saldos. Añadir o quitar uno pide reiniciar el daemon.
+- **Explorador de BTCB2:** el usuario dice que hay uno con API; la URL y su
+  formato se comprueban en T-102 (PA-13).
+- **Solo native segwit:** se aceptan `xpub` y `zpub` de nivel cuenta (hay
+  wallets que exportan la cuenta BIP84 con cualquiera de los dos prefijos) y de
+  los dos se deriva solo P2WPKH, ramas `/0/i` y `/1/i`. `ypub`, `Ypub` y `Zpub`
+  se rechazan al arrancar: son nested o multifirma. El prefijo no distingue una
+  cuenta taproot exportada como `xpub`: de ella saldrían direcciones `bc1q` sin
+  uso y saldo cero, nunca direcciones taproot.
+- **Sin dependencia criptográfica nueva:** BIP32 público (secp256k1), HASH160 y
+  bech32 en `core/wallet.py`, con la biblioteca estándar y los vectores de
+  BIP32, BIP84 y BIP173. El daemon tiene keys de trading y cada dependencia
+  amplía la superficie; aquí solo hay claves públicas, y una derivación mala se
+  ve en los vectores. `hashlib` puede no traer RIPEMD-160 con OpenSSL 3: lleva
+  una implementación propia de reserva.
+- **Escaneo:** al arrancar y cada `every_s` (600), hasta `gap_limit` (20)
+  direcciones seguidas sin transacciones por rama. Saldo = confirmado + mempool,
+  para que una transferencia en curso hacia un venue no cuente dos veces cuando
+  el venue la acredite. Cada escaneo vuelve a pedir todas las direcciones
+  usadas: con wallets de muchas direcciones son muchas peticiones cada 10 min;
+  si molesta, se optimiza en otra tarea.
+- **Dato incompleto:** un escaneo con una consulta fallida no vale y se conserva
+  el anterior; pasado `3 × every_s`, el saldo deja de valer y el total, su % y
+  la muestra `value` no salen. Como en RF-05 y D-69: un total a medias engaña.
+- **Valoración:** el BTCB2 en autocustodia, a la media de los mids de los
+  venues. No tiene venue propio y la diferencia entre mids es de décimas de %.
+- **Privacidad:** al explorador llegan direcciones sueltas, nunca el xpub. Quien
+  lo opera puede agruparlas y relacionarlas con la IP del daemon; se avisa en
+  `docs/uso.md`. §Fuera de alcance exceptúa estas consultas de "nada sale de la
+  máquina". Los nodos propios siguen fuera: la terminal no gestiona ninguno.
+- **Solo lectura:** la terminal nunca tiene claves privadas ni firma. Mover
+  fondos entre wallet y venues sigue siendo manual.
+- La serie de valor dará un salto al activar la autocustodia; la pestaña lo
+  avisa. Las muestras `value` anteriores, sin `custody`, se siguen leyendo.
+**Toca:** requirements v0.33 (RF-37, RF-38, RF-39, RNF-25, CA-22, PA-13, PA-14,
+RF-05, RF-27, RF-29, RF-32, Alcance, §Fuera de alcance, §Supuestos y riesgos),
+design.md §2, §6.5, §6.13, §8 y §9, T-100 a T-105.
+**Adenda (2026-11-14, T-102, resuelve PA-13):** el explorador de BTCB2 es
+`https://mempool.guide` (dado por el usuario): mempool con backend Esplora
+sobre Knots. `GET /api/address/<dirección>` responde con la misma forma que
+mempool.space, así que un solo cliente (`adapters/explorer.py`) vale para las
+dos cadenas. Un error del cliente nunca lleva la dirección ni la excepción de
+httpx (que trae la url): las direcciones derivadas no están en el `Redactor`.
+Las dos cadenas comparten el historial anterior a la bifurcación, así que el
+mismo xpub puede ir en `WALLET_BTC_XPUBS` y en `WALLET_BTCB2_XPUBS`.
+**Adenda (2026-11-14, T-103, límite de peticiones):** un escaneo real con la
+clave de los vectores de BIP84 dio HTTP 429 en mempool.space: a la petición 22
+sin pausa, a la 24 con 250 ms y a la 33 con 1 s (cada prueba, minutos después de
+la anterior; no se sabe la ventana ni si quedaba castigo de la prueba previa).
+mempool.guide contestó 40 seguidas sin pausa. Se ofreció esperar y reintentar
+ante un 429, ir más despacio o cambiar de explorador; **el usuario eligió solo
+ir más despacio**: `request_every_ms`, 3000 por defecto, y un 429 sigue tirando
+el escaneo entero, que se repite en el siguiente ciclo. **Sin comprobar** que
+mempool.space acepte ese ritmo: si no, se sube la pausa en la config o se
+apunta `btc_url` a otro servidor. Con 3 s, una wallet con 50 direcciones usadas
+tarda unos 5 min por cadena; con varias, conviene subir `every_s`.
+**Adenda (2026-11-14, pedido por el usuario):** `every_s` pasa de 600 a 3600
+por defecto. Cada escaneo vuelve a consultar todas las direcciones con alguna
+transacción, aunque estén a cero, más `gap_limit` vacías por rama: cada 10 min
+era enseñar al explorador el historial entero seis veces por hora y arriesgar
+el 429. El saldo en autocustodia cambia poco. Consecuencia: una transferencia
+entre wallet y venue tarda hasta 1 h en verse en la línea `wallet`, y un saldo
+vale hasta 3 h (`3 × every_s`). Corrige el "(600)" y el "cada 10 min" de arriba.

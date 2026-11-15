@@ -12,11 +12,11 @@ import spec_trace  # noqa: E402
 def test_requirements_define_all_ids():
     ids = spec_trace.spec_ids(ROOT / "specs/mvp/requirements.md")
     assert [i for i in ids if i.startswith("RF-")] == [
-        f"RF-{number:02d}" for number in range(1, 37)
+        f"RF-{number:02d}" for number in range(1, 40)
     ]
     assert [i for i in ids if i.startswith("RNF-")] == [
-        f"RNF-{number:02d}" for number in range(1, 25)
+        f"RNF-{number:02d}" for number in range(1, 26)
     ]
     assert [i for i in ids if i.startswith("CA-")] == [
-        f"CA-{number:02d}" for number in range(1, 22)
+        f"CA-{number:02d}" for number in range(1, 23)
     ]

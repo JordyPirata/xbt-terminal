@@ -4,6 +4,42 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
+## Estado (2026-11-14)
+
+- **M21 — Autocustodia en el inventario (spec v0.33, D-84), fusionada en
+  `main` (sin push ni despliegue):** el daemon sumará al inventario total y al
+  valor de la cuenta los saldos on-chain de wallets propias, por xpub o zpub,
+  solo native segwit. No entra en el tope de RF-10 ni en el filtro del bot.
+  - **T-100 hecha:** requirements v0.33 (RF-37 a RF-39, RNF-25, CA-22, PA-13,
+    PA-14), D-84, design.md, changelog y tareas T-101 a T-105.
+  - **T-101 hecha:** `core/wallet.py` (BIP32 público, P2WPKH bech32 y
+    RIPEMD-160 propio, sin dependencias nuevas), con los vectores de BIP32,
+    BIP84 y BIP173.
+  - **T-102 hecha:** `adapters/explorer.py`, API de Esplora. El explorador de
+    BTCB2 es `https://mempool.guide/api` (PA-13 resuelta, `docs/api/README.md`);
+    para BTC vale `https://mempool.space/api`.
+  - **T-103 hecha:** `[custody]` en la config y `WALLET_BTC_XPUBS` /
+    `WALLET_BTCB2_XPUBS` en `.env` (`Settings.wallets`, en el `Redactor`);
+    `services/custody.py` (`CustodyService`: escaneo al arrancar y cada
+    `every_s`, gap limit, último saldo bueno); `Snapshot.custody`.
+  - **T-104 hecha:** `inventory(..., custody, has_custody=)`; línea `wallet` en
+    el panel de balances y total con ella; aviso de banda del plan de
+    reequilibrio con el total nuevo. El tope de RF-10 y el bot no la ven.
+  - **T-105 hecha:** la muestra `value` suma la autocustodia y lleva `custody`;
+    sin saldo válido no se apunta. `docs/uso.md` §Autocustodia.
+  - **Sin probar en real:** nada de esto ha corrido contra el explorador con
+    un xpub de verdad ni en el daemon. Falta que el usuario compare las
+    primeras direcciones derivadas con las de su wallet y lo despliegue:
+    xpubs al `.env` del servidor, `[custody]` a su `config.toml` y reinicio.
+  - **Límite de mempool.space:** dio HTTP 429 a las 22-33 consultas incluso a
+    1 por segundo (D-84, adenda). El usuario eligió solo ir más despacio:
+    `request_every_ms = 3000` por defecto, sin reintentos. `every_s` por defecto,
+    3600 (pedido por el usuario): el saldo de la wallet vale hasta 3 h. No está comprobado
+    que ese ritmo pase; si no, subirlo o cambiar `btc_url`. mempool.guide no
+    cortó.
+  - Siguiente: que el usuario lo pruebe con sus xpubs y, si va bien, `git push`
+    y despliegue. Después, lo que ya estaba: T-89.
+
 ## Estado (2026-11-09)
 
 - **M20 — Nombres descriptivos (D-83), rama `t-98-descriptive-names` (PR abierta):**

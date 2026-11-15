@@ -175,3 +175,11 @@ Es historia: la spec vigente es la de `requirements.md`.
 > público, en `docs/contrato-venue.md`, con una batería común en `tests/contract/`
 > por la que tiene que pasar cualquier venue. Declara `FeedUpkeep`, que los servicios
 > ya usaban sin declarar.
+
+> **Cambio v0.32 → v0.33 (D-84): autocustodia en el inventario (RF-37 a RF-39,
+> RNF-25, CA-22).** Pedido por el usuario: parte del BTC y del BTCB2 está en
+> wallets propias y el % total de inventario salía sin ellas. El daemon deriva
+> direcciones native segwit de los xpubs de `.env`, pide sus saldos a un
+> explorador configurable y los suma al inventario total y al valor de la
+> cuenta. No entra en el tope por orden ni en el filtro del bot. Solo lectura.
+> §Fuera de alcance exceptúa las consultas al explorador. PA-13 y PA-14 nuevas.

@@ -1282,3 +1282,63 @@ ni los textos que ve el usuario.
 - Revisado: los 313 comentarios de texto libre de `src/` y los de `tests/` y `tools/`
   cortos o con cifras; los más largos de `tests/` se repasaron en listado.
 - Sin cambio de comportamiento: tests, ruff y `spec_trace` iguales.
+
+### T-100 Spec de la autocustodia · `done` · RF-37, RF-38, RF-39, RNF-25, CA-22 · D-84
+- requirements v0.33, D-84, design.md §2, §6.5, §6.13, §8 y §9, changelog y M21.
+
+### T-101 Derivación native segwit de un xpub · `done` · RF-37, CA-22 · dep T-100 · D-84, PA-14
+- `core/wallet.py`, puro: decodificar `xpub`/`zpub` (base58check), derivación
+  pública de hijos (BIP32) y dirección P2WPKH bech32 de `/0/i` y `/1/i`.
+- Tests: vectores de BIP32 (claves hijas), BIP84 (direcciones de la cuenta 0) y
+  BIP173; RIPEMD-160 propio igual al de `hashlib` donde exista y a sus vectores;
+  rechazo de `ypub`, `Zpub`, `xprv`, checksum malo e índice endurecido.
+- Hecho: `core/wallet.py` con `parse_account_key`, `AccountKey.child` y `address`;
+  no se exige profundidad 3 (Electrum deriva su zpub en `m/0'`). 29 tests; los
+  vectores de BIP32 y BIP84 pasan y el RIPEMD-160 propio coincide con `hashlib`.
+
+### T-102 Cliente del explorador · `done` · RF-38, CA-22 · dep T-100 · D-84, PA-13
+- Empieza comprobando en real las dos APIs con direcciones públicas ajenas (la
+  URL de BTCB2 la da el usuario); lo comprobado, a `docs/api/README.md` y a
+  `tests/fixtures/explorer/`. Si la de BTCB2 no es Esplora, parar (PA-13).
+- `adapters/explorer.py`: `address(addr)` → saldo (confirmado + mempool) y si
+  tiene transacciones. Respuesta ilegible o HTTP de error → error, nunca cero.
+- Tests con respx: saldo, dirección sin uso, mempool, error HTTP y JSON malo.
+- Hecho: `adapters/explorer.py` (`Explorer.address` → `AddressStats`), 24 tests;
+  mempool.guide (BTCB2) y mempool.space (BTC) responden igual: PA-13 resuelta.
+
+### T-103 Config, escaneo y protocolo · `done` · RF-37, RF-38, RNF-25, CA-22 · dep T-101, T-102 · D-84
+- `config.py`: `[custody]` y los xpubs de `.env` como `Secret`, con sus errores
+  de arranque; `config.example.toml`.
+- `services/custody.py` (`CustodyService`): escaneo al arrancar y cada
+  `every_s`, gap limit, último saldo bueno y su hora. En `Engine.services()`.
+- `Snapshot.custody` en `services/wire.py` y su lado en `services/remote.py`.
+- Tests: gap limit en las dos ramas, varias wallets por cadena, una consulta
+  fallida conserva el saldo anterior, y canario del xpub y de una dirección en
+  journal, `diag.log` y socket.
+- Hecho: `CustodyConfig` y `load_wallets` en `config.py` (`Settings.wallets`, por
+  cadena); `CustodyService` deriva en un hilo y guarda las direcciones;
+  `Snapshot.has_custody` y `custody`; `RemoteAccount.custody`. `_multiply` de
+  `core/wallet.py` pasa a coordenadas jacobianas (35 → 6 ms por dirección) y
+  `AccountKey` no se imprime.
+
+### T-104 Inventario total, panel y aviso · `done` · RF-39, RF-05, RF-27, RF-29, CA-22 · dep T-103 · D-84
+- `core/inventory.py`: `inventory(..., custody)` e `Inventory.custody`.
+- Panel de balances: línea `wallet`, total y % total con ella; sin dato válido,
+  sin total. Aviso de banda del plan de reequilibrio con el % total nuevo.
+- Tests: totales con y sin autocustodia, dato viejo, panel; el tope de RF-10 y
+  `decide` del bot dan lo mismo con autocustodia.
+- Hecho: `inventory(..., custody, has_custody=)` con `Inventory.custody` y
+  `custody_mid`; línea `wallet` en `render_balances`; `XbtApp.total_with_custody`
+  y la línea "total con la wallet" del plan de reequilibrio. `services/orders.py`,
+  `services/bot.py` y `core/bot.py` no reciben la autocustodia (test).
+
+### T-105 Autocustodia en el valor de la cuenta · `done` · RF-39, RF-32, CA-22 · dep T-104 · D-84
+- `core/valuation.py`: la muestra suma la autocustodia y lleva `custody`; las
+  filas sin ella se leen igual. `ValueRecorder` no apunta sin saldo válido.
+- La pestaña avisa del salto; `docs/uso.md` con la sección de autocustodia y el
+  aviso de privacidad.
+- Tests: muestra con y sin `custody`, lectura de filas viejas, sin saldo válido
+  no se apunta.
+- Hecho: `CustodyValue` y `ValueSample.custody`; `ValueRecorder(custody=)`; un
+  cambio de más del 5 % en la wallet también abre tramo con `z`; nota en la
+  pestaña; sección "Autocustodia" en `docs/uso.md`.

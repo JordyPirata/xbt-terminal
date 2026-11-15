@@ -280,3 +280,19 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 ### T-98 Renombrar identificadores abreviados · `done` · RNF-21 · D-83
 
 ### T-99 Quitar comentarios que repiten el código · `done` · RNF-21 · D-83 · dep T-98
+
+## M21 — Autocustodia en el inventario (v0.33, D-84)
+
+En este orden. Ninguna cambia lo que el bot decide ni los topes de RF-10.
+
+### T-100 Spec de la autocustodia · `done` · RF-37, RF-38, RF-39, RNF-25, CA-22 · D-84
+
+### T-101 Derivación native segwit de un xpub · `done` · RF-37, CA-22 · dep T-100 · D-84, PA-14
+
+### T-102 Cliente del explorador · `done` · RF-38, CA-22 · dep T-100 · D-84, PA-13
+
+### T-103 Config, escaneo y protocolo · `done` · RF-37, RF-38, RNF-25, CA-22 · dep T-101, T-102 · D-84
+
+### T-104 Inventario total, panel y aviso · `done` · RF-39, RF-05, RF-27, RF-29, CA-22 · dep T-103 · D-84
+
+### T-105 Autocustodia en el valor de la cuenta · `done` · RF-39, RF-32, CA-22 · dep T-104 · D-84
