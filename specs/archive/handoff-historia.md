@@ -679,3 +679,166 @@ tests de `test_cross.py`.
   subía desde local con `git push servidor:xbt-terminal main:refs/heads/incoming`
   y allí `git merge --ff-only incoming && git branch -d incoming`. Lo sustituye
   `git pull` desde GitHub con deploy key.
+
+## Estado (2026-11-04)
+
+- **T-88 hecha (spec v0.32, D-82):** contrato público en `docs/contrato-venue.md`,
+  batería en `tests/contract/` (31 cláusulas), con NonKYC, Neoxa y un adaptador falso
+  con una variante rota por cláusula. `FeedUpkeep` declara `resync`, `clock_skew_ms` y
+  `aclose`, que los servicios usaban por `getattr`. Sin cambio de comportamiento.
+- **T-91 hecha (D-81):** comentarios, docstrings, logs y nombres de test en inglés
+  en `src/`, `tests/` y `tools/`; lo vigila `tests/unit/test_english.py`. El AST de
+  `src/` solo cambia en mensajes de log y en `DESCRIPTION` de `--help`, que sigue en
+  español (antes salía del docstring del módulo).
+- **Desplegado en el servidor hasta T-97** (`3bb6d43`, daemon en live desde el 2026-11-08 03:00 UTC; falta `bot on`). Reinstalar con `uv tool install --reinstall --python /usr/bin/python3.11 .`: con el Python 3.12 de uv, la unidad endurecida (`ProtectHome=tmpfs`) no ve el intérprete y da `203/EXEC`.
+- **T-87 hecha (spec v0.31, D-80):** `xbt daemon --record` graba books y trades;
+  `xbt daemon --replay <fichero> --data-dir <dir>` reproduce sin keys ni red,
+  con venues simulados (`services/replay.py`) y `[replay]` en la config;
+  `xbt report --replay <fichero>` da el informe fijo en tiempo virtual
+  (`VirtualLoop`). Muestra real de 7 min y config de la demo en
+  `tests/fixtures/replay/` (PA-11: su supuesto). Demo en el README. El `[inventory]`
+  de la demo se quitó: con él, la muestra no dispara.
+- **Servidor:** el usuario dice que ya está resuelto (2026-11-04): historial
+  reescrito de `origin` y despliegue de T-79 a T-85 fuera de la lista. No lo he
+  comprobado por SSH. T-87 aún no está desplegada ni hace falta para el bot.
+- **Neoxa quitó el descuento de fee temporalmente** (dicho por el usuario,
+  2026-11-04): explica los fills al 0.2 % completo. `fee_discount_pct = "50"`
+  sigue en la config y solo infla el neto del panel cruzado.
+- **Legibilidad (D-77, D-78), T-79 a T-85:** refactor sin cambio de
+  comportamiento; detalle en `specs/archive/tasks-done.md`.
+- **Spec v0.30 (D-79, 2026-10-31):** fase 3, comunidad pequeña.
+  Abre, cada uno en su versión y con condiciones, pares contra BTC (contra
+  stablecoins, solo con propuesta y PR según `CONTRIBUTING.md`), venues por
+  contrato de adaptador y estrategias por interfaz común; backtesting solo como
+  reproducción de books grabados; sin telemetría. Sin RF nuevos. PA-11 y PA-12
+  nuevas. `CONTRIBUTING.md` (T-86, hecha). Tareas en M18: T-32 y T-87 hechas, T-88 contrato de adaptador, T-89 interfaz de
+  estrategia, T-90 backoff y fracción de la profundidad; T-88 a T-90 empiezan
+  por su versión de la spec.
+- Spec anterior: **v0.29** (D-76). **T-78 desplegada** (`f2cf49a`; daemon reiniciado
+  el 2026-10-29 20:48:51 UTC, bot `armed` desde las 20:49:03): el daemon contrasta cada `book_check_s` (5 s) el tope
+  del book de cada venue con el REST; si no coincide, el book queda en duda
+  (bot "book viejo", órdenes `stale_data`), se vuelve a pedir el book y se
+  apunta `book_resync`. La conexión viva ya no cuenta como frescura. Hechas
+  T-61 a T-65, T-67 a T-87 y T-32. Más de 1500 tests, ruff limpio, `spec_trace`
+  75/79 (sin test: RNF-01, CA-01, CA-02 y CA-10, pasados en real: D-20, D-43,
+  D-57).
+- **T-77 desplegada** desde el 2026-10-28 23:55 UTC, con `lead_venue = "nx"`.
+- **2026-10-29, book de NonKYC congelado (D-76):** el WS siguió conectado pero
+  sin `updateOrderbook` desde ~17:45 UTC; el bot disparó d-9820a4, d-f1fe90 y
+  d-6eca2e (19:58 a 20:01 UTC) contra un bid que ya no estaba: 0.0234 XBT
+  comprados de más en Neoxa, sin cuadrar. El usuario se volvió a suscribir y el
+  book quedó bien. Con T-78 eso lo ve el contraste (`book_resync`).
+- **Arquitectura:** `xbt daemon [--live]` es el único proceso que habla con
+  los venues (keys, lock, journal, órdenes, bot, resultados, depósitos,
+  comisiones, muestreo del valor). `xbt` (alias `attach`) es la pantalla:
+  opera todo por el socket, sin config ni keys. Protocolo en design.md §6.13.
+- **T-75 y T-76 (D-73, D-74, spec v0.27):** el comando pasa a `xbt` y las
+  rutas a `~/.config/xbt` y `~/.local/state/xbt` (socket `xbt.sock`, lock
+  `xbt.lock`); licencia AGPL-3.0; README reescrito, `docs/despliegue.md` y
+  `docs/uso.md`. Hechas en el worktree `~/Code/xbt-terminal-t75` (rama
+  `t-75-xbt`), fusionadas en `main`.
+- **El daemon corre en el servidor** (por Tailscale; la IP no va al repo:
+  usar un alias `servidor` en `~/.ssh/config`; hora local CST) desde el 2026-10-27 03:56:02 UTC: servicio systemd de
+  sistema `xbt` (no `--user`; pararlo o arrancarlo pide sudo), `ExecStart=
+  /home/jordypirata/.local/bin/xbt daemon --live`, `Restart=on-failure`.
+  `xbt` instalado con `uv tool install --reinstall ~/xbt-terminal`, un clon
+  de GitHub (`origin`) que tira con una deploy key de solo lectura
+  (`~/.ssh/github_xbt`, puesta por el usuario el 2026-10-29). **Desplegar:**
+  `git push origin main` en local; en el servidor, `cd ~/xbt-terminal && git
+  pull --ff-only && uv tool install --reinstall ~/xbt-terminal`, y el usuario
+  hace `sudo systemctl restart xbt` y `bot on`. El modo automático de Claude
+  Code no deja tocar el servidor por SSH (push ni instalación): esos pasos los
+  hace el usuario; leer journal y logs por SSH sí. Pantalla: `ssh -t servidor
+  env COLORTERM=truecolor xbt`.
+- **Migración desde local (2026-10-27):** daemon local parado a las 03:38 UTC
+  (bot `off` desde las 03:32, nada en vuelo). `config.toml`, `.env` y todo el
+  journal copiados con rsync al servidor, idénticos (sha256). Los logs del
+  dry-run previo del servidor quedaron en `~/xbt-dryrun-logs/` del servidor.
+  El journal sigue sin huecos salvo 03:38 a 03:56 UTC.
+- **En local** (`~/Code/xbt-terminal`, paquete `xbt_terminal`) ya no corre
+  daemon. El 2026-10-27 se borraron en local `~/.local/state/xbt`,
+  `~/.config/xbt` (con el `.env`) y el `xbt` de `uv tool`: los únicos datos,
+  config y keys son los del servidor. **No arrancar un daemon `--live` en
+  local**: el lock es por máquina y no lo impide; serían dos bots con las mismas
+  keys. Para probar en local, `uv run` desde el repo con otro `--data-dir`.
+- **Lo último (detalle en decisions.md y `specs/archive/tasks-done.md`):**
+  - T-69/T-70/T-71 (D-69): evento `value` cada 5 min en el journal; en
+    resultados (`r`), `Tab` → pestaña "Valor de la cuenta"; se refresca sola
+    cada 60 s; `z` → último tramo en sats (desde el último salto > 5 %, que son
+    transferencias en tránsito). Serie desde 2026-10-25 22:25 UTC, sin huecos.
+  - T-72 (D-70): `decide` del bot ~100× más barata con el mismo resultado
+    (50 → 0.5 ms con walk). Oráculo congelado en `tests/unit/bot_reference.py`:
+    un cambio de comportamiento del bot a propósito lo actualiza con su D-NN.
+    Latencia en `tests/perf/` (`uv run pytest tests/perf -s`).
+  - T-73 (D-71): con `max_move_pct`, el bot no dispara si el mid de un venue se
+    movió más de ese % en la ventana (no espera: mira hacia atrás; tras un salto
+    tarda hasta `move_window_ms` en volver a disparar). `bot_fire.move` apunta el
+    movimiento de cada venue, con filtro o sin él. Al frenar, `diag.log` dice
+    "not firing, sharp move".
+  - T-74 (D-72): la ventana de T-73 olvidaba también el mid vigente al
+    empezarla; tras un book quieto, un salto en un solo cambio daba `move` 0.
+    Así disparó d-60003f (23:42:42 UTC, venta en Neoxa colgada, 0.0038 XBT
+    comprados de más en NonKYC). Daemon con T-74 desde el 2026-10-27 00:01:59
+    UTC, bot `armed` desde las 00:03:52. Primeras dobles con el arreglo:
+    d-052717 (23:57:40, +1.41 %) y d-0fbda9 (00:05:05), las dos llenas y
+    disparadas ~2 s después de que el filtro frenara un barrido en Neoxa.
+- **Piernas colgadas:** 20 de 634 dobles del bot en live (2026-10-21 a 27): 14
+  en Neoxa y 6 en NonKYC. Las dos últimas, d-8c32f8 (20:55 UTC) y d-97dc8e
+  (21:15 UTC) del 2026-10-27: compra en Neoxa que volvió `open` y se canceló a
+  los 3 s, 0.0097 XBT vendidos de más en NonKYC. Neoxa casa al recibir la
+  orden: de las 615 piernas del bot en Neoxa, 600 volvieron `filled` en el ack
+  y 15 `open`, de las que 14 colgaron. `max_move_pct` no las separa (`move`
+  0.14 y 0.43 %). De ahí D-75/T-77. No es el WiFi ni la latencia (ack de Neoxa
+  p50 305 ms).
+- **Descuadres** (journal en live, 2026-10-26): neto +0.0601 XBT sobrante
+  (+0.0817 comprado de más, −0.0216 vendido de más), coste neto 0.00026685 BTC
+  (media 0.00444).
+
+### Tareas abiertas
+
+- **T-66** `todo`: CA-16 en real. Parte local hecha (2026-10-26 23:32 UTC,
+  t-2c6b97 colocada y cancelada desde la pantalla, en D-66). Falta la del
+  server por SSH, con permiso del usuario.
+- **T-55** `doing`: falta la parte manual de CA-15 en live en el server.
+- **T-20** `doing`: CA-03 y CA-06 aplazados por el usuario (2026-10-23).
+- **T-33** `todo` (comprobación en real de M6).
+- **CI (T-32):** `.github/workflows/ci.yml` en cada push a `main` y cada PR.
+  Primera ejecución en GitHub en verde (2026-11-01 02:46 UTC, 1 min 22 s,
+  `gh run list`). Ojo con los tests de reloj real
+  (`test_dialog_does_not_wait_for_network`, `tests/perf/`): en un runner
+  compartido pueden fallar más que en local.
+
+### Siguiente
+
+00. **T-88 fusionada en `main`.** Siguiente: **T-89** (interfaz de estrategia), que
+    empieza por su versión de la spec; luego T-90. Aplazado por el usuario (2026-11-04): cómo se reporta un fallo de
+    seguridad en `CONTRIBUTING.md`.
+1. **Vigilar T-78 y T-77** en el journal del servidor: cuántos `book_resync`
+   salen y en qué venue (en Neoxa se espera ~1 cada 3 a 4 min por carreras,
+   D-76; muchos más, o en NonKYC con el book bien, sería un falso positivo que
+   comparar con el REST), y `bot_miss` y `hanging_leg` (consulta en
+   `specs/archive/handoff-historia.md`). Cuadrar a mano los 0.0234 XBT de las
+   colgadas del 2026-10-29 si el usuario lo pide.
+2. Corregir d-550cd7 a mano (queda fuera de los 50 trades de NonKYC): leer sus
+   4 trades de `/account/trades` con un límite mayor y añadir los `fill_fee`,
+   con el daemon parado. Pendiente de que el usuario lo pida.
+3. Apuntar en `decisions.md` la prueba en live de d-fb32e2 (el usuario aún no
+   ha dicho si quiere).
+4. T-66 y T-55 por SSH contra el daemon del servidor (ya con la versión
+   nueva), con permiso del usuario.
+5. Cuando Neoxa vuelva a dar el descuento, comprobar los fills; si no vuelve,
+   quitar `fee_discount_pct` de la config de Neoxa en el servidor.
+
+### Cómo retomar en una sesión nueva
+
+- Estado del daemon y del bot, en el servidor: `ssh -o BatchMode=yes
+  servidor 'systemctl is-active xbt; tail
+  ~/.local/state/xbt/diag.log'` y los `bot_state` del journal de hoy (el
+  servidor saca un aviso legal por stderr en cada conexión).
+- Si se reinicia el daemon, el bot arranca `off`: rearmar con `bot on` desde la
+  pantalla. La config solo se lee al arrancar. Cambiar la config: editarla en
+  el servidor y que el usuario haga `sudo systemctl restart xbt`.
+- Resultados y descuadres sin pantalla: `ResultsService(Path.home() /
+  ".local/state/xbt").load("todo")` (`services/results.py`).
+- Trades públicos de Neoxa para ver qué pasó en una colgada (solo los 100
+  últimos): `curl -s "https://neoxa.exchange/api/exchange/trades/BTCB2_BTC?limit=100"`.
