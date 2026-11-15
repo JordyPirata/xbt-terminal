@@ -2194,3 +2194,7 @@ mempool.guide dio HTTP 403: rechaza el agente por defecto de httpx
 `curl`, por eso no salió. El cliente manda ahora `User-Agent: xbt-terminal`:
 nombra el programa y nada de quien lo usa. El error de un escaneo dice además
 la cadena (BTC o XBT), sin la dirección.
+**Adenda (2026-11-14, pedido por el usuario):** las dos cadenas se escanean a la
+vez: cada una tiene su explorador, así que no comparten pausa ni límite, y el
+escaneo dura lo que la cadena más lenta en vez de la suma (BTC tardó ~14 min).
+Si una falla, el escaneo entero no vale, como antes.

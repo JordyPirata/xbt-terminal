@@ -109,6 +109,34 @@ class TestScan:
         with pytest.raises(ExplorerError, match=r"^XBT: "):
             await rig.service.scan()
 
+    async def test_both_chains_are_scanned_at_once(self, tmp_path):
+        both_asked = asyncio.Event()
+
+        class Waiting(FakeExplorer):
+            async def address(self, address):
+                result = await super().address(address)
+                if btc.asked and btcb2.asked:
+                    both_asked.set()
+                # sequential chains would never get here: the other one is not asked yet
+                await asyncio.wait_for(both_asked.wait(), 1)
+                return result
+
+        btc, btcb2 = Waiting({"first/0/0": "1"}), Waiting({"first/0/0": "2"})
+        rig = Rig(
+            tmp_path, {"BTC": (FIRST,), "BTCB2": (FIRST,)}, {"BTC": btc, "BTCB2": btcb2}
+        )
+        assert await rig.service.scan() == CustodyBalance(D("1"), D("2"), T0)
+
+    async def test_one_chain_failing_fails_the_scan(self, tmp_path):
+        btc, btcb2 = FakeExplorer({"first/0/0": "1"}), FakeExplorer({"first/0/0": "2"})
+        btcb2.failing.add("first/1/1")
+        rig = Rig(
+            tmp_path, {"BTC": (FIRST,), "BTCB2": (FIRST,)}, {"BTC": btc, "BTCB2": btcb2}
+        )
+        with pytest.raises(ExplorerError, match=r"^XBT: "):
+            await rig.service.scan()
+        assert rig.service.last is None
+
     async def test_chain_without_wallets_is_zero(self, tmp_path):
         rig = Rig(tmp_path, {"BTCB2": (FIRST,)}, {"BTCB2": FakeExplorer({"first/0/0": "2"})})
         assert await rig.service.scan() == CustodyBalance(D("0"), D("2"), T0)

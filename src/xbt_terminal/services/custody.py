@@ -10,7 +10,8 @@ A scan only counts if every query answered: a failed one keeps the previous bala
 is reported and retried on the next cycle, because a partial sum would look like
 funds moved out. A balance older than three intervals stops counting (`balance()`).
 
-Queries go one at a time, `request_every_ms` apart: mempool.space answered 429 after
+The chains are scanned at the same time; within a chain, queries go one at a time,
+`request_every_ms` apart: mempool.space answered 429 after
 about twenty in a row, and after thirty at one per second (2026-11-14). A 429 fails
 the scan like any other error; there is no retry inside a scan (D-84).
 
@@ -104,22 +105,32 @@ class CustodyService:
             await self._sleep(self._every_s)
 
     async def scan(self) -> CustodyBalance:
+        # chains at once: each has its own explorer, so its pause and limit are its own
+        assets = list(self._wallets)
+        results = await asyncio.gather(
+            *(self._chain_balance(asset) for asset in assets), return_exceptions=True
+        )
         totals: dict[str, Decimal] = {}
-        for asset, keys in self._wallets.items():
-            explorer = self._explorers[asset]
-            total = ZERO
-            for key in keys:
-                for branch in (RECEIVE, CHANGE):
-                    try:
-                        total += await self._branch_balance(explorer, key, branch)
-                    except ExplorerError as error:
-                        # which chain failed; still never the address (RNF-25)
-                        raise ExplorerError(f"{CHAIN_NAME[asset]}: {error}") from None
-            totals[asset] = total
+        for asset, result in zip(assets, results, strict=True):
+            if isinstance(result, BaseException):
+                raise result
+            totals[asset] = result
         self.last = CustodyBalance(
             totals.get(QUOTE, ZERO), totals.get(BASE, ZERO), self._clock()
         )
         return self.last
+
+    async def _chain_balance(self, asset: str) -> Decimal:
+        explorer = self._explorers[asset]
+        total = ZERO
+        for key in self._wallets[asset]:
+            for branch in (RECEIVE, CHANGE):
+                try:
+                    total += await self._branch_balance(explorer, key, branch)
+                except ExplorerError as error:
+                    # which chain failed; still never the address (RNF-25)
+                    raise ExplorerError(f"{CHAIN_NAME[asset]}: {error}") from None
+        return total
 
     async def _branch_balance(self, explorer: _Explorer, key: AccountKey, branch: int) -> Decimal:
         total = ZERO
