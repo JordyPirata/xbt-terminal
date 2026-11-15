@@ -30,3 +30,27 @@ coinciden, manda lo grabado en `tests/fixtures/` y lo anotado en
 - El BTC en red principal es el ticker hijo `BTC-MAIN` en depósitos y retiros;
   el padre `BTC` no vale (D-50, D-53).
 - El formato del `report` del WS privado no está documentado (D-14).
+
+## Exploradores (autocustodia, RF-38)
+
+Comprobado el 2026-11-14 con la dirección de ejemplo de BIP173
+(`bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4`, que no es de nadie); respuestas
+en `tests/fixtures/explorer/`.
+
+| Cadena | Base (`[custody]`) | Qué es |
+| --- | --- | --- |
+| BTC | `https://mempool.space/api` | mempool.space, API de Esplora |
+| BTCB2 | `https://mempool.guide/api` | mempool 3.4-dev con backend Esplora sobre Knots (`/api/v1/backend-info`) |
+
+- `GET <base>/address/<dirección>` devuelve `{address, chain_stats,
+  mempool_stats}`, cada bloque con `funded_txo_sum`, `spent_txo_sum` (en
+  satoshis, enteros) y `tx_count`. El formato es el mismo en los dos.
+- Una dirección mal formada da HTTP 400 con el texto `Invalid Bitcoin address`.
+- Las dos cadenas comparten formato de dirección (`bc1q…`, PA-14) y el
+  historial anterior a la bifurcación: la misma dirección tiene transacciones
+  en las dos (172 en BTCB2, 227 en BTC), y la altura es distinta (982022 frente
+  a 975885). Un mismo xpub puede tener saldo en las dos cadenas.
+- Límites (2026-11-14, sin documentar): mempool.space dio HTTP 429 a la
+  consulta 22 sin pausa, a la 24 con 250 ms y a la 33 con 1 s entre consultas.
+  mempool.guide contestó 40 seguidas sin pausa. De ahí `request_every_ms`
+  (3000 por defecto); no se ha comprobado que mempool.space lo acepte.
