@@ -6,7 +6,10 @@ PnL: deposits and withdrawals show as jumps, unadjusted.
 
     inventory() ─▶ sample() ─▶ journal "value" ─▶ series() ─▶ summarize()
 
-Spec: RF-05, RF-32, RNF-10, CA-17 · design.md §6.5 · D-69 · Tasks: T-69
+With self-custody wallets (RF-39, D-84) the total includes them and the sample carries
+a `custody` entry; samples from before, without it, still read.
+
+Spec: RF-05, RF-32, RF-39, RNF-10, CA-17, CA-22 · design.md §6.5 · D-69, D-84 · Tasks: T-69, T-105
 """
 
 from __future__ import annotations
@@ -35,11 +38,22 @@ class VenueValue:
 
 
 @dataclass(frozen=True, slots=True)
+class CustodyValue:
+    """The self-custody wallets in a sample (RF-39)."""
+
+    btc: Decimal
+    btcb2: Decimal
+    mid: Decimal  # mean of the venue mids
+    value: Decimal  # BTC
+
+
+@dataclass(frozen=True, slots=True)
 class ValueSample:
     ts: int  # epoch ms of the interval multiple
-    value: Decimal  # BTC, both venues
+    value: Decimal  # BTC, both venues plus self-custody if any
     every_ms: int  # sampling interval: decides what a gap is
     venues: tuple[VenueValue, ...]
+    custody: CustodyValue | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,12 +82,33 @@ def sample(
         if item is None or item.value is None or mid is None:
             return None
         venues.append(VenueValue(venue_id, item.btc, item.btcb2, mid, item.value))
-    return ValueSample(timestamp, inv.value, every_ms, tuple(venues))
+    custody: CustodyValue | None = None
+    if inv.custody is not None:
+        if inv.custody.value is None or inv.custody_mid is None:
+            return None
+        custody = CustodyValue(
+            inv.custody.btc, inv.custody.btcb2, inv.custody_mid, inv.custody.value
+        )
+    return ValueSample(timestamp, inv.value, every_ms, tuple(venues), custody)
 
 
 def sample_data(sample: ValueSample) -> dict[str, Any]:
     """The `data` of the journal's `value` event."""
+    custody = sample.custody
+    extra = (
+        {}
+        if custody is None
+        else {
+            "custody": {
+                "btc": custody.btc,
+                "btcb2": custody.btcb2,
+                "mid": custody.mid,
+                "value": custody.value,
+            }
+        }
+    )
     return {
+        **extra,
         "at": sample.ts,
         "every_ms": sample.every_ms,
         "value": sample.value,
@@ -114,7 +149,15 @@ def _parse(row: Mapping[str, Any]) -> ValueSample:
     )
     at = data.get("at")
     timestamp = at if isinstance(at, int) and not isinstance(at, bool) else _ms(row["ts"])
-    return ValueSample(timestamp, _dec(data["value"]), int(data["every_ms"]), venues)
+    entry = data.get("custody")
+    custody = (
+        CustodyValue(
+            _dec(entry["btc"]), _dec(entry["btcb2"]), _dec(entry["mid"]), _dec(entry["value"])
+        )
+        if entry is not None
+        else None
+    )
+    return ValueSample(timestamp, _dec(data["value"]), int(data["every_ms"]), venues, custody)
 
 
 def series(
@@ -198,6 +241,8 @@ def last_stretch(values: Sequence[ValueSample]) -> tuple[ValueSample, ...]:
             for venue_value in cur.venues
             if venue_value.venue in before
         ]
+        if prev.custody is not None and cur.custody is not None:
+            pairs.append((prev.custody.value, cur.custody.value))
         if any(_jumped(earlier, later) for earlier, later in pairs):
             start = i
     return tuple(values[start:])

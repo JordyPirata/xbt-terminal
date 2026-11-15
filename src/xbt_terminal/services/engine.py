@@ -20,6 +20,7 @@ from ..core.models import VenueId
 from ..core.notices import VENUE, Notice
 from .account import AccountService
 from .bot import BotService
+from .custody import CustodyService
 from .deposits import DepositService
 from .faults import Fault, Faults
 from .market import MarketHub
@@ -48,9 +49,11 @@ class Engine:
         deposits: DepositService | None = None,
         rebalance: RebalanceService | None = None,
         value_every_s: int | None = None,
+        custody: CustodyService | None = None,
         clock: Callable[[], int] = now_ms,
     ) -> None:
         self.hub = hub
+        self.custody = custody  # self-custody balances (RF-38); None without wallets
         # what the client asks for over the socket without trading (D-66)
         self.results = results
         self.deposits = deposits
@@ -72,7 +75,7 @@ class Engine:
         if value_every_s is not None and account is not None and journal is not None:
             self.values = ValueRecorder(
                 account, hub, journal, every_s=value_every_s,
-                faults=self._main_faults, clock=clock,
+                faults=self._main_faults, clock=clock, custody=custody,
             )  # fmt: skip
         hub.subscribe(self._on_hub)
         if orders is not None and account is not None:
@@ -118,6 +121,8 @@ class Engine:
             out.append(("bot", self.bot.run))
         if self.values is not None:
             out.append(("value", self.values.run))
+        if self.custody is not None:
+            out.append(("custody", self.custody.run))
         return out
 
     def watchers(self) -> list[tuple[str, Callable[[], Awaitable[None]]]]:
@@ -198,4 +203,6 @@ class Engine:
         if self.orders is not None:
             await self.orders.drain()
             self.orders.close()
+        if self.custody is not None:
+            await self.custody.aclose()
         await self.hub.aclose()

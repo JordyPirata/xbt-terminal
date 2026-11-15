@@ -156,3 +156,37 @@ class TestAppBalances:
             got = rig.app.rebalance_holdings()
             # without Neoxa balances there is no plan, and the message says so
             assert isinstance(got, str) and "nx" in got
+
+
+@pytest.mark.spec("RF-39", "RF-29", "CA-22")
+class TestTotalWithCustody:
+    """With self-custody wallets the band warning looks at the total that includes them
+    (T-104). The venues alone are at 25.5 %."""
+
+    TARGET = InventoryTarget(D("25"), D("10"))
+
+    async def notes(self, total):
+        app = make_app(service(), {"nk": NK, "nx": NX}, inventory_target=self.TARGET)
+        app._custody = lambda: (True, None)  # type: ignore[method-assign]
+        app.total_with_custody = lambda: total  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.press("e")
+            return (await opened(app, pilot)).text()
+
+    async def test_warns_with_the_total_that_includes_the_wallet(self):
+        text = await self.notes(D("8"))
+        assert "total con la wallet: 8.0 %" in text and "fuera de la banda" in text
+
+    async def test_no_warning_if_that_total_is_in_band(self):
+        text = await self.notes(D("30"))
+        assert "total con la wallet: 30.0 %" in text and "fuera de la banda" not in text
+
+    async def test_says_so_without_wallet_data(self):
+        text = await self.notes(None)
+        assert "sin dato de la wallet" in text and "fuera de la banda" not in text
+
+    async def test_without_wallets_no_extra_line(self):
+        app = make_app(service(), {"nk": NK, "nx": NX}, inventory_target=self.TARGET)
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.press("e")
+            assert "wallet" not in (await opened(app, pilot)).text()

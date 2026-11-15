@@ -30,6 +30,7 @@ from ..core.bot import BotState
 from ..core.candles import CandleBuilder
 from ..core.commands import CancelAll, CancelOrder, CancelVenue, DoubleOrder, PlaceOrder
 from ..core.double import DoubleState
+from ..core.inventory import CustodyBalance
 from ..core.models import ZERO, BookSnapshot, ConnState, OrderRequest, Trade, VenueId
 from ..core.rebalance import FeeInfo
 from ..core.results import Range, Report, Summary
@@ -199,6 +200,9 @@ class RemoteAccount:
 
     def __init__(self) -> None:
         self.state: dict[VenueId, VenueAccount] = {}
+        # self-custody as the daemon last scanned it (RF-39); the panel reads both
+        self.has_custody = False
+        self.custody: CustodyBalance | None = None
         self.faults = Faults()  # empty: faults are the daemon's and arrive as notices
         self._listeners: list[Callable[[VenueId, str], None]] = []
 
@@ -577,6 +581,8 @@ class RemoteEngine:
         before = self.doubles
         self.snapshot = decode(Snapshot, msg["state"])
         self.orders._changed(before, self.snapshot.doubles)
+        self.account.has_custody = self.snapshot.has_custody
+        self.account.custody = self.snapshot.custody
         self.account._update(self.snapshot.accounts)
         if self.bot is not None:
             self.bot._update(self.snapshot)

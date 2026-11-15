@@ -23,8 +23,11 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
+
 from .adapters.base import Depositor, MarketData, TokenPricer, Venue, WithdrawalFees
 from .adapters.dryrun import DryRunVenue
+from .adapters.explorer import Explorer
 from .adapters.neoxa import NeoxaVenue
 from .adapters.nonkyc import NonKYCVenue
 from .adapters.streaming import now_ms
@@ -40,6 +43,7 @@ from .paths import AlreadyRunningError, InstanceLock, private_dir, resolve_paths
 from .services.account import AccountService
 from .services.bot import BotService
 from .services.control import SOCKET_NAME, socket_problem
+from .services.custody import CustodyService
 from .services.daemon import run_daemon
 from .services.deposits import DepositService
 from .services.engine import Engine
@@ -205,6 +209,23 @@ def fee_tokens(venues: Mapping[VenueId, VenueConfig]) -> dict[VenueId, FeeToken]
     }
 
 
+def custody_service(
+    settings: Settings, faults: Faults, clock: Callable[[], int]
+) -> CustodyService | None:
+    """Self-custody scan (RF-38); None without wallets in `.env`. Its http client is its
+    own: it shares nothing with the venues, not even their rate limiters."""
+    custody = settings.config.custody
+    if custody is None or not settings.wallets:
+        return None
+    http = httpx.AsyncClient()
+    explorers = {asset: Explorer(http, custody.url(asset) or "") for asset in settings.wallets}
+    return CustodyService(
+        settings.wallets, explorers, every_s=custody.every_s, gap_limit=custody.gap_limit,
+        request_every_ms=custody.request_every_ms, clock=clock, faults=faults,
+        close=http.aclose,
+    )  # fmt: skip
+
+
 def build_engine(
     settings: Settings,
     logs: Path = Path("logs"),
@@ -221,6 +242,7 @@ def build_engine(
     account: AccountService | None = None
     bot: BotService | None = None
     journal: Journal | None = None
+    custody: CustodyService | None = None
     if settings.mode == "read-only":
         hub = MarketHub(venues)
     else:
@@ -236,6 +258,7 @@ def build_engine(
         )  # fmt: skip
         trading = trading_venues(settings, venues, hub, clock)
         every = cfg.polling.balances_every_s
+        custody = custody_service(settings, faults, clock)
         account = AccountService(
             trading, journal=journal, balances_every_s=every, faults=faults, clock=clock
         )
@@ -252,7 +275,7 @@ def build_engine(
     return Engine(
         hub, mode=settings.mode, orders=orders, account=account, bot=bot,
         max_clock_skew_s=cfg.risk.max_clock_skew_s, journal=journal,
-        value_every_s=cfg.polling.value_every_s, clock=clock,
+        value_every_s=cfg.polling.value_every_s, clock=clock, custody=custody,
         # what the client asks for over the socket (D-66)
         results=results_service(logs, settings, venues),
         deposits=deposit_service(settings, venues),

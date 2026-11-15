@@ -67,7 +67,42 @@ Sale solo del journal; no es un PnL de cartera.
 Con `Tab`, la pestaña **Valor de la cuenta**: el valor total en BTC (BTC + XBT ×
 mid) a lo largo del tiempo, en total y por venue, que el daemon apunta en el
 journal cada `value_every_s` (`[polling]`, 5 min por defecto). Los depósitos y
-retiros salen como saltos.
+retiros salen como saltos. Con autocustodia, el total la incluye, y añadir o
+quitar una wallet sale como un salto.
+
+## Autocustodia
+
+Para que el inventario total cuente lo que tienes en wallets propias:
+
+1. En el `.env` del daemon, las claves públicas de cuenta, separadas por comas:
+   `WALLET_BTC_XPUBS=zpub…` y `WALLET_BTCB2_XPUBS=zpub…,xpub…`. Vale `xpub` o
+   `zpub`; de las dos se derivan **solo direcciones native segwit** (`bc1q…`),
+   ramas de recepción y de cambio. Un `ypub` (nested segwit) no arranca, y de
+   una cuenta taproot no saldría ningún saldo. Las dos cadenas comparten
+   formato de dirección: la misma clave puede ir en las dos variables.
+2. En `config.toml`, la sección `[custody]` con el explorador de cada cadena
+   (una API tipo Esplora): `btc_url = "https://mempool.space/api"` y
+   `btcb2_url = "https://mempool.guide/api"`, o un servidor tuyo.
+3. Reiniciar el daemon (la config y el `.env` solo se leen al arrancar).
+
+El daemon pide los saldos al arrancar y cada `every_s` (1 h por defecto),
+dirección a dirección, hasta `gap_limit` (20) seguidas sin uso, con una pausa
+de `request_every_ms` (3 s) antes de cada consulta: los exploradores públicos
+cortan con HTTP 429 si van más seguidas. El primer saldo tarda unos minutos, y
+si el explorador sigue cortando, sube esa pausa. El panel de
+balances gana una línea `wallet`, y el total, su valor y el % de XBT del título
+la incluyen, igual que el aviso de banda del plan de reequilibrio (`e`) y el
+valor de la cuenta. Si el explorador no contesta, se conserva el último saldo;
+pasadas 3 h sin uno bueno (tres intervalos), el total deja de mostrarse hasta que vuelva.
+
+No cambia cómo opera el bot: el tope por orden, la exposición por venue y el
+filtro de `[inventory]` siguen mirando solo los saldos de los venues. La
+terminal solo lee: nunca tiene claves privadas ni mueve fondos de una wallet.
+
+**Privacidad:** el xpub no sale de la máquina y no aparece en pantalla, logs
+ni journal, pero cada dirección derivada se consulta al explorador
+configurado. Quien lo opera puede relacionar esas direcciones entre sí y con
+la IP del daemon. Si eso importa, apunta las URLs a un servidor propio.
 
 ## Depósitos (`w`)
 

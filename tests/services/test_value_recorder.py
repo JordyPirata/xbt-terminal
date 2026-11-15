@@ -112,3 +112,82 @@ class TestRecorder:
             await rig.recorder.run()
         assert len(calls) == 3
         assert any(fault.where == "value" for fault in rig.faults.recent)
+
+
+# -- self-custody in the sample (T-105, RF-39) -------------------------------------------
+
+
+class Wallets:
+    def __init__(self, balance):
+        self.current = balance
+
+    def balance(self):
+        return self.current
+
+
+def custody_rig(tmp_path, balance):
+    from xbt_terminal.core.inventory import CustodyBalance
+
+    rig = Rig(tmp_path)
+    wallets = Wallets(CustodyBalance(D(balance[0]), D(balance[1]), T0) if balance else None)
+    rig.recorder = ValueRecorder(
+        rig.account, rig.hub, rig.journal, every_s=EVERY_S,
+        clock=lambda: rig.now, sleep=rig.sleep, faults=rig.faults, custody=wallets,
+    )  # fmt: skip
+    return rig, wallets
+
+
+@pytest.mark.spec("RF-39", "RF-32", "CA-22")
+class TestCustodyInTheSample:
+    def test_total_includes_the_wallets(self, tmp_path):
+        from xbt_terminal.core.valuation import CustodyValue
+
+        rig, _ = custody_rig(tmp_path, ("1", "10"))
+        value_sample = rig.recorder.record(T0)
+        # venues are worth 0.334; the wallet, 1 + 10 × 0.0055 (mean of 0.005 and 0.006)
+        assert value_sample.custody == CustodyValue(D("1"), D("10"), D("0.0055"), D("1.055"))
+        assert value_sample.value == D("1.389")
+        (row,) = rig.rows()
+        assert row["data"]["custody"] == {
+            "btc": "1", "btcb2": "10", "mid": "0.0055", "value": "1.0550",
+        }  # fmt: skip
+        (read,), bad = series(rig.rows(), None)
+        assert bad == 0 and read == value_sample
+
+    def test_without_a_valid_wallet_balance_nothing_is_written(self, tmp_path):
+        rig, wallets = custody_rig(tmp_path, None)
+        assert rig.recorder.record(T0) is None and rig.rows() == []
+        from xbt_terminal.core.inventory import CustodyBalance
+
+        wallets.current = CustodyBalance(D("0"), D("0"), T0)
+        assert rig.recorder.record(T0 + EVERY_S * 1000).value == D("0.334")
+
+    def test_without_wallets_the_row_is_as_before(self, tmp_path):
+        rig = Rig(tmp_path)
+        assert rig.recorder.record(T0).custody is None
+        (row,) = rig.rows()
+        assert "custody" not in row["data"]
+
+    def test_old_rows_and_new_ones_read_together(self, tmp_path):
+        from xbt_terminal.core.valuation import last_stretch
+
+        rig = Rig(tmp_path)
+        rig.recorder.record(T0)
+        with_wallets, _ = custody_rig(tmp_path, ("1", "10"))
+        with_wallets.now = rig.now
+        with_wallets.recorder.record(T0 + EVERY_S * 1000)
+        got, bad = series(with_wallets.rows(), None)
+        assert bad == 0 and [value_sample.custody is None for value_sample in got] == [True, False]
+        # adding the wallets is a jump of the total: the last stretch starts there
+        assert last_stretch(got) == got[1:]
+
+    def test_a_move_inside_the_wallets_starts_a_new_stretch(self, tmp_path):
+        from dataclasses import replace
+
+        from xbt_terminal.core.valuation import last_stretch
+
+        rig, _ = custody_rig(tmp_path, ("0.001", "0"))
+        first = rig.recorder.record(T0)
+        moved = replace(first.custody, btc=D("0.0012"), value=D("0.0012"))
+        second = replace(first, ts=T0 + EVERY_S * 1000, custody=moved)
+        assert last_stretch((first, second)) == (second,)

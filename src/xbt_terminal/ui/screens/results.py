@@ -6,7 +6,7 @@ Spec: RF-25, RF-32, CA-17 · Tasks: T-40, T-69, T-70, T-71, T-83, T-94
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 from datetime import UTC, datetime
 
 from textual.app import ComposeResult
@@ -261,7 +261,21 @@ class ResultsScreen(ModalScreen[None]):
             *self._stretch_text(),
             "Los depósitos y retiros salen como saltos: es el valor, no es PnL. "
             "Los huecos son ratos sin daemon. Valor = BTC + BTCB2 × mid de cada venue.",
+            *self._custody_text(values),
         ])  # fmt: skip
+
+    @staticmethod
+    def _custody_text(values: Sequence[ValueSample]) -> list[str]:
+        """With self-custody in the range (RF-39): what the wallets add now, and that
+        adding or removing one is a jump, not a result."""
+        if not any(sample.custody is not None for sample in values):
+            return []
+        custody = values[-1].custody
+        now = f"ahora {custody.value:.8f} BTC" if custody is not None else "ahora sin ella"
+        return [
+            f"Incluye la autocustodia (wallet: {now}; su XBT, a la media de los mids). "
+            "Añadir o quitar una wallet sale como un salto."
+        ]
 
     def _stretch_text(self) -> list[str]:
         """With `z`: when the stretch is from and how much it changed in sats."""

@@ -28,7 +28,7 @@ from textual_plotext import PlotextPlot
 from ..core.book import BookRow, L2Book
 from ..core.cross import Quote, Route, VenueStats, cross, sats, venue_stats
 from ..core.double import DoubleState, Leg
-from ..core.inventory import Inventory, InventoryTarget
+from ..core.inventory import CustodyBalance, Inventory, InventoryTarget
 from ..core.models import BASE_LABEL, ZERO, Balance, Candle, MarketSpec, Timeframe, VenueId
 from ..core.results import DoubleResult
 from ..core.valuation import ValueSample, segments, thin
@@ -409,6 +409,9 @@ class AccountView:
     error: str | None
 
 
+WALLET_NAME = "wallet"  # the self-custody line of the balance panel (RF-39)
+
+
 def _ratio(percent: Decimal | None, target: InventoryTarget | None) -> Text:
     """% of the value in BTCB2 (RF-27): green inside the band, yellow outside."""
     if percent is None:
@@ -417,14 +420,29 @@ def _ratio(percent: Decimal | None, target: InventoryTarget | None) -> Text:
     return Text(f"{BASE_LABEL} {percent:.1f} %", style=style)
 
 
+def _wallet_line(inv: Inventory, custody: CustodyBalance | None, now: int) -> Text:
+    """The self-custody wallets: on-chain balance, value and age of the scan (RF-39)."""
+    out = Text().append(f" {WALLET_NAME:<7}", style="bold")
+    if custody is None:
+        return out.append("sin dato del explorador: el total no se muestra", style="yellow")
+    out.append(f"BTC {custody.btc:.8f} · {BASE_LABEL} {custody.btcb2:.8f}")
+    value = inv.custody.value if inv.custody is not None else None
+    out.append(" · valor ")
+    out.append(f"{value:.8f} BTC" if value is not None else "—")
+    return out.append(f" · hace {_age(now - custody.at)}", style="dim")
+
+
 def render_balances(
     views: dict[VenueId, AccountView | None],
     inv: Inventory,
     now: int,
     target: InventoryTarget | None = None,
+    custody: CustodyBalance | None = None,
+    has_custody: bool = False,
 ) -> tuple[str, Text]:
     """(title, lines). One line per venue: available + in orders of each asset, its BTC
-    value at the mid and the % in BTCB2; in the title, the total net inventory."""
+    value at the mid and the % in BTCB2; in the title, the total net inventory. With
+    self-custody (RF-39), one more line for the wallets, which the total includes."""
     out = Text()
     for i, venue_id in enumerate(("nk", "nx")):
         if i:
@@ -450,8 +468,13 @@ def render_balances(
                 out.append(f" · hace {_age(now - view.balances_at)}", style="dim")
         if view.error:
             out.append(f" · ⚠ {view.error[:60]}", style="yellow")
+    if has_custody:
+        out.append("\n")
+        out.append_text(_wallet_line(inv, custody, now))
     # short: it shares the row with the double's legs (D-67)
     title = "Balances"
+    if has_custody and custody is None:
+        title += " · total — (falta la wallet)"
     if inv.btc is not None and inv.btcb2 is not None:
         title += f" · BTC {inv.btc:.8f} · {BASE_LABEL} {inv.btcb2:.8f}"
         title += f" · valor {inv.value:.8f} BTC" if inv.value is not None else " · valor —"
@@ -478,8 +501,15 @@ class BalancesPanel(Static):
         self.display = visible
         self.target = target
 
-    def show(self, views: dict[VenueId, AccountView | None], inv: Inventory, now: int) -> None:
-        title, text = render_balances(views, inv, now, self.target)
+    def show(
+        self,
+        views: dict[VenueId, AccountView | None],
+        inv: Inventory,
+        now: int,
+        custody: CustodyBalance | None = None,
+        has_custody: bool = False,
+    ) -> None:
+        title, text = render_balances(views, inv, now, self.target, custody, has_custody)
         self.border_title = title
         self.text = text.plain
         self.update(text)

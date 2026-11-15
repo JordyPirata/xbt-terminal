@@ -6,6 +6,7 @@ Spec: RF-29 · Tasks: T-45, T-83
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from decimal import Decimal
 
 from rich.text import Text
 from textual.app import ComposeResult
@@ -48,8 +49,11 @@ class RebalanceScreen(ModalScreen[None]):
         holdings: Callable[[], Mapping[VenueId, Holding] | str],
         target: InventoryTarget | None = None,
         limits: BotLimits | None = None,
+        total_with_custody: Callable[[], Decimal | None] | None = None,
     ) -> None:
         super().__init__()
+        # with self-custody wallets, the total the band is checked against (RF-39)
+        self._total_with_custody = total_with_custody
         self._source = source
         self._holdings = holdings
         self._target = target
@@ -162,15 +166,20 @@ class RebalanceScreen(ModalScreen[None]):
                         f"a la neta mínima ({lim.min_net_pct} %)"
                     )
         target = self._target
-        if (
-            target is not None
-            and rebalance_plan.total_pct is not None
-            and not target.in_band(rebalance_plan.total_pct)
-        ):
+        total = rebalance_plan.total_pct
+        if self._total_with_custody is not None:
+            total = self._total_with_custody()
             lines.append(
-                f"⚠ el total ({fmt_share(rebalance_plan.total_pct)}) está fuera de la banda "
+                f"total con la wallet: {fmt_share(total)} de {BASE_LABEL}"
+                if total is not None
+                else "⚠ sin dato de la wallet: no se puede comprobar la banda del total"
+            )
+        if target is not None and total is not None and not target.in_band(total):
+            lines.append(
+                f"⚠ el total ({fmt_share(total)}) está fuera de la banda "
                 f"{target.low}-{target.high} %: "
-                "una transferencia no lo cambia; se corrige comprando o vendiendo a mano"
+                "una transferencia entre venues no lo cambia; se corrige comprando o "
+                "vendiendo a mano"
             )
         lines.append(
             "«pedir» es lo que se escribe en el formulario de retiro. Neoxa cobra la "

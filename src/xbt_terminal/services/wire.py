@@ -21,7 +21,7 @@ from typing import Any
 
 from ..core.bot import BotLimits, BotState
 from ..core.double import DoubleState
-from ..core.inventory import InventoryTarget
+from ..core.inventory import CustodyBalance, InventoryTarget
 from ..core.models import (
     BookSnapshot,
     Candle,
@@ -231,6 +231,9 @@ class Snapshot:
     deposit_venues: tuple[VenueId, ...] = ()
     fee_venues: tuple[VenueId, ...] = ()
     has_results: bool = False
+    # self-custody (RF-39): balances and their time only, never xpubs or addresses
+    has_custody: bool = False
+    custody: CustodyBalance | None = None  # None: no valid scan yet, or too old
 
 
 def snapshot(engine: Engine) -> Snapshot:
@@ -261,6 +264,8 @@ def snapshot(engine: Engine) -> Snapshot:
         deposit_venues=engine.deposits.venues if engine.deposits is not None else (),
         fee_venues=engine.rebalance.venues if engine.rebalance is not None else (),
         has_results=engine.results is not None,
+        has_custody=engine.custody is not None,
+        custody=engine.custody.balance() if engine.custody is not None else None,
     )
 
 

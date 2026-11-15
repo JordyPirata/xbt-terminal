@@ -68,6 +68,15 @@ target_base_pct = "25"       # % del valor de cada venue en BTCB2
 band_pct = "10"              # puntos a cada lado (15-35 %); el bot no dispara si
                              # deja un venue fuera y más lejos del objetivo
 
+# [custody]                  # RF-38: autocustodia. Las claves van en .env (WALLET_BTC_XPUBS y
+#                            # WALLET_BTCB2_XPUBS, xpub o zpub separados por comas); solo se
+#                            # derivan direcciones native segwit (bc1q). Sin la sección, nada
+# btc_url = "https://mempool.space/api"    # API tipo Esplora; cada dirección consultada
+# btcb2_url = "https://mempool.guide/api"  # la ve quien opere ese servidor
+# every_s = 3600             # cada cuánto se vuelven a pedir los saldos (mín. 60)
+# gap_limit = 20             # direcciones seguidas sin uso que cierran una rama
+# request_every_ms = 3000    # pausa antes de cada consulta: más seguidas, mempool.space da 429
+
 # [replay]                   # RF-34: solo con --replay y xbt report. Venues simulados
 # base_balance = "2"         # XBT en cada venue
 # quote_balance = "0.05"     # BTC en cada venue

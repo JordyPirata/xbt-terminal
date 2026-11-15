@@ -181,3 +181,18 @@ async def test_periodic_reload_reads_off_the_ui_thread(tmp_path, monkeypatch):
         assert all(name != threading.main_thread().name for name in threads[1:])
         write(tmp_path, "20261022", plain_double("d-2", T0 + 60_000))
         await until(pilot, lambda: len(screen(app).report.doubles) == 2)
+
+
+@pytest.mark.spec("RF-39", "RF-32", "CA-22")
+def test_value_tab_says_when_the_series_includes_self_custody():
+    from xbt_terminal.core.models import D
+    from xbt_terminal.core.valuation import CustodyValue, ValueSample
+
+    plain = ValueSample(0, D("0.3"), 300_000, ())
+    wallet = CustodyValue(D("1"), D("10"), D("0.0055"), D("1.055"))
+    with_wallet = ValueSample(300_000, D("1.355"), 300_000, (), wallet)
+    assert ResultsScreen._custody_text([plain]) == []
+    (line,) = ResultsScreen._custody_text([plain, with_wallet])
+    assert "autocustodia" in line and "1.05500000 BTC" in line and "salto" in line
+    (removed,) = ResultsScreen._custody_text([with_wallet, plain])
+    assert "ahora sin ella" in removed

@@ -5,7 +5,10 @@ balances and the hub mid (like the balance panel, RF-05) and, if the total exist
 writes a `value` event. If a venue lacks its balance or mid, that sample is not
 written. A fault is reported and sampling goes on.
 
-Spec: RF-05, RF-32, RNF-14 · design.md §6.5 · D-69 · Task: T-69
+With self-custody wallets (RF-39) their balance joins the sample; without a valid
+one, the sample is not written either.
+
+Spec: RF-05, RF-32, RF-39, RNF-14 · design.md §6.5 · D-69, D-84 · Tasks: T-69, T-105
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from ..adapters.streaming import now_ms
-from ..core.inventory import inventory
+from ..core.inventory import CustodyBalance, inventory
 from ..core.journal import Journal
 from ..core.valuation import ValueSample, sample, sample_data
 from .faults import Faults
@@ -31,6 +34,10 @@ class _Hub(Protocol):
     state: dict  # VenueId → state with `book.mid`
 
 
+class _Custody(Protocol):
+    def balance(self) -> CustodyBalance | None: ...
+
+
 class ValueRecorder:
     def __init__(
         self,
@@ -42,7 +49,9 @@ class ValueRecorder:
         clock: Callable[[], int] = now_ms,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         faults: Faults | None = None,
+        custody: _Custody | None = None,
     ) -> None:
+        self._custody = custody  # None: no self-custody wallets
         self._account = account
         self._hub = hub
         self._journal = journal
@@ -67,7 +76,14 @@ class ValueRecorder:
         """Write the `at` sample if there is one."""
         balances = {venue_id: state.balances for venue_id, state in self._account.state.items()}
         mids = {venue_id: self._hub.state[venue_id].book.mid for venue_id in balances}
-        value_sample = sample(inventory(balances, mids), mids, at, self._every_ms)
+        custody = self._custody
+        inv = inventory(
+            balances,
+            mids,
+            custody.balance() if custody is not None else None,
+            has_custody=custody is not None,
+        )
+        value_sample = sample(inv, mids, at, self._every_ms)
         if value_sample is not None:
             self._journal.write("value", data=sample_data(value_sample))
         return value_sample

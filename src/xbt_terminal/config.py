@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Literal, get_args
 
 from dotenv import dotenv_values
@@ -23,6 +24,7 @@ from .core.inventory import InventoryTarget
 from .core.models import Timeframe, VenueId
 from .core.risk import RiskLimits
 from .core.secrets import Redactor, Secret
+from .core.wallet import AccountKey, WalletError, parse_account_key
 from .paths import env_permission_problem
 
 Mode = Literal["read-only", "dry-run", "live"]
@@ -37,6 +39,10 @@ REQUIRED_BASE, REQUIRED_QUOTE = "BTCB2", "BTC"
 # RNF-03: published by Neoxa minus the 20% margin
 NEOXA_MAX = {"general_per_min": 480, "orders_per_10s": 8, "cancels_per_10s": 16}
 BALANCES_MAX_EVERY_S = 10  # RF-05
+
+# RF-37: self-custody xpubs per chain, comma separated in `.env`
+WALLET_ENV: dict[str, str] = {"BTC": "WALLET_BTC_XPUBS", "BTCB2": "WALLET_BTCB2_XPUBS"}
+CUSTODY_URL_KEY: dict[str, str] = {"BTC": "btc_url", "BTCB2": "btcb2_url"}
 
 
 class ConfigError(ValueError):
@@ -109,6 +115,20 @@ class ReplayConfig:
 
 
 @dataclass(frozen=True)
+class CustodyConfig:
+    """`[custody]`: where the on-chain balances of the wallets come from (RF-38, D-84)."""
+
+    btc_url: str | None = None  # base of an Esplora-like API, one per chain
+    btcb2_url: str | None = None
+    every_s: int = 3600
+    gap_limit: int = 20  # unused addresses in a row that end a branch
+    request_every_ms: int = 3000  # pause before each query to an explorer
+
+    def url(self, asset: str) -> str | None:
+        return self.btc_url if asset == "BTC" else self.btcb2_url
+
+
+@dataclass(frozen=True)
 class AppConfig:
     venues: dict[VenueId, VenueConfig]
     ui: UiConfig
@@ -119,6 +139,7 @@ class AppConfig:
     bot: BotConfig | None = None  # without [bot], no bot (RF-18)
     inventory: InventoryTarget | None = None  # without [inventory], no ratio (RF-26)
     replay: ReplayConfig | None = None  # only read by --replay (RF-34)
+    custody: CustodyConfig | None = None  # without [custody], no self-custody (RF-38)
 
 
 @dataclass(frozen=True)
@@ -135,6 +156,7 @@ class Settings:
     redactor: Redactor
     warnings: tuple[str, ...] = ()  # shown in red at startup
     replay: bool = False  # simulated venues: trades without keys (RF-34)
+    wallets: Mapping[str, tuple[AccountKey, ...]] = MappingProxyType({})  # by chain (RF-37)
 
     def can_trade(self, venue: VenueId) -> bool:
         if self.replay:
@@ -326,6 +348,7 @@ def load_config(path: Path) -> AppConfig:
     bot = _bot(root.section("bot")) if "bot" in root.data else None
     inv = _inventory(root.section("inventory")) if "inventory" in root.data else None
     replay = _replay(root.section("replay")) if "replay" in root.data else None
+    custody = _custody(root.section("custody")) if "custody" in root.data else None
 
     if "dryrun" in root.data:
         raise ConfigError(
@@ -344,6 +367,7 @@ def load_config(path: Path) -> AppConfig:
         bot=bot,
         inventory=inv,
         replay=replay,
+        custody=custody,
     )
 
 
@@ -453,6 +477,66 @@ def _walk(section: _Section) -> dict[VenueId, Decimal]:
     return walk
 
 
+def _custody(section: _Section) -> CustodyConfig:
+    """`[custody]` (RF-38): at least one explorer url; cadence of 60 s or more, so a
+    public explorer is not hammered; gap limit from 1 to 100."""
+    urls: dict[str, str] = {}
+    for key in CUSTODY_URL_KEY.values():
+        if key not in section.data:
+            continue
+        url = section.data[key]
+        section._read.add(key)
+        if not isinstance(url, str) or not url.startswith(("https://", "http://")):
+            raise ConfigError(f"{section._key(key)}: se esperaba una url http(s)")
+        urls[key] = url
+    if not urls:
+        raise ConfigError(f"{section.path}: falta btc_url o btcb2_url")
+    extra = {
+        key: section.int(key, min=low, max=high)
+        for key, low, high in (
+            ("every_s", 60, None),
+            ("gap_limit", 1, 100),
+            ("request_every_ms", 0, 60_000),
+        )
+        if key in section.data
+    }
+    section.done()
+    return CustodyConfig(**urls, **extra)
+
+
+def load_wallets(
+    env: Mapping[str, str | None], custody: CustodyConfig | None
+) -> tuple[dict[str, tuple[AccountKey, ...]], list[Secret]]:
+    """Account keys per chain and their text as secrets (RF-37, RNF-25). An error names
+    the variable and the position in its list, never the key."""
+    wallets: dict[str, tuple[AccountKey, ...]] = {}
+    secrets: list[Secret] = []
+    for asset, name in WALLET_ENV.items():
+        texts = [text.strip() for text in (env.get(name) or "").split(",") if text.strip()]
+        keys: list[AccountKey] = []
+        for position, text in enumerate(texts, start=1):
+            try:
+                key = parse_account_key(text)
+            except WalletError as error:
+                raise ConfigError(f".env: {name}, clave {position}: {error}") from None
+            if key in keys:
+                raise ConfigError(f".env: {name}, clave {position}: repetida")
+            keys.append(key)
+            secrets.append(Secret(text))
+        if not keys:
+            continue
+        if custody is None:
+            raise ConfigError(f".env: {name} necesita la sección [custody] en config.toml")
+        if custody.url(asset) is None:
+            raise ConfigError(f"custody.{CUSTODY_URL_KEY[asset]}: falta (hay claves en {name})")
+        wallets[asset] = tuple(keys)
+    if custody is not None and not wallets:
+        raise ConfigError(
+            f"[custody]: no hay claves en {' ni en '.join(WALLET_ENV.values())} del .env"
+        )
+    return wallets, secrets
+
+
 def _percent(sec: _Section, key: str, *, positive: bool = True) -> Decimal:
     value = sec.decimal(key, positive=positive)
     if value > 100:
@@ -497,6 +581,7 @@ def load_settings(
     env = dotenv_values(env_path) if Path(env_path).exists() else {}
     credentials = load_credentials(env)
     mode = resolve_mode(credentials, live)
+    wallets, wallet_secrets = load_wallets(env, config.custody)
     warnings: tuple[str, ...] = ()
     if problem := env_permission_problem(Path(env_path)):  # RNF-18
         if mode == "live":
@@ -511,6 +596,7 @@ def load_settings(
         config=config,
         credentials=credentials,
         mode=mode,
-        redactor=Redactor(secrets),
+        redactor=Redactor(secrets + wallet_secrets),
         warnings=warnings,
+        wallets=wallets,
     )

@@ -5,11 +5,16 @@ venue's mid. In total: the sum of both. If a venue has no mid, its value is None
 and so is the total, because a partial total would mislead. Only BTC and BTCB2
 count (RNF-10).
 
+Self-custody (RF-39, D-84): the wallets' on-chain balance joins the total, never a
+venue, with its BTCB2 valued at the mean of the venue mids. If wallets are configured
+and their balance is missing, there is no total. Callers that do not pass it (the
+RF-10 order cap, the bot) see the venues only, as before.
+
 Inventory ratio (RF-26, D-46): the % of a venue's value in BTCB2, and a target
 band around a %; a double "worsens" a venue if it leaves it outside the band and
 further from the target than before.
 
-Spec: RF-05, RF-26, RF-27, RNF-10 · design.md §6.5, §6.9 · Tasks: T-19, T-41
+Spec: RF-05, RF-26, RF-27, RF-39, RNF-10 · design.md §6.5, §6.9 · Tasks: T-19, T-41, T-104
 """
 
 from __future__ import annotations
@@ -60,6 +65,15 @@ class InventoryTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class CustodyBalance:
+    """On-chain balance of the self-custody wallets, from one complete scan (RF-38)."""
+
+    btc: Decimal
+    btcb2: Decimal
+    at: int  # epoch ms of the scan
+
+
+@dataclass(frozen=True, slots=True)
 class VenueInventory:
     btc: Decimal
     btcb2: Decimal
@@ -76,6 +90,8 @@ class Inventory:
     btc: Decimal | None
     btcb2: Decimal | None
     value: Decimal | None
+    custody: VenueInventory | None = None  # self-custody wallets, part of the totals
+    custody_mid: Decimal | None = None  # price its BTCB2 is valued at
 
     @property
     def base_pct(self) -> Decimal | None:
@@ -90,7 +106,12 @@ def _total(balances: Mapping[str, Balance], asset: str) -> Decimal:
 def inventory(
     balances: Mapping[VenueId, Mapping[str, Balance] | None],
     mids: Mapping[VenueId, Decimal | None],
+    custody: CustodyBalance | None = None,
+    *,
+    has_custody: bool = False,
 ) -> Inventory:
+    """`has_custody` with no `custody`: wallets are configured but their balance is
+    missing or too old, so the totals are None rather than partial (RF-39)."""
     venues: dict[VenueId, VenueInventory | None] = {}
     for venue_id, bal in balances.items():
         if bal is None:
@@ -104,9 +125,26 @@ def inventory(
     known = [venue_inventory for venue_inventory in venues.values() if venue_inventory is not None]
     complete = len(known) == len(venues)
     values = [venue_inventory.value for venue_inventory in known]
+    wallet: VenueInventory | None = None
+    wallet_mid: Decimal | None = None
+    if custody is not None:
+        venue_mids = [mids.get(venue_id) for venue_id in venues]
+        if venue_mids and None not in venue_mids:
+            wallet_mid = sum(venue_mids, ZERO) / len(venue_mids)  # type: ignore[arg-type]
+        wallet = VenueInventory(
+            custody.btc,
+            custody.btcb2,
+            custody.btc + custody.btcb2 * wallet_mid if wallet_mid is not None else None,
+        )
+        known = [*known, wallet]
+        values = [*values, wallet.value]
+    elif has_custody:
+        complete = False
     return Inventory(
         venues=venues,
         btc=sum((venue_inventory.btc for venue_inventory in known), ZERO) if complete else None,
         btcb2=sum((venue_inventory.btcb2 for venue_inventory in known), ZERO) if complete else None,
         value=sum(values, ZERO) if complete and None not in values else None,  # type: ignore[arg-type]
+        custody=wallet,
+        custody_mid=wallet_mid,
     )

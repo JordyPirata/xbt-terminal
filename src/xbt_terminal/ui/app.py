@@ -55,7 +55,7 @@ from ..core.commands import (
     parse,
 )
 from ..core.cross import Quote
-from ..core.inventory import inventory
+from ..core.inventory import CustodyBalance, Inventory, inventory
 from ..core.models import BASE_LABEL, ConnState, Order, Timeframe, VenueId
 from ..core.notices import Fault, Notice
 from ..core.proposals import (
@@ -345,14 +345,34 @@ class XbtApp(App[None]):
                 if state is not None
                 else None
             )
-        inv = inventory(
-            {venue_id: state.balances for venue_id, state in self.account.state.items()},
-            {venue_id: self.hub.state[venue_id].book.mid for venue_id in self.account.state},
-        )
+        has_custody, custody = self._custody()
         try:
-            self.query_one(BalancesPanel).show(views, inv, self._clock())
+            self.query_one(BalancesPanel).show(
+                views, self._inventory(), self._clock(), custody, has_custody
+            )
         except NoMatches:  # a notice may arrive while unmounting
             pass
+
+    def _custody(self) -> tuple[bool, CustodyBalance | None]:
+        """Whether the daemon has self-custody wallets, and their balance if it is valid
+        (RF-39). Only the daemon's account carries them."""
+        account = self.account
+        return getattr(account, "has_custody", False), getattr(account, "custody", None)
+
+    def _inventory(self) -> Inventory:
+        """Net inventory of the venues with keys plus self-custody (RF-05, RF-39)."""
+        assert self.account is not None
+        has_custody, custody = self._custody()
+        return inventory(
+            {venue_id: state.balances for venue_id, state in self.account.state.items()},
+            {venue_id: self.hub.state[venue_id].book.mid for venue_id in self.account.state},
+            custody,
+            has_custody=has_custody,
+        )
+
+    def total_with_custody(self) -> Decimal | None:
+        """% of BTCB2 of the total with the wallets; None if it cannot be known."""
+        return self._inventory().base_pct if self.account is not None else None
 
     def _open_orders(self) -> list[Order]:
         if self.account is None:
@@ -773,7 +793,8 @@ class XbtApp(App[None]):
             return
         self.push_screen(
             RebalanceScreen(
-                self.rebalance, self.rebalance_holdings, self.inventory_target, self.bot_limits
+                self.rebalance, self.rebalance_holdings, self.inventory_target, self.bot_limits,
+                total_with_custody=self.total_with_custody if self._custody()[0] else None,
             )
         )
 
