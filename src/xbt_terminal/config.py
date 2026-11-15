@@ -120,7 +120,7 @@ class CustodyConfig:
 
     btc_url: str | None = None  # base of an Esplora-like API, one per chain
     xbt_url: str | None = None
-    every_s: int = 3600
+    every_s: int = 300
     gap_limit: int = 20  # unused addresses in a row that end a branch
     request_every_ms: int = 3000  # pause before each query to an explorer
 

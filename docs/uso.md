@@ -85,7 +85,7 @@ Para que el inventario total cuente lo que tienes en wallets propias:
    `xbt_url = "https://mempool.guide/api"`, o un servidor tuyo.
 3. Reiniciar el daemon (la config y el `.env` solo se leen al arrancar).
 
-El daemon pide los saldos al arrancar y cada `every_s` (1 h por defecto),
+El daemon pide los saldos al arrancar y cada `every_s` (5 min por defecto, contados desde que acaba el escaneo anterior),
 dirección a dirección, hasta `gap_limit` (20) seguidas sin uso, con una pausa
 de `request_every_ms` (3 s) antes de cada consulta: los exploradores públicos
 cortan con HTTP 429 si van más seguidas. El primer saldo tarda unos minutos, y
@@ -93,7 +93,7 @@ si el explorador sigue cortando, sube esa pausa. El panel de
 balances gana una línea `wallet`, y el total, su valor y el % de XBT del título
 la incluyen, igual que el aviso de banda del plan de reequilibrio (`e`) y el
 valor de la cuenta. Si el explorador no contesta, se conserva el último saldo;
-pasadas 3 h sin uno bueno (tres intervalos), el total deja de mostrarse hasta que vuelva.
+pasados 15 min sin uno bueno (tres intervalos), el total deja de mostrarse hasta que vuelva.
 
 No cambia cómo opera el bot: el tope por orden, la exposición por venue y el
 filtro de `[inventory]` siguen mirando solo los saldos de los venues. La

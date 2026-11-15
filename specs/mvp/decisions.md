@@ -2181,3 +2181,9 @@ usan XBT, como la pantalla (D-48): `WALLET_BTCB2_XPUBS` pasa a `WALLET_XBT_XPUBS
 `btcb2_url` de `[custody]` a `xbt_url`. Por dentro, el activo sigue siendo
 `BTCB2` (`WALLET_ENV`, `CUSTODY_URL_KEY`). Sin retrocompatibilidad: aún no se
 había desplegado. Corrige los nombres de arriba.
+**Adenda (2026-11-14, pedido por el usuario):** `every_s` pasa de 3600 a 300
+por defecto: el usuario prefiere el total al día a menos consultas. La espera
+cuenta desde el final de cada escaneo, así que dos escaneos nunca se solapan
+aunque uno tarde más de 5 min. El explorador ve el historial de direcciones
+cada ~5 min más lo que dure el escaneo, y el riesgo de 429 en mempool.space
+crece; un saldo vale 15 min (`3 × every_s`). Corrige la adenda anterior.

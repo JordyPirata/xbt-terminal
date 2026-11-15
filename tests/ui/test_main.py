@@ -575,7 +575,7 @@ async def test_engine_scans_the_wallets_of_env(tmp_path):
     assert custody is not None and "custody" in dict(engine.services())
     assert set(custody._explorers) == {"BTC", "BTCB2"}
     assert custody._explorers["BTCB2"]._url == "https://xbt.test/api"
-    assert (custody._every_s, custody._gap_limit, custody._request_every_s) == (3600, 20, 3.0)
+    assert (custody._every_s, custody._gap_limit, custody._request_every_s) == (300, 20, 3.0)
     await engine.aclose()
 
 

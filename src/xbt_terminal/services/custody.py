@@ -35,7 +35,7 @@ from ..core.models import ZERO
 from ..core.wallet import CHANGE, HARDENED, RECEIVE, AccountKey, p2wpkh_address
 from .faults import Faults
 
-CUSTODY_EVERY_S = 3600  # self-custody balances change rarely; fewer queries (D-84)
+CUSTODY_EVERY_S = 300  # the user wants the total fresh; the pause is after each scan (D-84)
 GAP_LIMIT = 20
 REQUEST_EVERY_MS = 3000  # public explorers answer 429 to queries close together (D-84)
 MAX_AGE_INTERVALS = 3  # a balance older than this many intervals no longer counts

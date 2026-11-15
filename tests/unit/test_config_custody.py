@@ -37,7 +37,7 @@ class TestCustodySection:
         assert (custody.btc_url, custody.xbt_url) == (
             "https://btc.test/api", "https://xbt.test/api",
         )  # fmt: skip
-        assert (custody.every_s, custody.gap_limit, custody.request_every_ms) == (3600, 20, 3000)
+        assert (custody.every_s, custody.gap_limit, custody.request_every_ms) == (300, 20, 3000)
 
     def test_one_chain_only(self, tmp_path):
         custody = load_config(

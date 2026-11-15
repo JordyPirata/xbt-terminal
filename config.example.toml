@@ -73,7 +73,7 @@ band_pct = "10"              # puntos a cada lado (15-35 %); el bot no dispara s
 #                            # derivan direcciones native segwit (bc1q). Sin la sección, nada
 # btc_url = "https://mempool.space/api"    # API tipo Esplora; cada dirección consultada
 # xbt_url = "https://mempool.guide/api"  # la ve quien opere ese servidor
-# every_s = 3600             # cada cuánto se vuelven a pedir los saldos (mín. 60)
+# every_s = 300              # cada cuánto se vuelven a pedir los saldos (mín. 60)
 # gap_limit = 20             # direcciones seguidas sin uso que cierran una rama
 # request_every_ms = 3000    # pausa antes de cada consulta: más seguidas, mempool.space da 429
 

@@ -34,7 +34,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
   - **Límite de mempool.space:** dio HTTP 429 a las 22-33 consultas incluso a
     1 por segundo (D-84, adenda). El usuario eligió solo ir más despacio:
     `request_every_ms = 3000` por defecto, sin reintentos. `every_s` por defecto,
-    3600 (pedido por el usuario): el saldo de la wallet vale hasta 3 h. No está comprobado
+    300 (pedido por el usuario): el saldo de la wallet vale hasta 15 min. No está comprobado
     que ese ritmo pase; si no, subirlo o cambiar `btc_url`. mempool.guide no
     cortó.
   - Siguiente: que el usuario lo pruebe con sus xpubs y, si va bien, `git push`
