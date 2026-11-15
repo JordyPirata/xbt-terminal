@@ -280,3 +280,33 @@ se ve en pantalla; la que lo haría (T-95) empieza por su D-NN.
 ### T-98 Renombrar identificadores abreviados · `done` · RNF-21 · D-83
 
 ### T-99 Quitar comentarios que repiten el código · `done` · RNF-21 · D-83 · dep T-98
+
+## M21 — Spec de la API de Neoxa (D-84)
+
+### T-100 OpenAPI de Neoxa y validación de sus fixtures · `doing` · RF-36, RNF-09 · D-84 · dep T-08
+- **Bloqueado en la parte v2:** el host en vivo responde 404 a `/api/v2/*` (2026-11-11),
+  así que no hay fixtures v2 grabados. Hecho: spec generado y reproducible,
+  `tests/adapters/test_neoxa_openapi.py` (31 pasan, 2 `xfail` estrictos con motivo),
+  README de `docs/api/`. Pendiente: grabar `v2_orderbook`, `v2_pool_edge` y `v2_time`
+  cuando la v2 responda, y decidir si T-100 se cierra sin ellos.
+- Neoxa no publica OpenAPI. Su `/api-docs` es una SPA; la documentación está en el
+  bundle JS de la web. Se extrae con `tools/neoxa_openapi.py` a
+  `docs/api/neoxa/openapi.json` (OpenAPI 3.0.1, como el de NonKYC). v2 preferente;
+  v1 solo donde la v2 no tiene equivalente (D-84).
+- Fixtures v2 públicos (`orderbook`, `pool/edge`, `time`) grabados con GET (pendiente:
+  el host responde 404, ver arriba); los privados v2 salen de los ejemplos de la doc,
+  marcados como tales. Ninguna orden ni credencial.
+- `tests/adapters/test_neoxa_openapi.py`: el spec es válido y sus `$ref` resuelven; cada
+  fixture de `tests/fixtures/neoxa/` valida contra su operación (`jsonschema`, dev);
+  los importes son `string`; cada ruta v1 que usa `adapters/neoxa.py` está en el spec.
+- Tests primero, en rojo; luego el spec. Reproducible: regenerar no cambia el fichero.
+- `docs/api/README.md`: fila de Neoxa y sus diferencias conocidas.
+
+### T-101 Adaptador Neoxa sobre la API v2 · `todo` · RF-36, RNF-09 · D-84 · dep T-100
+- Propuesta, no se implementa hasta que su D-NN propia la acepte: pasar a v2 lo que
+  la v2 cubre (`balances`, órdenes abiertas e historial, trades propios, colocar y
+  cancelar, book con pool, `account/fees`), y mantener v1 para pares, trades
+  públicos, velas, depósitos, retiros y WS.
+- Riesgo a decidir en su D-NN: el book v2 trae el pool en niveles distintos a la
+  escalera v1 y puede cambiar lo que el bot decide; obliga a regenerar
+  `tests/fixtures/replay/decisiones.txt`.

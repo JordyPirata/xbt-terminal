@@ -93,6 +93,7 @@ dicen en su propia nota.
 | D-81 | 2026-11-04 | El código va todo en inglés; en español, lo que ve el usuario, los docs y la spec (T-91) |
 | D-82 | 2026-11-04 | Contrato de venue: documento público, batería común y una variante rota por cláusula (requirements v0.32, T-88) |
 | D-83 | 2026-11-09 | Nombres que dicen qué son; comentarios solo para el porqué (T-98, T-99) |
+| D-84 | 2026-11-11 | Spec OpenAPI de Neoxa generada de su web, v2 preferente, con fixtures validados (T-100; migración en T-101) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -2090,3 +2091,31 @@ en funciones largas. Objetivo: entender qué hace cada nombre sin comentario.
 - Renombrar no cambia comportamiento: el criterio de cierre es que los tests, el
   `spec_trace` y el ruff sigan igual, y que `git diff` no toque literales de las fronteras.
 **Toca:** T-98, T-99, `CLAUDE.md` (regla de comentarios, ya vigente).
+
+## D-84 · 2026-11-11 · Spec OpenAPI de Neoxa generada de su web, v2 preferente, con fixtures validados (T-100; migración en T-101)
+**Contexto:** Neoxa no publica OpenAPI (`docs/api/README.md`). Su `/api-docs` es una
+SPA y la documentación completa va en el bundle JS de la web (37 operaciones: método,
+ruta, auth, parámetros, ejemplo, notas y errores). Su API tiene dos versiones: la v2
+cubre el trading privado (órdenes, historial, trades propios, balances, fees, batch,
+cancel-after) y tres públicos (book con pool, borde del pool, hora); la v1 sigue siendo
+la única con pares, trades públicos, velas, depósitos, retiros y WS. El adaptador usa
+solo v1.
+**Decisión:**
+- `docs/api/neoxa/openapi.json` (OpenAPI 3.0.1, igual que NonKYC) se genera del bundle
+  con `tools/neoxa_openapi.py`, para poder rehacerlo cuando Neoxa cambie su web.
+- v2 preferente. v1 se documenta solo donde la v2 no tiene equivalente, y las
+  operaciones v1 con equivalente llevan `x-v2-equivalent`.
+- Fixtures v2 públicos grabados con GET. Los privados v2 son los ejemplos de la doc,
+  marcados como tales: no hay forma de grabarlos sin key y sin órdenes reales. Ninguna
+  orden ni credencial en esta tarea.
+  **Estado (2026-11-11): no se han podido grabar.** `GET` anónimo a `/api/v2/*`
+  devuelve 404 en el host en vivo, también con `api.neoxa.exchange`; la v1 responde.
+  Las comprobaciones v2 son, por ahora, de coherencia del spec con sus ejemplos.
+- Los fixtures grabados mandan sobre la doc. Una diferencia se anota en
+  `docs/api/README.md`, no se corrige el fixture.
+- `jsonschema` entra como dependencia de dev para validar.
+- La migración del adaptador a v2 no se hace aquí: es T-101, con su propia decisión,
+  porque cambia lo que el bot ve.
+- Sin cambio de `requirements.md`: no añade RF. La spec y su validación se apoyan en
+  RF-36 (contrato de adaptador, D-82) y RNF-09.
+**Toca:** T-100, T-101, `docs/api/README.md`, `pyproject.toml`.
