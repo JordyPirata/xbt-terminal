@@ -802,11 +802,11 @@ y no coincidiría.
   Validación estricta (D-05): importes como string, clave desconocida = error,
   `balances_every_s ≤ 10` (RF-05) y límites de Neoxa ≤ 80% de lo publicado (RNF-03).
   `risk.max_clock_skew_s` es obligatoria (D-30); `[log]`, `[bot]`, `[inventory]`,
-  `[custody]` (RF-38: `btc_url`, `btcb2_url`, `every_s`, `gap_limit`, `request_every_ms`)
+  `[custody]` (RF-38: `btc_url`, `xbt_url`, `every_s`, `gap_limit`, `request_every_ms`)
   y `fee_discount_pct` son opcionales; una sección `[dryrun]` que quede de la
   v0.1 es error (D-16).
 - `.env`: `NONKYC_API_KEY`, `NONKYC_API_SECRET`, `NEOXA_API_KEY`, `NEOXA_API_SECRET`
-  y, opcionales, `WALLET_BTC_XPUBS` y `WALLET_BTCB2_XPUBS` (RF-37): listas
+  y, opcionales, `WALLET_BTC_XPUBS` y `WALLET_XBT_XPUBS` (RF-37): listas
   separadas por comas, cargadas como `Secret` y dadas al `Redactor` (RNF-25).
   No cambian el modo: con xpubs y sin keys sigue siendo solo lectura, y la
   autocustodia no se escanea (no hay inventario que mostrar).

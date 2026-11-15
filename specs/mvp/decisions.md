@@ -2176,3 +2176,8 @@ era enseñar al explorador el historial entero seis veces por hora y arriesgar
 el 429. El saldo en autocustodia cambia poco. Consecuencia: una transferencia
 entre wallet y venue tarda hasta 1 h en verse en la línea `wallet`, y un saldo
 vale hasta 3 h (`3 × every_s`). Corrige el "(600)" y el "cada 10 min" de arriba.
+**Adenda (2026-11-14, pedido por el usuario):** los nombres de cara al usuario
+usan XBT, como la pantalla (D-48): `WALLET_BTCB2_XPUBS` pasa a `WALLET_XBT_XPUBS` y
+`btcb2_url` de `[custody]` a `xbt_url`. Por dentro, el activo sigue siendo
+`BTCB2` (`WALLET_ENV`, `CUSTODY_URL_KEY`). Sin retrocompatibilidad: aún no se
+había desplegado. Corrige los nombres de arriba.

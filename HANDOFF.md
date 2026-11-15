@@ -19,7 +19,7 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
     BTCB2 es `https://mempool.guide/api` (PA-13 resuelta, `docs/api/README.md`);
     para BTC vale `https://mempool.space/api`.
   - **T-103 hecha:** `[custody]` en la config y `WALLET_BTC_XPUBS` /
-    `WALLET_BTCB2_XPUBS` en `.env` (`Settings.wallets`, en el `Redactor`);
+    `WALLET_XBT_XPUBS` en `.env` (`Settings.wallets`, en el `Redactor`);
     `services/custody.py` (`CustodyService`: escaneo al arrancar y cada
     `every_s`, gap limit, último saldo bueno); `Snapshot.custody`.
   - **T-104 hecha:** `inventory(..., custody, has_custody=)`; línea `wallet` en

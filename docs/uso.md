@@ -75,14 +75,14 @@ quitar una wallet sale como un salto.
 Para que el inventario total cuente lo que tienes en wallets propias:
 
 1. En el `.env` del daemon, las claves públicas de cuenta, separadas por comas:
-   `WALLET_BTC_XPUBS=zpub…` y `WALLET_BTCB2_XPUBS=zpub…,xpub…`. Vale `xpub` o
+   `WALLET_BTC_XPUBS=zpub…` y `WALLET_XBT_XPUBS=zpub…,xpub…`. Vale `xpub` o
    `zpub`; de las dos se derivan **solo direcciones native segwit** (`bc1q…`),
    ramas de recepción y de cambio. Un `ypub` (nested segwit) no arranca, y de
    una cuenta taproot no saldría ningún saldo. Las dos cadenas comparten
    formato de dirección: la misma clave puede ir en las dos variables.
 2. En `config.toml`, la sección `[custody]` con el explorador de cada cadena
    (una API tipo Esplora): `btc_url = "https://mempool.space/api"` y
-   `btcb2_url = "https://mempool.guide/api"`, o un servidor tuyo.
+   `xbt_url = "https://mempool.guide/api"`, o un servidor tuyo.
 3. Reiniciar el daemon (la config y el `.env` solo se leen al arrancar).
 
 El daemon pide los saldos al arrancar y cada `every_s` (1 h por defecto),

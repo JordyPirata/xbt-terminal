@@ -11,9 +11,9 @@ from .test_wallet import BIP32_PARENT, BIP84_RECEIVE_0, BIP84_ZPUB, with_version
 CUSTODY = """
 [custody]
 btc_url = "https://btc.test/api"
-btcb2_url = "https://btcb2.test/api"
+xbt_url = "https://xbt.test/api"
 """
-BOTH = {"WALLET_BTC_XPUBS": BIP84_ZPUB, "WALLET_BTCB2_XPUBS": f"{BIP84_ZPUB}, {BIP32_PARENT}"}
+BOTH = {"WALLET_BTC_XPUBS": BIP84_ZPUB, "WALLET_XBT_XPUBS": f"{BIP84_ZPUB}, {BIP32_PARENT}"}
 YPUB = with_version(BIP84_ZPUB, 0x049D7CB2)
 
 
@@ -34,16 +34,16 @@ class TestCustodySection:
 
     def test_defaults(self, tmp_path):
         custody = load_config(config_with(tmp_path)).custody
-        assert (custody.btc_url, custody.btcb2_url) == (
-            "https://btc.test/api", "https://btcb2.test/api",
+        assert (custody.btc_url, custody.xbt_url) == (
+            "https://btc.test/api", "https://xbt.test/api",
         )  # fmt: skip
         assert (custody.every_s, custody.gap_limit, custody.request_every_ms) == (3600, 20, 3000)
 
     def test_one_chain_only(self, tmp_path):
         custody = load_config(
-            config_with(tmp_path, '\n[custody]\nbtcb2_url = "http://localhost:3000"\n')
+            config_with(tmp_path, '\n[custody]\nxbt_url = "http://localhost:3000"\n')
         ).custody
-        assert (custody.btc_url, custody.btcb2_url) == (None, "http://localhost:3000")
+        assert (custody.btc_url, custody.xbt_url) == (None, "http://localhost:3000")
 
     def test_explicit_cadence_and_gap(self, tmp_path):
         custody = load_config(
@@ -89,7 +89,7 @@ class TestWallets:
         assert address(wallets["BTC"][0], RECEIVE, 0) == BIP84_RECEIVE_0
 
     def test_empty_counts_as_absent(self, tmp_path):
-        env = {"WALLET_BTC_XPUBS": "", "WALLET_BTCB2_XPUBS": BIP84_ZPUB}
+        env = {"WALLET_BTC_XPUBS": "", "WALLET_XBT_XPUBS": BIP84_ZPUB}
         assert set(settings(tmp_path, env).wallets) == {"BTCB2"}
 
     def test_wallets_without_custody_section(self, tmp_path):
@@ -98,7 +98,7 @@ class TestWallets:
 
     def test_wallets_of_a_chain_without_its_url(self, tmp_path):
         with pytest.raises(ConfigError, match=r"custody\.btc_url"):
-            settings(tmp_path, BOTH, '\n[custody]\nbtcb2_url = "https://btcb2.test/api"\n')
+            settings(tmp_path, BOTH, '\n[custody]\nxbt_url = "https://xbt.test/api"\n')
 
     def test_custody_section_without_wallets(self, tmp_path):
         with pytest.raises(ConfigError, match=r"WALLET_"):
@@ -111,12 +111,12 @@ class TestWallets:
         assert YPUB not in str(raised.value) and BIP84_ZPUB not in str(raised.value)
 
     def test_repeated_key(self, tmp_path):
-        env = {"WALLET_BTCB2_XPUBS": f"{BIP84_ZPUB},{with_version(BIP84_ZPUB, 0x0488B21E)}"}
-        with pytest.raises(ConfigError, match=r"WALLET_BTCB2_XPUBS.*repetida"):
+        env = {"WALLET_XBT_XPUBS": f"{BIP84_ZPUB},{with_version(BIP84_ZPUB, 0x0488B21E)}"}
+        with pytest.raises(ConfigError, match=r"WALLET_XBT_XPUBS.*repetida"):
             settings(tmp_path, env)
 
     def test_same_key_on_both_chains_is_fine(self, tmp_path):
-        env = {"WALLET_BTC_XPUBS": BIP84_ZPUB, "WALLET_BTCB2_XPUBS": BIP84_ZPUB}
+        env = {"WALLET_BTC_XPUBS": BIP84_ZPUB, "WALLET_XBT_XPUBS": BIP84_ZPUB}
         assert set(settings(tmp_path, env).wallets) == {"BTC", "BTCB2"}
 
     @pytest.mark.spec("RF-34")

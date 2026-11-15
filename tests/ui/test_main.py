@@ -547,7 +547,7 @@ def test_daemon_without_record_does_not_record(xdg, served):
 
 # -- self-custody (T-103) --------------------------------------------------------------
 
-CUSTODY = '\n[custody]\nbtc_url = "https://btc.test/api"\nbtcb2_url = "https://btcb2.test/api"\n'
+CUSTODY = '\n[custody]\nbtc_url = "https://btc.test/api"\nxbt_url = "https://xbt.test/api"\n'
 ZPUB = (
     "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868Rv"
     "UUkgDKf31mGDtKsAYz2oz2AGutZYs"
@@ -556,7 +556,7 @@ ZPUB = (
 
 def custody_env(tmp_path, keys=True):
     path = env(tmp_path, nk=keys)
-    path.write_text(path.read_text() + f"WALLET_BTC_XPUBS={ZPUB}\nWALLET_BTCB2_XPUBS={ZPUB}\n")
+    path.write_text(path.read_text() + f"WALLET_BTC_XPUBS={ZPUB}\nWALLET_XBT_XPUBS={ZPUB}\n")
     return path
 
 
@@ -574,7 +574,7 @@ async def test_engine_scans_the_wallets_of_env(tmp_path):
     custody = engine.custody
     assert custody is not None and "custody" in dict(engine.services())
     assert set(custody._explorers) == {"BTC", "BTCB2"}
-    assert custody._explorers["BTCB2"]._url == "https://btcb2.test/api"
+    assert custody._explorers["BTCB2"]._url == "https://xbt.test/api"
     assert (custody._every_s, custody._gap_limit, custody._request_every_s) == (3600, 20, 3.0)
     await engine.aclose()
 

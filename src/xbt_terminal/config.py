@@ -41,8 +41,8 @@ NEOXA_MAX = {"general_per_min": 480, "orders_per_10s": 8, "cancels_per_10s": 16}
 BALANCES_MAX_EVERY_S = 10  # RF-05
 
 # RF-37: self-custody xpubs per chain, comma separated in `.env`
-WALLET_ENV: dict[str, str] = {"BTC": "WALLET_BTC_XPUBS", "BTCB2": "WALLET_BTCB2_XPUBS"}
-CUSTODY_URL_KEY: dict[str, str] = {"BTC": "btc_url", "BTCB2": "btcb2_url"}
+WALLET_ENV: dict[str, str] = {"BTC": "WALLET_BTC_XPUBS", "BTCB2": "WALLET_XBT_XPUBS"}
+CUSTODY_URL_KEY: dict[str, str] = {"BTC": "btc_url", "BTCB2": "xbt_url"}
 
 
 class ConfigError(ValueError):
@@ -119,13 +119,13 @@ class CustodyConfig:
     """`[custody]`: where the on-chain balances of the wallets come from (RF-38, D-84)."""
 
     btc_url: str | None = None  # base of an Esplora-like API, one per chain
-    btcb2_url: str | None = None
+    xbt_url: str | None = None
     every_s: int = 3600
     gap_limit: int = 20  # unused addresses in a row that end a branch
     request_every_ms: int = 3000  # pause before each query to an explorer
 
     def url(self, asset: str) -> str | None:
-        return self.btc_url if asset == "BTC" else self.btcb2_url
+        return self.btc_url if asset == "BTC" else self.xbt_url
 
 
 @dataclass(frozen=True)
@@ -490,7 +490,7 @@ def _custody(section: _Section) -> CustodyConfig:
             raise ConfigError(f"{section._key(key)}: se esperaba una url http(s)")
         urls[key] = url
     if not urls:
-        raise ConfigError(f"{section.path}: falta btc_url o btcb2_url")
+        raise ConfigError(f"{section.path}: falta btc_url o xbt_url")
     extra = {
         key: section.int(key, min=low, max=high)
         for key, low, high in (
