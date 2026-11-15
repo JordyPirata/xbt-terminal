@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from types import MappingProxyType
@@ -156,7 +156,10 @@ class Settings:
     redactor: Redactor
     warnings: tuple[str, ...] = ()  # shown in red at startup
     replay: bool = False  # simulated venues: trades without keys (RF-34)
-    wallets: Mapping[str, tuple[AccountKey, ...]] = MappingProxyType({})  # by chain (RF-37)
+    # by chain (RF-37); a factory, because Python 3.11 refuses an unhashable default
+    wallets: Mapping[str, tuple[AccountKey, ...]] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     def can_trade(self, venue: VenueId) -> bool:
         if self.replay:
