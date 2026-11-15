@@ -6,8 +6,8 @@ después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
 ## Estado (2026-11-14)
 
-- **Draft PR de T-100:** rama `t-100-neoxa-openapi`, PR en borrador contra `main`
-  (enlace en la PR; el borrador está en la descripción). Se revisa antes de fundir.
+- **Draft PR de T-100:** PR #3 (borrador) desde `t-100-neoxa-openapi` contra `main`.
+  Se revisa y se funde cuando la v2 responda o el usuario decida cerrar T-100 sin ella.
 - **Comprobado 2026-11-14:** el bundle de `/api-docs` ha cambiado de nombre
   (`index-DLyC5FvO.js` → `index-klQvhdbp.js`). Las 56 operaciones, sus schemas y la
   guía son idénticos; solo cambia el hash de `info`. El spec del repo no se ha
