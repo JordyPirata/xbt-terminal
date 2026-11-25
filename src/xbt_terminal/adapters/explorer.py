@@ -5,10 +5,9 @@ Speaks the Esplora address endpoint, which mempool.space (BTC) and mempool.guide
 
     GET <url>/address/<address>  ->  {address, chain_stats, mempool_stats}
 
-One address per request and nothing else: the xpub never leaves the machine
-(RNF-25). Any answer that cannot be read is an error, never a zero balance, and
-no error message carries the address, because derived addresses are not in the
-`Redactor`.
+One address per request and nothing else (RNF-25). Any answer that cannot be read is
+an error, never a zero balance, and no error message carries the address, because
+watched addresses are not in the `Redactor`.
 
 Spec: RF-38, RNF-25, CA-22 · design.md §6.5 · D-84 · Task: T-102
 """

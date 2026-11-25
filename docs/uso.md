@@ -68,40 +68,47 @@ Con `Tab`, la pestaña **Valor de la cuenta**: el valor total en BTC (BTC + XBT 
 mid) a lo largo del tiempo, en total y por venue, que el daemon apunta en el
 journal cada `value_every_s` (`[polling]`, 5 min por defecto). Los depósitos y
 retiros salen como saltos. Con autocustodia, el total la incluye, y añadir o
-quitar una wallet sale como un salto.
+quitar una dirección sale como un salto.
 
 ## Autocustodia
 
-Para que el inventario total cuente lo que tienes en wallets propias:
+Para que el inventario total cuente lo que tienes en wallets propias, dile al
+daemon qué direcciones mirar:
 
-1. En el `.env` del daemon, las claves públicas de cuenta, separadas por comas:
-   `WALLET_BTC_XPUBS=zpub…` y `WALLET_XBT_XPUBS=zpub…,xpub…`. Vale `xpub` o
-   `zpub`; de las dos se derivan **solo direcciones native segwit** (`bc1q…`),
-   ramas de recepción y de cambio. Un `ypub` (nested segwit) no arranca, y de
-   una cuenta taproot no saldría ningún saldo. Las dos cadenas comparten
-   formato de dirección: la misma clave puede ir en las dos variables.
-2. En `config.toml`, la sección `[custody]` con el explorador de cada cadena
+1. En `config.toml`, la sección `[custody]` con el explorador de cada cadena
    (una API tipo Esplora): `btc_url = "https://mempool.space/api"` y
-   `xbt_url = "https://mempool.guide/api"`, o un servidor tuyo.
-3. Reiniciar el daemon (la config y el `.env` solo se leen al arrancar).
+   `xbt_url = "https://mempool.guide/api"`, o un servidor tuyo. Hay que
+   reiniciar el daemon una vez para que lea la sección.
+2. En la terminal, el comando `watch`:
+   - `watch add btc <dirección>` o `watch add xbt <dirección>` añade una
+     dirección (de BTC o de XBT; la misma puede ir en las dos);
+   - `watch rm btc <dirección>` la quita;
+   - `watch` lista las que vigila.
 
-El daemon pide los saldos al arrancar y cada `every_s` (5 min por defecto, contados desde que acaba el escaneo anterior),
-dirección a dirección, hasta `gap_limit` (20) seguidas sin uso, con una pausa
-de `request_every_ms` (3 s) antes de cada consulta: los exploradores públicos
-cortan con HTTP 429 si van más seguidas. El primer saldo tarda unos minutos, y
-si el explorador sigue cortando, sube esa pausa. El panel de
-balances gana una línea `wallet`, y el total, su valor y el % de XBT del título
-la incluyen, igual que el aviso de banda del plan de reequilibrio (`e`) y el
-valor de la cuenta. Si el explorador no contesta, se conserva el último saldo;
-pasados 15 min sin uno bueno (tres intervalos), el total deja de mostrarse hasta que vuelva.
+   Vale cualquier dirección de Bitcoin mainnet (`bc1q…`, `bc1p…`, `1…`, `3…`) con
+   el checksum correcto, hasta 50 por cadena. Sin reiniciar nada: el daemon las
+   guarda en `watch.json` (en su carpeta de datos, solo legible por ti) y
+   vuelve a escanear al momento. Para vigilar toda una wallet, añade cada una
+   de sus direcciones con saldo.
+
+El daemon pide los saldos al arrancar, tras cada cambio de la lista y cada `every_s`
+(5 min por defecto, contados desde que acaba el escaneo anterior), una consulta por
+dirección, con una pausa de `request_every_ms` (3 s) antes de cada una: los exploradores
+públicos cortan con HTTP 429 si van más seguidas. Tras añadir o quitar una dirección el
+saldo de autocustodia no vale hasta que acaba ese escaneo (unos segundos por dirección),
+y el total no se muestra mientras. El panel de balances gana una línea `wallet`, y el
+total, su valor y el % de XBT del título la incluyen, igual que el aviso de banda del plan
+de reequilibrio (`e`) y el valor de la cuenta. Si el explorador no contesta, se conserva
+el último saldo; pasados 15 min sin uno bueno (tres intervalos), el total deja de
+mostrarse hasta que vuelva.
 
 No cambia cómo opera el bot: el tope por orden, la exposición por venue y el
 filtro de `[inventory]` siguen mirando solo los saldos de los venues. La
 terminal solo lee: nunca tiene claves privadas ni mueve fondos de una wallet.
 
-**Privacidad:** el xpub no sale de la máquina y no aparece en pantalla, logs
-ni journal, pero cada dirección derivada se consulta al explorador
-configurado. Quien lo opera puede relacionar esas direcciones entre sí y con
+**Privacidad:** las direcciones solo se guardan en `watch.json` y se muestran con
+`watch`: no aparecen en logs, journal ni en el estado que se envía al cliente. Cada
+una se consulta al explorador configurado. Quien lo opera puede relacionar esas direcciones entre sí y con
 la IP del daemon. Si eso importa, apunta las URLs a un servidor propio.
 
 ## Depósitos (`w`)

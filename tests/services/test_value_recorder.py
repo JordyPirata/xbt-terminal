@@ -118,6 +118,8 @@ class TestRecorder:
 
 
 class Wallets:
+    active = True
+
     def __init__(self, balance):
         self.current = balance
 

@@ -4,6 +4,27 @@ Solo el estado vigente. Lo viejo (qué se hizo en cada tarea, estados de otros
 días) está en `specs/archive/handoff-historia.md`. Leer esto antes de tocar nada;
 después `specs/README.md` y la tarea siguiente en `specs/mvp/tasks.md`.
 
+## Estado (2026-11-25)
+
+- **M22 — Autocustodia por direcciones (spec v0.34, D-85), T-106 a T-109 hechas,
+  sin push ni despliegue:** el usuario pidió quitar los xpub ("funciona horrible").
+  Ahora el comando `watch [add|rm btc|xbt <dirección>]` gestiona las direcciones;
+  el daemon las guarda en `<datos>/watch.json` y escanea al momento. Fuera:
+  `core/wallet.py`, `WALLET_*`, `gap_limit`. Cualquier tipo de dirección, máx. 50
+  por cadena.
+  - **Sin probar en real:** falta desplegar, poner `[custody]` en el `config.toml`
+    del servidor (el `.env` ya no lleva nada de wallets) y hacer `watch add`
+    con una dirección con saldo.
+  - Siguiente: que el usuario lo pruebe; si va bien, `git push` y despliegue.
+    Después, lo de la revisión del servidor (abajo) y T-89.
+- **Revisión del servidor (2026-11-25):** el bot se paró solo a las 21:02 UTC
+  (`max_consecutive_failures`: 3 rechazos locales, `stale_data` en Neoxa y
+  `order_size` "no se puede calcular el inventario total", con el book local de
+  Neoxa distinto del REST); no salió ninguna orden. Hay reconexiones frecuentes
+  del WS de Neoxa por esa diferencia de book y timeouts de balances. Sin
+  decidir: investigar por qué un fallo transitorio de saldos o book lleva a
+  parar el bot.
+
 ## Estado (2026-11-14)
 
 - **M21 — Autocustodia en el inventario (spec v0.33, D-84), fusionada en

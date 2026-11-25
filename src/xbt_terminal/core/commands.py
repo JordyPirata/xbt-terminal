@@ -14,10 +14,11 @@ Grammar (design.md §9):
     results [dia|7d|todo]                  (RF-25)
     deposit                                (RF-28)
     rebalance                              (RF-29)
+    watch [add|rm <btc|xbt> <address>]     (RF-37)
     help
 
-Spec: RF-03, RF-06, RF-07, RF-08, RF-15, RF-17, RF-25, RF-28, RF-29 · design.md §9
-Tasks: T-05, T-21, T-23, T-40, T-42, T-45
+Spec: RF-03, RF-06, RF-07, RF-08, RF-15, RF-17, RF-25, RF-28, RF-29, RF-37 · design.md §9
+Tasks: T-05, T-21, T-23, T-40, T-42, T-45, T-109
 """
 
 from __future__ import annotations
@@ -49,6 +50,7 @@ USAGE = {
     "results": "results [dia|7d|todo]",
     "deposit": "deposit",
     "rebalance": "rebalance",
+    "watch": "watch | watch add <btc|xbt> <dirección> | watch rm <btc|xbt> <dirección>",
     "help": "help",
 }
 
@@ -139,6 +141,20 @@ class ShowRebalance:
     """Rebalance plan window (RF-29)."""
 
 
+WatchAction = Literal["list", "add", "rm"]
+WATCH_ASSETS = {"btc": "BTC", "xbt": "BTCB2"}  # what the user types → the chain's asset
+
+
+@dataclass(frozen=True, slots=True)
+class WatchCommand:
+    """List, add or remove a watched self-custody address (RF-37). The daemon validates the
+    address; here it is only text, case included."""
+
+    action: WatchAction
+    asset: str | None = None
+    address: str | None = None
+
+
 Command = (
     PlaceOrder
     | DoubleOrder
@@ -152,6 +168,7 @@ Command = (
     | ShowResults
     | ShowDeposits
     | ShowRebalance
+    | WatchCommand
 )
 
 
@@ -253,6 +270,15 @@ def _parse_results(args: list[str]) -> Command:
     return ShowResults(cast(Range, rng))
 
 
+def _parse_watch(args: list[str]) -> Command:
+    if not args:
+        return WatchCommand("list")
+    action = args[0].lower()
+    if action not in ("add", "rm") or len(args) != 3 or args[1].lower() not in WATCH_ASSETS:
+        raise CommandError(f"uso: {USAGE['watch']}")
+    return WatchCommand(cast(WatchAction, action), WATCH_ASSETS[args[1].lower()], args[2])
+
+
 def _no_args(name: str, command: Command) -> Callable[[list[str]], Command]:
     """Command taking no arguments; `name` is the USAGE entry."""
 
@@ -274,6 +300,7 @@ _PARSERS: dict[str, Callable[[list[str]], Command]] = {
     "results": _parse_results,
     "deposit": _no_args("deposit", ShowDeposits()),
     "rebalance": _no_args("rebalance", ShowRebalance()),
+    "watch": _parse_watch,
     "help": _no_args("help", ShowHelp()),
     "?": _no_args("help", ShowHelp()),
 }

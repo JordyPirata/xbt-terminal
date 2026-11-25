@@ -1342,3 +1342,15 @@ ni los textos que ve el usuario.
 - Hecho: `CustodyValue` y `ValueSample.custody`; `ValueRecorder(custody=)`; un
   cambio de más del 5 % en la wallet también abre tramo con `z`; nota en la
   pestaña; sección "Autocustodia" en `docs/uso.md`.
+
+### T-107 Validador de direcciones y fuera la derivación · `done` · RF-37, CA-22 · dep T-106 · D-85
+`core/address.py` (bech32, bech32m, base58check, mainnet) con vectores de BIP173, BIP350 y base58; se borran `core/wallet.py` y `tests/unit/test_wallet.py`.
+- Hecho: `core/address.py` (`validate_address`: bech32, bech32m, base58check, mainnet; minúsculas canónicas; el error nunca lleva la dirección), con vectores de BIP173, BIP350 y base58, y variantes de checksum cruzadas. Se borran `core/wallet.py` y `tests/unit/test_wallet.py`.
+
+### T-108 Lista persistente y escaneo por direcciones · `done` · RF-37, RF-38, RNF-25, CA-22 · dep T-107 · D-85
+`watch.json` (atómico, 0600), `CustodyService` sobre esa lista sin derivación ni `gap_limit`, escaneo inmediato y saldo inválido al cambiar la lista; fuera `WALLET_*` y `gap_limit` de la config y de `config.example.toml`.
+- Hecho: `WatchList` (`<datos>/watch.json`, 0600, escritura atómica, máx. 50 por cadena) y `CustodyService` sobre esa lista: una consulta por dirección, un cambio invalida el saldo y despierta el escaneo, y un escaneo de una lista anterior se descarta. `[custody]` sin `gap_limit`; fuera `WALLET_*`, `Settings.wallets` y la derivación; `has_custody` pasa a ser "hay alguna dirección". `config.example.toml` y `docs/uso.md` al día.
+
+### T-109 Comando `watch` · `done` · RF-37, RF-39, RNF-25, CA-22 · dep T-108 · D-85
+Gramática en `core/commands.py`, comando del control y del protocolo (`watch`, `watch add`, `watch rm`), ayuda de la app, `docs/uso.md` §Autocustodia y comprobación de que ninguna dirección sale por journal, logs, avisos ni `Snapshot`.
+- Hecho: `watch [add|rm btc|xbt <dirección>]` en `core/commands.py`, `watch` en el control del daemon (`Watched`, la única respuesta donde viajan las direcciones), `RemoteWatch`, `WatchScreen` y la ayuda. Una negativa del daemon sale en la barra sin la dirección.

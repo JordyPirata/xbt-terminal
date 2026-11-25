@@ -36,10 +36,22 @@ from .. import __version__
 from ..core.commands import CancelAll, CancelOrder, CancelVenue, DoubleOrder, PlaceOrder
 from ..core.models import BookDelta, BookSnapshot, ConnState, Trade, VenueId
 from ..core.results import Range
+from .custody import WatchError
 from .engine import Engine, Notice
 from .faults import Fault
 from .orders import CancelPlan, OrderService, Pending, PendingDouble
-from .wire import ClientView, FeeRow, Fees, Rows, decode, dumps, loads, market_view, snapshot
+from .wire import (
+    ClientView,
+    FeeRow,
+    Fees,
+    Rows,
+    Watched,
+    decode,
+    dumps,
+    loads,
+    market_view,
+    snapshot,
+)
 
 log = logging.getLogger(__name__)
 
@@ -363,6 +375,7 @@ class ControlServer:
             "results": self._results,
             "deposits": self._deposits,
             "withdrawal_fees": self._withdrawal_fees,
+            "watch": self._watch,
         }
 
     def _propose(self, value: Any) -> str:
@@ -429,6 +442,24 @@ class ControlServer:
         if deposits is None or not deposits.venues:
             raise RefusedError("depósitos: el daemon no tiene keys de ningún venue")
         return Rows(tuple(await deposits.load())), None
+
+    async def _watch(self, args: dict[str, Any]) -> tuple[Any, str | None]:
+        custody = self._engine.custody
+        if custody is None:
+            raise RefusedError("autocustodia: falta la sección [custody] en config.toml")
+        action, asset, address = args["action"], args.get("asset"), args.get("address")
+        try:
+            if action == "add":
+                custody.add(asset, address)
+            elif action == "rm":
+                custody.remove(asset, address)
+            elif action != "list":
+                raise RefusedError(f"watch: acción desconocida {action!r}")
+        except WatchError as error:
+            raise RefusedError(str(error)) from None
+        # the count only: an address never goes to the log (RNF-25)
+        log.info("watch %s from a client", action)
+        return Watched(custody.watched("BTC"), custody.watched("BTCB2")), None
 
     async def _withdrawal_fees(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         rebalance = self._engine.rebalance

@@ -49,7 +49,7 @@ en `tests/fixtures/explorer/`.
 - Las dos cadenas comparten formato de dirección (`bc1q…`, PA-14) y el
   historial anterior a la bifurcación: la misma dirección tiene transacciones
   en las dos (172 en BTCB2, 227 en BTC), y la altura es distinta (982022 frente
-  a 975885). Un mismo xpub puede tener saldo en las dos cadenas.
+  a 975885). Una misma dirección puede tener saldo en las dos cadenas.
 - Límites (2026-11-14, sin documentar): mempool.space dio HTTP 429 a la
   consulta 22 sin pausa, a la 24 con 250 ms y a la 33 con 1 s entre consultas.
   mempool.guide contestó 40 seguidas sin pausa. De ahí `request_every_ms`

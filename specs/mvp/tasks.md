@@ -296,3 +296,16 @@ En este orden. Ninguna cambia lo que el bot decide ni los topes de RF-10.
 ### T-104 Inventario total, panel y aviso · `done` · RF-39, RF-05, RF-27, RF-29, CA-22 · dep T-103 · D-84
 
 ### T-105 Autocustodia en el valor de la cuenta · `done` · RF-39, RF-32, CA-22 · dep T-104 · D-84
+
+## M22 — Autocustodia por direcciones (v0.34, D-85)
+
+En este orden. Sustituye los xpub de M21; ninguna cambia lo que el bot decide.
+
+### T-106 Spec de las direcciones vigiladas · `done` · RF-37, RF-38, RF-39, RNF-25, CA-22 · D-85
+
+### T-107 Validador de direcciones y fuera la derivación · `done` · RF-37, CA-22 · dep T-106 · D-85
+
+### T-108 Lista persistente y escaneo por direcciones · `done` · RF-37, RF-38, RNF-25, CA-22 · dep T-107 · D-85
+
+### T-109 Comando `watch` · `done` · RF-37, RF-39, RNF-25, CA-22 · dep T-108 · D-85
+

@@ -53,7 +53,18 @@ from .orders import (
     Sent,
     Uncertain,
 )
-from .wire import VENUES, ClientView, Fees, MarketView, Rows, Snapshot, decode, dumps, loads
+from .wire import (
+    VENUES,
+    ClientView,
+    Fees,
+    MarketView,
+    Rows,
+    Snapshot,
+    Watched,
+    decode,
+    dumps,
+    loads,
+)
 
 log = logging.getLogger(__name__)
 
@@ -274,6 +285,22 @@ class RemoteDeposits:
         return list(decode(Rows, raw).rows)
 
 
+class RemoteWatch:
+    """The watched self-custody addresses, kept by the daemon (RF-37)."""
+
+    def __init__(self, link: RemoteEngine) -> None:
+        self._link = link
+
+    async def send(
+        self, action: str, asset: str | None = None, address: str | None = None
+    ) -> Watched:
+        """`list`, `add` or `rm`; the daemon's refusal is a `DaemonRefusedError`."""
+        _, raw, _ = await self._link.request(
+            "watch", {"action": action, "asset": asset, "address": address}
+        )
+        return decode(Watched, raw)
+
+
 class RemoteRebalance:
     """The withdrawal fees the daemon asks for (RF-29)."""
 
@@ -436,6 +463,7 @@ class RemoteEngine:
         self.results = RemoteResults(self)
         self.deposits = RemoteDeposits(self)
         self.rebalance = RemoteRebalance(self)
+        self.watch = RemoteWatch(self)
         self._writer: asyncio.StreamWriter | None = None
         self._ids = itertools.count(1)
         self._waiting: dict[int, asyncio.Future[tuple[str, Any, str | None]]] = {}

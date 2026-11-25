@@ -52,6 +52,7 @@ from ..core.commands import (
     ShowHelp,
     ShowRebalance,
     ShowResults,
+    WatchCommand,
     parse,
 )
 from ..core.cross import Quote
@@ -102,6 +103,7 @@ from .screens.help import HelpScreen
 from .screens.orders import CancelCommand, OrdersScreen
 from .screens.rebalance import RebalanceScreen
 from .screens.results import ResultsScreen
+from .screens.watch import WatchScreen
 from .status import StatusBar, VenueLink
 
 MIN_SIZE = (160, 45)  # RNF-02
@@ -232,6 +234,7 @@ class XbtApp(App[None]):
         self.results = services.results
         self.deposits = services.deposits
         self.rebalance = services.rebalance
+        self.watching = services.remote.watch if services.remote is not None else None
         self.mode = mode
         self._run_hub = run_hub
         self.can_trade = dict(can_trade or {})
@@ -569,11 +572,28 @@ class XbtApp(App[None]):
             self.action_deposits()
         elif isinstance(command, ShowRebalance):
             self.action_rebalance()
+        elif isinstance(command, WatchCommand):
+            await self._watch(command)
         elif isinstance(command, BotCommand):
             self._bot_command(command)
         else:
             await self._cancel(command)
 
+
+    async def _watch(self, command: WatchCommand) -> None:
+        """RF-37: the daemon keeps the list; a refusal (bad checksum, no `[custody]`, ...)
+        comes back as `DaemonRefusedError` and is said in the status bar."""
+        if self.watching is None:
+            self.say("watch: hace falta un daemon (xbt attach)", error=True)
+            return
+        watched = await self.watching.send(command.action, command.asset, command.address)
+        if command.action == "list":
+            self.push_screen(WatchScreen(watched))
+            return
+        done = "vigilando" if command.action == "add" else "ya no se vigila"
+        self.say(
+            f"{done} la dirección · BTC {len(watched.btc)}, {BASE_LABEL} {len(watched.xbt)}"
+        )
 
     def _bot_command(self, command: BotCommand) -> None:
         if self.bot is None:

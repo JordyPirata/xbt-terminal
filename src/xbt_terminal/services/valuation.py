@@ -35,6 +35,9 @@ class _Hub(Protocol):
 
 
 class _Custody(Protocol):
+    @property
+    def active(self) -> bool: ...
+
     def balance(self) -> CustodyBalance | None: ...
 
 
@@ -81,7 +84,7 @@ class ValueRecorder:
             balances,
             mids,
             custody.balance() if custody is not None else None,
-            has_custody=custody is not None,
+            has_custody=custody is not None and custody.active,
         )
         value_sample = sample(inv, mids, at, self._every_ms)
         if value_sample is not None:

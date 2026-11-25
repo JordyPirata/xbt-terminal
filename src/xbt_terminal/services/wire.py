@@ -231,7 +231,7 @@ class Snapshot:
     deposit_venues: tuple[VenueId, ...] = ()
     fee_venues: tuple[VenueId, ...] = ()
     has_results: bool = False
-    # self-custody (RF-39): balances and their time only, never xpubs or addresses
+    # self-custody (RF-39): balances and their time only, never addresses
     has_custody: bool = False
     custody: CustodyBalance | None = None  # None: no valid scan yet, or too old
 
@@ -264,7 +264,7 @@ def snapshot(engine: Engine) -> Snapshot:
         deposit_venues=engine.deposits.venues if engine.deposits is not None else (),
         fee_venues=engine.rebalance.venues if engine.rebalance is not None else (),
         has_results=engine.results is not None,
-        has_custody=engine.custody is not None,
+        has_custody=engine.custody is not None and engine.custody.active,
         custody=engine.custody.balance() if engine.custody is not None else None,
     )
 
@@ -303,6 +303,14 @@ class Rows:
     """Rows of deposit addresses (RF-28)."""
 
     rows: tuple[DepositRow, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Watched:
+    """The watched addresses per chain: the only place they travel (RF-37, RNF-25)."""
+
+    btc: tuple[str, ...]
+    xbt: tuple[str, ...]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

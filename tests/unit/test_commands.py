@@ -15,6 +15,7 @@ from xbt_terminal.core.commands import (
     ShowHelp,
     ShowRebalance,
     ShowResults,
+    WatchCommand,
     parse,
 )
 from xbt_terminal.core.models import D
@@ -226,7 +227,7 @@ class TestRebalance:
         (
             "foo",
             "comando desconocido 'foo': buy, sell, dbl, orders, cancel, tf, bot, results,"
-            " deposit, rebalance, help",
+            " deposit, rebalance, watch, help",
         ),
         ("buy", "uso: buy <venue> <cantidad|N%> <precio>"),
         ("buy xx 1 1", "venue desconocido 'xx': usar nk o nx"),
@@ -261,3 +262,31 @@ def test_chosen_values_lowercase():
     assert parse("Bot STATUS") == BotCommand("status")
     assert parse("results 7D") == ShowResults("7d")
     assert parse("SELL NX 25% 0.004") == PlaceOrder("nx", "sell", Percent(D("25")), D("0.004"))
+
+
+@pytest.mark.spec("RF-37")
+class TestWatch:
+    ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+
+    def test_list(self):
+        assert parse("watch") == WatchCommand("list")
+
+    @pytest.mark.parametrize(("chain", "asset"), [("btc", "BTC"), ("XBT", "BTCB2")])
+    def test_add_and_remove(self, chain, asset):
+        added = parse(f"watch add {chain} {self.ADDRESS}")
+        removed = parse(f"watch rm {chain} {self.ADDRESS}")
+        assert added == WatchCommand("add", asset, self.ADDRESS)
+        assert removed == WatchCommand("rm", asset, self.ADDRESS)
+
+    def test_the_address_keeps_its_case(self):
+        upper = self.ADDRESS.upper()
+        assert parse(f"watch add btc {upper}") == WatchCommand("add", "BTC", upper)
+
+    @pytest.mark.parametrize(
+        "text",
+        ["watch add", "watch add btc", "watch add eth x", "watch rm xbt", "watch list x",
+         "watch add btc a b", "watch borrar btc x"],
+    )  # fmt: skip
+    def test_errors(self, text):
+        with pytest.raises(CommandError, match="uso: watch"):
+            parse(text)

@@ -43,7 +43,7 @@ from .paths import AlreadyRunningError, InstanceLock, private_dir, resolve_paths
 from .services.account import AccountService
 from .services.bot import BotService
 from .services.control import SOCKET_NAME, socket_problem
-from .services.custody import CustodyService
+from .services.custody import WATCH_FILE, CustodyService, WatchList
 from .services.daemon import run_daemon
 from .services.deposits import DepositService
 from .services.engine import Engine
@@ -210,17 +210,22 @@ def fee_tokens(venues: Mapping[VenueId, VenueConfig]) -> dict[VenueId, FeeToken]
 
 
 def custody_service(
-    settings: Settings, faults: Faults, clock: Callable[[], int]
+    settings: Settings, logs: Path, faults: Faults, clock: Callable[[], int]
 ) -> CustodyService | None:
-    """Self-custody scan (RF-38); None without wallets in `.env`. Its http client is its
-    own: it shares nothing with the venues, not even their rate limiters."""
+    """Self-custody scan (RF-38); None without `[custody]`. The watched addresses live in
+    `<data>/watch.json` (RF-37). Its http client is its own: it shares nothing with the
+    venues, not even their rate limiters."""
     custody = settings.config.custody
-    if custody is None or not settings.wallets:
+    if custody is None:
         return None
     http = httpx.AsyncClient()
-    explorers = {asset: Explorer(http, custody.url(asset) or "") for asset in settings.wallets}
+    explorers = {
+        asset: Explorer(http, url)
+        for asset in ("BTC", "BTCB2")
+        if (url := custody.url(asset)) is not None
+    }
     return CustodyService(
-        settings.wallets, explorers, every_s=custody.every_s, gap_limit=custody.gap_limit,
+        WatchList(logs / WATCH_FILE), explorers, every_s=custody.every_s,
         request_every_ms=custody.request_every_ms, clock=clock, faults=faults,
         close=http.aclose,
     )  # fmt: skip
@@ -258,7 +263,7 @@ def build_engine(
         )  # fmt: skip
         trading = trading_venues(settings, venues, hub, clock)
         every = cfg.polling.balances_every_s
-        custody = custody_service(settings, faults, clock)
+        custody = custody_service(settings, logs, faults, clock)
         account = AccountService(
             trading, journal=journal, balances_every_s=every, faults=faults, clock=clock
         )

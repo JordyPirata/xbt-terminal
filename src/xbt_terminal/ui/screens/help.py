@@ -71,6 +71,9 @@ COMANDOS (venue: nk = NonKYC, nx = Neoxa)
   results  /  results 7d  /  results todo     resultados de las dobles (ver abajo)
   deposit                                     direcciones de depósito (tecla w)
   rebalance                                   plan de reequilibrio (tecla e)
+  watch                                       direcciones de autocustodia que se vigilan
+  watch add btc|xbt <dirección>               vigila una dirección (BTC o {BASE_LABEL})
+  watch rm btc|xbt <dirección>                deja de vigilarla
   help                                        esta ayuda
   Ojo: cancelar un venue o todo cancela todas las órdenes {BASE_LABEL}/BTC de la
   cuenta, también las que no se enviaron desde la terminal.
