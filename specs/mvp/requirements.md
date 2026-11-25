@@ -1,6 +1,6 @@
 # xbt-terminal — Requerimientos MVP
 
-Versión 0.33 · 2026-11-14 · @JordyPirata · Estado: **aprobado para diseño**
+Versión 0.34 · 2026-11-25 · @JordyPirata · Estado: **aprobado para diseño**
 
 > Historial de versiones (qué cambió en cada una y por qué): `specs/archive/changelog.md`.
 
@@ -50,7 +50,7 @@ límite manuales.
 | Plan de reequilibrio (v0.14) | Calcular la transferencia entre venues que iguala su % de BTCB2 y lo que cuesta (RF-29) |
 | Daemon y cliente (v0.17, v0.21) | Toda la lógica (mercado, cuenta, órdenes, bot) corre en un daemon sin pantalla; la TUI es un cliente que opera por un socket local (RF-30, RF-31) |
 | Valor de la cuenta (v0.22) | Serie del valor total en BTC, muestreada por el daemon, en una pestaña de resultados (RF-32) |
-| Autocustodia (v0.33) | Saldos on-chain de wallets propias, por xpub native segwit, sumados al inventario total y al valor de la cuenta; solo lectura (RF-37 a RF-39) |
+| Autocustodia (v0.33, v0.34) | Saldos on-chain de direcciones que el usuario añade con el comando `watch`, sumados al inventario total y al valor de la cuenta; solo lectura (RF-37 a RF-39) |
 | Banco de pruebas (v0.31) | Grabar books y trades, reproducirlos en dry-run sin keys e informe fijo del bot sobre una grabación (RF-33 a RF-35) |
 
 ## Propuesta de diseño
@@ -101,8 +101,9 @@ construirse.
 - Nodos propios (Knots o Core) y monitoreo de hashrate o reorgs. La URL del
   explorador de RF-38 puede apuntar a un servidor del usuario, pero la terminal
   no lo arranca, ni lo configura, ni habla RPC de nodo.
-- Otros tipos de dirección en autocustodia: nested segwit (P2SH-P2WPKH),
-  taproot, legacy y multifirma. Solo native segwit de una firma (RF-37).
+- Derivar direcciones de una clave pública extendida (xpub, zpub): la
+  autocustodia mira solo las direcciones que el usuario añade una a una (RF-37,
+  D-85).
 - PnL contable o de cartera (valorar inventario, posiciones abiertas o
   rebalanceos), reportes contables o fiscales. Solo se permiten el resultado
   realizado por orden doble de RF-25 y la serie del valor de la cuenta de
@@ -114,7 +115,7 @@ construirse.
 - Telemetría o envío de datos fuera de la máquina: ni métricas, ni resultados,
   ni avisos de uso. Lo que alguien quiera compartir lo exporta a mano. Única
   excepción: las consultas de saldo por dirección al explorador que el usuario
-  configura (RF-38, RNF-25); el xpub nunca sale.
+  configura (RF-38, RNF-25), una dirección por petición.
 - Interfaz web, móvil o multiusuario; operar fondos de terceros. El cliente
   de RF-31 no lo es: habla con el daemon por un socket Unix del mismo usuario
   (en la misma máquina, por SSH o con el socket reenviado por SSH). Siguen
@@ -164,9 +165,9 @@ construirse.
 | RF-34 | Reproducción: `xbt daemon --replay <fichero> --data-dir <dir>` corre el daemon en dry-run contra venues simulados, sin red, sin keys y sin leer `.env`; `--live` y `--record` no se admiten con `--replay`, y `--data-dir` es obligatorio, para no mezclarlo con el journal real. Los eventos de la grabación salen en su orden y con sus tiempos relativos, a velocidad real. Los saldos salen de `[replay]` (`base_balance` y `quote_balance`, iguales en cada venue), sección obligatoria con `--replay`. Una orden llega al venue simulado `latency_ms` después de enviarse (300 por defecto) y casa como taker contra el book grabado en ese momento, hasta su precio límite, al precio de cada nivel y con la fee taker. Un competidor simulado se lleva cada nivel entero con probabilidad `competitor_pct` (0 por defecto), con una secuencia fijada por `seed` (0 por defecto). Lo que no casa queda abierto, sin llenarse después, hasta que se cancela. Lo casado no cambia el book grabado, pero no se vuelve a casar: queda gastado hasta que la grabación cambie o quite ese nivel. Al acabar la grabación, el mercado queda `down` y el bot deja de disparar. Validaciones, límites y estados del bot, los de siempre. |
 | RF-35 | Informe: `xbt report --replay <fichero> [--config <ruta>]` corre el mismo motor sobre la grabación en tiempo virtual, sin esperar, con el bot armado desde el principio y un journal temporal, y escribe por stdout: minutos de grabación, cruces sobre el umbral (cada tramo seguido en que la decisión del bot dispararía con saldo de sobra, sin contar cooldown, topes ni `max_move_pct`), disparos, dobles llenas, tasa de captura (dobles llenas sobre cruces), neta realizada en BTC y sats (RF-25), y `bot_miss` y piernas colgadas por cada 100 disparos. Tras una pierna colgada el bot se rearma solo, únicamente aquí: el informe mide, no opera. Otra parada (`halted`) lo deja parado y el informe dice el motivo. La misma grabación con la misma config da el mismo informe. |
 | RF-36 | Contrato de venue: un adaptador cumple los protocolos `MarketData` y `Venue` de `adapters/base.py` y su mantenimiento `FeedUpkeep`, tal como los describe `docs/contrato-venue.md`, y, si los implementa, los opcionales `Depositor`, `WithdrawalFees` y `TokenPricer`. Un venue entra si pasa la batería común de `tests/contract/` con fixtures grabados en real, o, donde no se pueda grabar sin operar, con la forma documentada por el venue, y dicho en el fixture. Cada cláusula de la batería está en ese documento. Cambiar una cláusula es un cambio de esta spec. |
-| RF-37 | Autocustodia por xpub: `.env` admite `WALLET_BTC_XPUBS` y `WALLET_XBT_XPUBS`, cada una con una o más claves públicas extendidas de nivel cuenta separadas por comas. Se aceptan las versiones `xpub` y `zpub`, y de cualquiera de las dos se derivan **solo** direcciones native segwit (P2WPKH, bech32 `bc1q…`): rama de recepción `/0/i` y de cambio `/1/i`. Nunca se derivan direcciones nested segwit, taproot ni legacy. Una clave de otra versión (`ypub`, `Ypub`, `Zpub`, testnet), privada (`xprv`, `zprv`), mal formada o repetida es un error de arranque que dice cuál de la lista falla sin mostrarla. Sin esas variables no hay autocustodia y nada cambia. La derivación es una función pura en `core/`, probada con los vectores de BIP32, BIP84 y BIP173. |
-| RF-38 | Saldos on-chain: sección opcional `[custody]` con `btc_url` y `xbt_url` (base de una API tipo Esplora, una por cadena), `every_s` (300 por defecto, mínimo 60), `gap_limit` (20 por defecto, de 1 a 100) y `request_every_ms` (3000 por defecto, de 0 a 60000: la pausa antes de cada consulta, porque los exploradores públicos limitan las peticiones seguidas). Tener xpubs de una cadena sin su URL, o `[custody]` sin ningún xpub, es un error de arranque. El daemon, cada `every_s` y al arrancar, recorre cada rama de cada xpub pidiendo `GET <url>/address/<dirección>` hasta `gap_limit` direcciones seguidas sin transacciones, y suma por cadena el saldo confirmado más el de la mempool. Un escaneo solo vale si todas sus consultas respondieron bien: si una falla, se conserva el último bueno, se reporta el fallo (RNF-14) y se reintenta en el siguiente ciclo. Un saldo con más de `3 × every_s` de antigüedad deja de valer. El escaneo no usa el limitador de los venues ni retrasa órdenes ni bot. Solo lectura: no hay más peticiones que esas consultas. |
-| RF-39 | Autocustodia en el inventario: con RF-37 configurado, el panel de balances muestra una línea `wallet` con el BTC y el BTCB2 en autocustodia y la antigüedad del dato, y el inventario neto total, su valor y el % total de BTCB2 (RF-05, RF-27, aviso de RF-29) los incluyen. El BTCB2 en autocustodia se valora a la media de los mids de los venues. Sin un saldo de autocustodia válido (RF-38), el total, su valor y el % total no se muestran y la línea lo dice; la muestra `value` de RF-32 no se apunta. La muestra `value` suma la autocustodia al total y lleva una entrada `custody` con BTC, BTCB2, precio y valor; las muestras anteriores se siguen leyendo, y la pestaña avisa de que añadir o quitar una wallet sale como un salto. La autocustodia **no** cuenta en el tope por orden de RF-10, ni en la exposición por venue, ni en el filtro de RF-26, ni en las cantidades del plan de RF-29: esos siguen solo con los saldos de los venues. |
+| RF-37 | Autocustodia por direcciones: el comando `watch` (en la terminal, también por `xbt` contra el daemon) gestiona las direcciones a vigilar, de BTC o de BTCB2 (`xbt`): `watch` las lista, `watch add <btc\|xbt> <dirección>` y `watch rm <btc\|xbt> <dirección>` las añaden y quitan. Se aceptan direcciones de Bitcoin mainnet de cualquier tipo (bech32 `bc1q…`, taproot `bc1p…`, base58 `1…` y `3…`) con el checksum correcto; el comando no pide confirmación porque no mueve fondos. Una dirección mal formada, de otra red, repetida en esa cadena, o más allá de 50 por cadena, se rechaza diciendo por qué; la misma dirección sí puede estar en las dos cadenas (comparten historial). La lista vive en `<datos>/watch.json` (permisos de RNF-18), la escribe solo el daemon, y se conserva entre reinicios. No hay variables de `.env` ni derivación de xpub. Añadir una dirección de una cadena sin su URL en `[custody]` (RF-38) se rechaza. Los comandos son síncronos en el daemon y no exigen reiniciarlo. |
+| RF-38 | Saldos on-chain: sección opcional `[custody]` con `btc_url` y `xbt_url` (base de una API tipo Esplora, una por cadena), `every_s` (300 por defecto, mínimo 60) y `request_every_ms` (3000 por defecto, de 0 a 60000: la pausa antes de cada consulta, porque los exploradores públicos limitan las peticiones seguidas). Sin `[custody]` no hay autocustodia y `watch` lo dice. El daemon, al arrancar, cada `every_s` y al añadir o quitar una dirección, pide `GET <url>/address/<dirección>` por cada dirección de la lista y suma por cadena el saldo confirmado más el de la mempool; las cadenas se escanean a la vez. Un escaneo solo vale si todas sus consultas respondieron bien: si una falla, se conserva el último bueno, se reporta el fallo (RNF-14) y se reintenta en el siguiente ciclo. Al añadir o quitar una dirección, el saldo de autocustodia (las dos cadenas) deja de valer hasta que termine un escaneo con la lista nueva. Un saldo con más de `3 × every_s` de antigüedad deja de valer. Sin direcciones en ninguna cadena no hay autocustodia. El escaneo no usa el limitador de los venues ni retrasa órdenes ni bot. Solo lectura: no hay más peticiones que esas consultas. |
+| RF-39 | Autocustodia en el inventario: con alguna dirección vigilada (RF-37), el panel de balances muestra una línea `wallet` con el BTC y el BTCB2 en autocustodia y la antigüedad del dato, y el inventario neto total, su valor y el % total de BTCB2 (RF-05, RF-27, aviso de RF-29) los incluyen. El BTCB2 en autocustodia se valora a la media de los mids de los venues. Sin un saldo de autocustodia válido (RF-38), el total, su valor y el % total no se muestran y la línea lo dice; la muestra `value` de RF-32 no se apunta. La muestra `value` suma la autocustodia al total y lleva una entrada `custody` con BTC, BTCB2, precio y valor; las muestras anteriores se siguen leyendo, y la pestaña avisa de que añadir o quitar una wallet sale como un salto. La autocustodia **no** cuenta en el tope por orden de RF-10, ni en la exposición por venue, ni en el filtro de RF-26, ni en las cantidades del plan de RF-29: esos siguen solo con los saldos de los venues. |
 
 ## Requerimientos no funcionales
 
@@ -199,7 +200,7 @@ por IP y comparte presupuesto entre polling y órdenes.
 | RNF-22 | La decisión del bot (disparar o no, con qué precios y cantidad, y por qué no) es una función pura en `core/`, sin I/O ni reloj propio, probada con books sintéticos. El bucle del bot no hace más peticiones que la operación manual: los envíos comparten el limitador de Neoxa (RNF-03). |
 | RNF-23 | Latencia del bot: `decide` con 50 niveles por lado y `max_walk_pct` en los dos venues tarda menos de 5 ms (mediana); de un cambio de book que cruza a la llamada a `prepare_double` del bot, menos de 50 ms (mediana, venues simulados); `top(50)` de un book de 1000 niveles por lado, menos de 2 ms. Tests de latencia en la suite. |
 | RNF-24 | El daemon contrasta cada `risk.book_check_s` (5 s por defecto) el book local de cada venue con su book REST: mejor bid y mejor ask, precio y cantidad. Si coinciden, ese momento cuenta como frescura del book (RNF-16). Si no, el book local deja de ser fresco hasta que llega uno nuevo del venue: se vuelve a suscribir (NonKYC) o a conectar (Neoxa), y se apunta `book_resync` en el journal con los dos topes y en `diag.log`. Un contraste en el que llega un mensaje del book mientras se espera el REST no cuenta, ni para un lado ni para el otro. Un REST fallido no confirma: si fallan todos durante `stale_after_s`, el book queda viejo. |
-| RNF-25 | Los xpubs de RF-37 se tratan como secretos: se leen de `.env` (con los permisos de RNF-18), se guardan como `Secret` y pasan por el `Redactor`; ni ellos ni las direcciones derivadas aparecen en pantalla, journal, logs ni en el socket. Al explorador solo llegan direcciones sueltas, una por petición, nunca el xpub. La documentación avisa de que quien opera el explorador puede relacionar esas direcciones entre sí y con la IP del daemon. No se añade ninguna dependencia criptográfica: la derivación usa solo la biblioteca estándar. |
+| RNF-25 | Las direcciones de RF-37 son datos sensibles: agrupan el patrimonio del usuario. Se guardan solo en `<datos>/watch.json` (permisos de RNF-18) y salen únicamente en la respuesta del comando `watch` al cliente que lo pidió, donde se muestran; no aparecen en el journal, los logs, los avisos, el `Snapshot` ni la muestra `value`. Al explorador solo llega una dirección por petición. La documentación avisa de que quien opera el explorador puede relacionar esas direcciones entre sí y con la IP del daemon. No se añade ninguna dependencia criptográfica: el checksum se valida con la biblioteca estándar. |
 
 Fuente de los límites de Neoxa: [documentación de su API](https://neoxa.exchange/api-docs).
 
@@ -216,8 +217,8 @@ alcance se revisa.
   por red y asset ID, no por ticker.
 - Hay saldo BTC y BTCB2 pre-depositado en ambos venues antes de operar. La
   autocustodia (RF-37 a RF-39) solo se cuenta: no se opera con ella.
-- Las direcciones native segwit de BTCB2 usan el mismo formato que las de
-  Bitcoin (HRP `bc`), como la dirección de depósito de NonKYC (PA-14).
+- Las direcciones de BTCB2 usan el mismo formato que las de Bitcoin (HRP `bc`,
+  prefijos base58 `1` y `3`), como la dirección de depósito de NonKYC (PA-14).
 
 **Riesgos**
 
@@ -232,7 +233,7 @@ alcance se revisa.
 | Cruzar órdenes propias | Se interpreta como wash trading | Bloqueo local (RF-10) |
 | Congelamiento de stablecoins por su emisor | Fondos bloqueados aunque el venue funcione | No se usan: todo contra BTC (RNF-10) |
 | Envío que se corta a mitad | Orden viva en el exchange que la terminal da por fallida | Estado incierto y reconciliación (RNF-12) |
-| El explorador de RF-38 ve las direcciones de autocustodia | Un tercero puede agruparlas y relacionarlas con la IP del daemon | URL configurable (puede ser un servidor propio), una dirección por petición, el xpub no sale (RNF-25) |
+| El explorador de RF-38 ve las direcciones de autocustodia | Un tercero puede agruparlas y relacionarlas con la IP del daemon | URL configurable (puede ser un servidor propio), una dirección por petición (RNF-25) |
 | El explorador responde mal o con datos viejos | % total y valor de la cuenta equivocados | Solo informa: no entra en RF-10 ni en RF-26; un escaneo a medias no vale y un dato viejo deja de mostrarse (RF-38, RF-39) |
 | Neoxa manda el secret en claro en una cabecera de cada petición privada | Quien lea el tráfico o un log de proxy tiene la key | Keys sin retiro por diseño del exchange (RNF-08), TLS y nunca un proxy que registre cabeceras |
 
@@ -243,7 +244,7 @@ fase 2 (bot), cuando pasa además CA-08 a CA-10. Cada ampliación posterior se d
 por terminada con su criterio: resultados CA-11 (v0.10), ratio de inventario
 CA-12 (v0.11), direcciones de depósito CA-13 (v0.12 y v0.13) y plan de
 reequilibrio CA-14 (v0.14), daemon CA-15 (v0.17), cliente CA-16 (v0.21), banco
-de pruebas CA-19 y CA-20 (v0.31) y autocustodia CA-22 (v0.33).
+de pruebas CA-19 y CA-20 (v0.31) y autocustodia CA-22 (v0.33, v0.34).
 
 | ID | Criterio | Cómo se verifica |
 | --- | --- | --- |
@@ -268,7 +269,7 @@ de pruebas CA-19 y CA-20 (v0.31) y autocustodia CA-22 (v0.33).
 | CA-19 | Con venues simulados, `--record` deja un fichero `0600` del que la reproducción saca los mismos eventos, en el mismo orden y con los mismos tiempos relativos, sin datos privados; un fallo de escritura no para el mercado. Un daemon con `--replay` arranca sin keys y sin `.env`, un cliente ve el book, y con el bot armado dispara sobre un cruce de la grabación; una orden casa por niveles hasta su límite, deja abierto lo que no casa y, con `competitor_pct` = 100, no llena nada (`bot_miss` con `lead_venue`). | Automático |
 | CA-20 | Sobre una grabación de muestra fija con su config, el informe da exactamente los cruces, disparos, dobles llenas, tasa de captura, neta, `bot_miss` y piernas colgadas esperados, dos veces seguidas igual, sin red y sin tocar el directorio de datos. | Automático |
 | CA-21 | La batería de contrato pasa entera con NonKYC y Neoxa, con sus fixtures y sin red, y con un adaptador falso correcto. Por cada cláusula, una variante del adaptador falso que rompe solo esa cláusula hace fallar su comprobación. `docs/contrato-venue.md` lista exactamente las comprobaciones de la batería. |
-| CA-22 | Las direcciones derivadas de los xpub y zpub de los vectores de BIP32 y BIP84 son las de los vectores, todas `bc1q…`, y un `ypub` no arranca. Con un explorador simulado, el daemon suma el saldo de las direcciones usadas de las dos ramas y para tras `gap_limit` vacías; con una consulta fallida conserva el saldo anterior y, pasado `3 × every_s`, deja de darlo. El panel muestra la línea `wallet` y un % total que la incluye, y sin dato válido no muestra total. La muestra `value` suma la autocustodia y no se apunta sin ella. El tope por orden de RF-10 y la decisión del bot son los mismos con autocustodia y sin ella. Ni el xpub ni una dirección derivada aparecen en journal, logs, socket ni pantalla. | Automático |
+| CA-22 | `watch add` acepta direcciones bech32, bech32m y base58 con checksum válido y rechaza checksum malo, otra red, repetidas y la número 51 de una cadena; `watch rm` las quita, y la lista sobrevive a un reinicio. Con un explorador simulado, el daemon suma el saldo de las direcciones de cada cadena; con una consulta fallida conserva el saldo anterior y, pasado `3 × every_s`, deja de darlo; tras añadir o quitar, el saldo no vale hasta que termina un escaneo nuevo. El panel muestra la línea `wallet` y un % total que la incluye, y sin dato válido no muestra total. La muestra `value` suma la autocustodia y no se apunta sin ella. El tope por orden de RF-10 y la decisión del bot son los mismos con autocustodia y sin ella. Ninguna dirección aparece en journal, logs, avisos, `Snapshot` ni en la respuesta de otro comando. | Automático |
 
 ## Preguntas abiertas
 

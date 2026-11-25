@@ -94,6 +94,7 @@ dicen en su propia nota.
 | D-82 | 2026-11-04 | Contrato de venue: documento público, batería común y una variante rota por cláusula (requirements v0.32, T-88) |
 | D-83 | 2026-11-09 | Nombres que dicen qué son; comentarios solo para el porqué (T-98, T-99) |
 | D-84 | 2026-11-14 | Autocustodia por xpub native segwit en el inventario total (requirements v0.33, T-100) |
+| D-85 | 2026-11-25 | Autocustodia por direcciones con el comando `watch`; fuera los xpub (requirements v0.34, T-106) |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -2198,3 +2199,40 @@ la cadena (BTC o XBT), sin la dirección.
 vez: cada una tiene su explorador, así que no comparten pausa ni límite, y el
 escaneo dura lo que la cadena más lenta en vez de la suma (BTC tardó ~14 min).
 Si una falla, el escaneo entero no vale, como antes.
+
+## D-85 · 2026-11-25 · Autocustodia por direcciones con el comando `watch`; fuera los xpub (requirements v0.34, T-106)
+**Contexto:** el usuario probó la autocustodia por xpub (D-84) y dice que
+"funciona horrible": la derivación con `gap_limit` obliga a recorrer muchas
+direcciones, los escaneos duran minutos contra exploradores que cortan (HTTP
+429 y 403) y dejan el total sin dato. Prefiere indicar él mismo las direcciones.
+**Decisión** (la forma, elegida por el usuario; el resto, supuestos por defecto):
+- **Comando en la terminal:** `watch`, `watch add <btc|xbt> <dirección>` y
+  `watch rm <btc|xbt> <dirección>`. Lo ejecuta el daemon; la lista vive en
+  `<datos>/watch.json` y no hace falta reiniciar. Se descartan `.env` (obliga a
+  reiniciar) y `config.toml` (no es para datos sensibles).
+- **Se borra todo lo del xpub:** `core/wallet.py` y sus tests (BIP32, BIP84,
+  RIPEMD-160), `WALLET_*` de `.env`, `gap_limit` y la derivación en
+  `CustodyService`. Queda un validador de direcciones (`core/address.py`,
+  checksum bech32/bech32m y base58check con la biblioteca estándar). Sin
+  retrocompatibilidad: la autocustodia nunca se desplegó.
+- **Cualquier tipo de dirección:** sin derivación, no hay motivo para limitar a
+  native segwit; Esplora responde igual con taproot, legacy y nested.
+  Corrige "solo native segwit" de D-84.
+- **Una dirección por cadena, como mucho 50:** acota las consultas (3 s cada una
+  por defecto, unos 2,5 min). La misma dirección puede estar en las dos
+  cadenas.
+- **Sin confirmación:** no mueve fondos ni toca órdenes, y `watch rm` se
+  deshace con `watch add`.
+- **Saldo incompleto:** al añadir o quitar, el saldo de autocustodia (el de las dos
+  cadenas, que se guarda junto) no vale hasta que termine un escaneo nuevo (inmediato), por el mismo motivo que
+  D-84: un total con otra composición engaña.
+- **Privacidad:** las direcciones las escribe el usuario, así que no pasan por el
+  `Redactor`; se vigilan por construcción: solo van a `watch.json`, a la
+  respuesta de `watch` y, una por petición, al explorador. No entran en
+  journal, logs, avisos ni `Snapshot`.
+- **Sigue igual de D-84:** explorador tipo Esplora configurable, `every_s`,
+  `request_every_ms`, dato viejo tras `3 × every_s`, valoración, inventario
+  total, `value` y que no cuenta en RF-10 ni en el bot.
+**Toca:** requirements v0.34 (RF-37, RF-38, RF-39, RNF-25, CA-22, Alcance,
+§Fuera de alcance, §Supuestos y riesgos), design.md §2, §6.5, §8 y §9, T-106 a
+T-109.

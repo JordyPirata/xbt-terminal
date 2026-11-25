@@ -183,3 +183,12 @@ Es historia: la spec vigente es la de `requirements.md`.
 > explorador configurable y los suma al inventario total y al valor de la
 > cuenta. No entra en el tope por orden ni en el filtro del bot. Solo lectura.
 > §Fuera de alcance exceptúa las consultas al explorador. PA-13 y PA-14 nuevas.
+
+> **Cambio v0.33 → v0.34 (autocustodia por direcciones, D-85):** los xpub no
+> funcionaban bien (derivación, `gap_limit` y escaneos largos contra
+> exploradores que cortan). RF-37 pasa a ser el comando `watch`: el usuario
+> añade y quita direcciones sueltas de BTC o de BTCB2, guardadas en
+> `<datos>/watch.json`. Fuera: `WALLET_BTC_XPUBS`, `WALLET_XBT_XPUBS`, la
+> derivación BIP32/BIP84 y `gap_limit`. Se aceptan direcciones de cualquier
+> tipo, ya que no hay derivación que limitar. RF-38 y RNF-25 se reescriben;
+> RF-39 y CA-22 se ajustan. Pedido por el usuario.
