@@ -51,17 +51,17 @@ journalctl --user -u xbt -f        # la línea de arranque y los errores de arra
 ## Conectarse desde otra máquina
 
 ```sh
-ssh -t servidor xbt
+ssh -t miservidor xbt
 ```
 
 El `-t` hace falta: es una TUI. Si `xbt` no está en el PATH de una sesión no
-interactiva, usa la ruta completa: `ssh -t servidor ~/.local/bin/xbt`.
+interactiva, usa la ruta completa: `ssh -t miservidor ~/.local/bin/xbt`.
 
 También puedes correr la pantalla en tu máquina (con xbt-terminal instalado
 también ahí) y reenviar el socket:
 
 ```sh
-ssh -N -L /tmp/xbt.sock:/home/USUARIO/.local/state/xbt/xbt.sock servidor
+ssh -N -L /tmp/xbt.sock:/home/USUARIO/.local/state/xbt/xbt.sock miservidor
 xbt --socket /tmp/xbt.sock
 ```
 
@@ -128,5 +128,5 @@ llevan keys.
 | Error de ruta de socket demasiado larga | El límite de los sockets Unix es 107 bytes: con un `--data-dir` largo, pasa un `--socket` corto a los dos comandos. |
 | La pantalla se ve cortada | La terminal mide menos de 160×45. |
 | Copiar una dirección no hace nada | La terminal ignora OSC 52: instala `xclip` (X11) o `wl-copy` (Wayland). Por SSH solo sirve OSC 52. |
-| Por SSH, el fondo de las ventanas sale azul marino | `sshd` no pasa `COLORTERM` y Textual baja a 256 colores: `ssh -t servidor env COLORTERM=truecolor xbt`. |
+| Por SSH, el fondo de las ventanas sale azul marino | `sshd` no pasa `COLORTERM` y Textual baja a 256 colores: `ssh -t miservidor env COLORTERM=truecolor xbt`. |
 | Tras actualizar, la pantalla no conecta o da errores raros | Daemon y pantalla de versiones distintas: actualiza los dos y reinicia el daemon. |

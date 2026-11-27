@@ -1,11 +1,13 @@
 # CLAUDE.md
 
 Proyecto con **spec driven development**. Antes de tocar código, leer
-`HANDOFF.md` (estado y siguiente paso), `specs/README.md` y la tarea en curso
-de `specs/mvp/tasks.md`. Al terminar una sesión, actualizar `HANDOFF.md`
-(solo el estado vigente; lo que deja de serlo pasa a
-`specs/archive/handoff-historia.md`). `specs/archive/` es historia: no hace
-falta leerlo.
+`specs/README.md` y la tarea en curso de `specs/mvp/tasks.md`. Si existe
+`HANDOFF.md` (contexto personal del mantenedor: servidor, config real, estado
+de sesión; está en `.gitignore`, D-86), leerlo también y actualizarlo al
+terminar la sesión (lo que deja de ser vigente pasa a
+`specs/archive/handoff-historia.md`, también ignorado). Nada de eso entra en
+ficheros versionados.
+`specs/archive/` es historia: no hace falta leerlo.
 
 ## Reglas
 

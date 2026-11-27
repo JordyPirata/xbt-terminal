@@ -15,7 +15,7 @@ En pantalla BTCB2 aparece como **XBT**.
 > **Aviso de riesgo.** Este programa envía órdenes reales con tu dinero cuando
 > lo arrancas con `--live`. Se distribuye sin ninguna garantía (ver `LICENSE`).
 > Empieza en solo lectura y en dry-run, y en live con importes mínimos. Las
-> pruebas en real pendientes están en `HANDOFF.md`.
+> pruebas en real pendientes están en `specs/mvp/tasks.md`.
 
 ## Requisitos
 
@@ -173,8 +173,7 @@ tests/                  cada test marcado con @pytest.mark.spec("RF-NN")
 tools/spec_trace.py     matriz requerimientos ↔ tests
 ```
 
-El estado del desarrollo y el siguiente paso están en `HANDOFF.md`; el plan,
-en `specs/mvp/tasks.md`.
+El estado del desarrollo y el siguiente paso están en `specs/mvp/tasks.md`.
 
 ## Desarrollo
 

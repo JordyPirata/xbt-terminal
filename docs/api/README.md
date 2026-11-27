@@ -15,7 +15,7 @@ coinciden, manda lo grabado en `tests/fixtures/` y lo anotado en
 - `/account/orders` devuelve `side` en mayúsculas (`BUY`); `createorder` y
   `getorder`, en minúsculas (D-22).
 - `/market/trades` no coincide con el schema `HistoricalTrade`: trae `id`,
-  `type`, `baseVolume` y `timestamp` en ms (HANDOFF, T-09).
+  `type`, `baseVolume` y `timestamp` en ms (T-09).
 - `/cancelallorders`: el schema no marca `side` como obligatorio, pero sin él
   la API responde HTTP 200 con `{"error": "400 Bad Request"}` (D-58).
 - `/account/orders?status=active` también devuelve órdenes ya `Cancelled` o

@@ -18,8 +18,10 @@ como versiones nuevas de `requirements.md`:
 
 `specs/archive/` guarda la historia y no hace falta leerla para trabajar:
 `changelog.md` (qué cambió en cada versión de `requirements.md`),
-`tasks-done.md` (el detalle de cada tarea cerrada) y `handoff-historia.md`
-(estados viejos de `HANDOFF.md`).
+`tasks-done.md` (el detalle de cada tarea cerrada).
+
+El contexto personal de operación de cada mantenedor (servidor, config real,
+diario de sesión) no se versiona: vive en `HANDOFF.md`, ignorado por git (D-86).
 
 ## Identificadores
 

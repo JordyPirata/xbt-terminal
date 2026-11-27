@@ -475,7 +475,7 @@ def test_help_explains_subcommands(monkeypatch, capsys):
 
 @pytest.mark.spec("RF-30", "RF-31")
 def test_unknown_subcommand_does_not_start(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["xbt", "servidor"])
+    monkeypatch.setattr(sys, "argv", ["xbt", "miservidor"])
     with pytest.raises(SystemExit):
         main()
     assert "invalid choice" in capsys.readouterr().err

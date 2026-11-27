@@ -2,8 +2,10 @@
 
 xbt-terminal lo mantiene un grupo pequeño. No buscamos volumen de PRs, sino
 cambios que se entiendan, estén probados y sigan funcionando dentro de un año.
-Si es tu primera vez, empieza por leer `HANDOFF.md` (dónde está el trabajo) y
-`specs/README.md` (cómo se trabaja).
+Si es tu primera vez, empieza por leer `specs/README.md` (cómo se trabaja) y
+`specs/mvp/tasks.md` (dónde está el trabajo). Tus notas de operación
+(servidor, config real, estado de sesión) van en un `HANDOFF.md` propio, que
+git ignora.
 
 ## El proyecto se guía por su spec
 
@@ -114,3 +116,26 @@ completa está en `requirements.md` §Fuera de alcance.
 ## Licencia
 
 El proyecto es AGPL-3.0 (D-74). Al aportar, tu código entra con esa licencia.
+
+## Trampas conocidas
+
+- **Socket:** la ruta no puede pasar de 107 bytes (AF_UNIX). Con un `--data-dir`
+  largo, usar `--socket`.
+- **Colores por SSH:** `sshd` no pasa `COLORTERM`; usar `env COLORTERM=truecolor xbt`.
+- **Pantalla:** tras escribir un comando el foco queda en la línea; `Esc` antes de `q`.
+- **`VirtualLoop`:** con hora epoch, sumar 1 ns a un float no lo mueve; por eso
+  `CLOCK_RESOLUTION_S` = 1 µs.
+- **Tests inestables:** `test_dialog_does_not_wait_for_network` y, a veces,
+  `test_both_filled_cools_down` fallan con la suite entera y pasan por separado.
+- **`.pyc` viejo:** tras restaurar un fichero con `cp`, borrar `__pycache__`.
+- **Timestamps de test:** los `T0` alineados al timeframe (`T0 % 3_600_000 == 0`).
+- **ruff:** `×` está permitido; el signo menos `−` no, usar `-`.
+- **`core/` no importa de fuera de `core/`** (`RiskLimits` vive en `core/risk.py`).
+- **`market_stream`:** consumir con `aclosing()` o cancelando la tarea.
+- **Rich/Textual:** texto con corchetes del venue → `markup=False` o `Text`.
+- **`Input` de Textual:** `select_on_focus=True` por defecto; la línea de comandos lo pone a False.
+- **WebSockets:** `WS_CLOSE_TIMEOUT_S = 1.0`; NonKYC corta la conexión ante una petición errónea.
+- **NonKYC:** `/market/trades` no coincide con su OpenAPI (manda lo grabado) y firma la
+  url exacta: construir la query con `urlencode` y pasar la url hecha a httpx.
+- **respx:** gana la primera ruta que encaja; cambiar el `side_effect` de la del fixture.
+- **`ruff format`** no se aplica al repo entero: formatear solo los ficheros nuevos.

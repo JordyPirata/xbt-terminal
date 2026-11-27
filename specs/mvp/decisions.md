@@ -95,6 +95,7 @@ dicen en su propia nota.
 | D-83 | 2026-11-09 | Nombres que dicen qué son; comentarios solo para el porqué (T-98, T-99) |
 | D-84 | 2026-11-14 | Autocustodia por xpub native segwit en el inventario total (requirements v0.33, T-100) |
 | D-85 | 2026-11-25 | Autocustodia por direcciones con el comando `watch`; fuera los xpub (requirements v0.34, T-106) |
+| D-86 | 2026-11-26 | El contexto personal de operación va en `HANDOFF.md` (ignorado), no en el repo |
 | D-67 | 2026-10-25 | Eje Y de las velas ajustado a los cuerpos, no a las mechas |
 
 ## D-01 · 2026-10-19 · Todo asíncrono en el loop de Textual
@@ -1805,7 +1806,7 @@ actualizar, datos y problemas comunes. Y sin licencia nadie más puede usarlo.
 - `README.md` queda en qué es, instalar, primera puesta en marcha, seguridad y
   aviso de riesgo; `docs/despliegue.md` (servidor, servicio, actualizar, datos,
   problemas comunes) y `docs/uso.md` (atajos y ventanas). El estado de
-  desarrollo sigue en `HANDOFF.md` y la spec.
+  desarrollo sigue en `specs/mvp/tasks.md`.
 - El ejemplo de unidad `systemd --user` va en la documentación, no como fichero
   del repo: el binario sigue sin hablar con ningún gestor de servicios (D-61).
 **Toca:** RNF-08, RNF-16, RNF-20, T-76.
@@ -2236,3 +2237,17 @@ direcciones, los escaneos duran minutos contra exploradores que cortan (HTTP
 **Toca:** requirements v0.34 (RF-37, RF-38, RF-39, RNF-25, CA-22, Alcance,
 §Fuera de alcance, §Supuestos y riesgos), design.md §2, §6.5, §8 y §9, T-106 a
 T-109.
+
+## D-86 · 2026-11-26 · El contexto personal de operación va en `HANDOFF.md` (ignorado), no en el repo
+
+**Contexto:** `HANDOFF.md` y su historia mezclaban el estado del proyecto con el
+diario del mantenedor (servidor, unidad systemd, config real del bot, fees
+observadas), y `CLAUDE.md`, README y CONTRIBUTING mandaban a todo el mundo a
+leerlo primero.
+**Decisión:** el estado del proyecto vive solo en `specs/mvp/tasks.md` y la
+spec. Lo personal va en `HANDOFF.md` y `specs/archive/handoff-historia.md`, ambos en
+`.gitignore`: salen del repo y cada mantenedor tiene los suyos. Los avisos
+técnicos genéricos pasan a CONTRIBUTING §Trampas conocidas. Los ejemplos de
+docs usan `miservidor`.
+**Toca:** CLAUDE.md, README, CONTRIBUTING, specs/README, docs/despliegue.md,
+.gitignore. Las menciones a HANDOFF en entradas D-NN antiguas son historia.
