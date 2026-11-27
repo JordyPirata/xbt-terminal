@@ -77,6 +77,7 @@ dicen en su propia nota.
 | D-65 | 2026-10-25 | Fees en token valoradas en resultados (requirements v0.20, T-60) |
 | D-66 | 2026-10-25 | El daemon es el servidor y la TUI, su cliente (requirements v0.21, T-61 a T-66) |
 | D-87 | 2026-11-27 | La serie `values` de `results` se reduce en el daemon; el límite de línea sube (T-110) |
+| D-88 | 2026-11-27 | `bip-utils` valida las direcciones, elegida por popularidad en GitHub (requirements v0.35, T-111) |
 | D-67 | 2026-10-25 | Piernas de la doble junto a los balances (T-67) |
 | D-68 | 2026-10-25 | Al arrancar, el journal se pone al día con los trades del venue (T-68) |
 | D-69 | 2026-10-25 | Valor de la cuenta muestreado en el journal (requirements v0.22, T-69) |
@@ -2267,3 +2268,31 @@ no se tocan. `LIMIT` sube a 16 MiB y una línea mayor es un error propio, no una
 conexión perdida. Descartado: solo subir `LIMIT` (retrasa el problema).
 **Toca:** `core/valuation.py`, `core/results.py`, `services/control.py`,
 `services/remote.py`, `ui/screens/results.py`, T-110.
+
+## D-88 · 2026-11-27 · `bip-utils` valida las direcciones; se elige por popularidad (requirements v0.35, T-111)
+**Contexto:** D-85 pidió validar bech32, bech32m y base58check con la biblioteca
+estándar, y RNF-25 lo fijó como "ninguna dependencia criptográfica". El usuario
+pide cambiarlo por bibliotecas auditadas. El plan inicial era `bech32` + `base58`,
+pero `bech32` 1.2.0 solo cubre BIP173: no valida bech32m, y CA-22 exige aceptar
+`bc1p…` (taproot). Se compararon las opciones con datos de GitHub (2026-11-27):
+
+| Paquete | Estrellas | Forks | Estado | Cubre |
+| --- | --- | --- | --- | --- |
+| `bip-utils` 2.14.0 (MIT) | 391 | 105 | activo | bech32, bech32m, base58check |
+| `base58` 2.1.1 (MIT) | 189 | 69 | activo | solo base58 |
+| `bech32` 1.2.0 (MIT) | 20 | 13 | **archivado** (2020) | solo BIP173 |
+| `bech32m` 1.0.0 (MIT) | 1 | 0 | última versión 2023 | bech32 y bech32m |
+
+**Decisión:** `bip-utils` es la dependencia de `core/address.py`, por ser la más
+usada de las comparadas y la única que cubre los tres formatos. Usa
+`SegwitBech32Decoder` (bech32 y bech32m, longitudes y versión de witness de
+BIP173/BIP350) y `Base58Decoder.CheckDecode` (checksum), y el módulo mantiene las
+reglas de red mainnet, la mezcla de mayúsculas y los mensajes en español.
+**Coste aceptado:** `bip-utils` arrastra ~8 dependencias criptográficas con código
+nativo (coincurve, cryptography, pynacl, pycryptodome, sr25519). El usuario lo
+conoce y lo acepta a cambio de la popularidad. Es el precio más alto de la
+decisión: si se quiere reducirlo, el paso siguiente sería `base58` + `bech32m`.
+**Descartado:** `bech32` (archivado y sin bech32m), `bech32m` (una estrella y sin
+mantenimiento), y mantener la biblioteca estándar (sin auditoría externa).
+**Toca:** requirements v0.35 (RNF-25), design.md §6.5, `core/address.py`,
+`tests/unit/test_address.py`, `pyproject.toml`, `uv.lock`, T-111.

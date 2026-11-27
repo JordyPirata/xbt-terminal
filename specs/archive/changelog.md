@@ -192,3 +192,8 @@ Es historia: la spec vigente es la de `requirements.md`.
 > derivación BIP32/BIP84 y `gap_limit`. Se aceptan direcciones de cualquier
 > tipo, ya que no hay derivación que limitar. RF-38 y RNF-25 se reescriben;
 > RF-39 y CA-22 se ajustan. Pedido por el usuario.
+
+> **Cambio v0.34 → v0.35 (D-88):** RNF-25 deja de exigir "ninguna dependencia
+> criptográfica" y nombra `bip-utils` como la que valida el checksum de
+> `core/address.py`, elegida por estrellas y forks en GitHub frente a `bech32`
+> (archivado, sin bech32m), `bech32m` (una estrella) y `base58`. Pedido por el usuario.

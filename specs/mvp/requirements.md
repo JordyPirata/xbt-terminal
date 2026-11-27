@@ -1,6 +1,6 @@
 # xbt-terminal — Requerimientos MVP
 
-Versión 0.34 · 2026-11-25 · @JordyPirata · Estado: **aprobado para diseño**
+Versión 0.35 · 2026-11-27 · @JordyPirata · Estado: **aprobado para diseño**
 
 > Historial de versiones (qué cambió en cada una y por qué): `specs/archive/changelog.md`.
 
@@ -200,7 +200,7 @@ por IP y comparte presupuesto entre polling y órdenes.
 | RNF-22 | La decisión del bot (disparar o no, con qué precios y cantidad, y por qué no) es una función pura en `core/`, sin I/O ni reloj propio, probada con books sintéticos. El bucle del bot no hace más peticiones que la operación manual: los envíos comparten el limitador de Neoxa (RNF-03). |
 | RNF-23 | Latencia del bot: `decide` con 50 niveles por lado y `max_walk_pct` en los dos venues tarda menos de 5 ms (mediana); de un cambio de book que cruza a la llamada a `prepare_double` del bot, menos de 50 ms (mediana, venues simulados); `top(50)` de un book de 1000 niveles por lado, menos de 2 ms. Tests de latencia en la suite. |
 | RNF-24 | El daemon contrasta cada `risk.book_check_s` (5 s por defecto) el book local de cada venue con su book REST: mejor bid y mejor ask, precio y cantidad. Si coinciden, ese momento cuenta como frescura del book (RNF-16). Si no, el book local deja de ser fresco hasta que llega uno nuevo del venue: se vuelve a suscribir (NonKYC) o a conectar (Neoxa), y se apunta `book_resync` en el journal con los dos topes y en `diag.log`. Un contraste en el que llega un mensaje del book mientras se espera el REST no cuenta, ni para un lado ni para el otro. Un REST fallido no confirma: si fallan todos durante `stale_after_s`, el book queda viejo. |
-| RNF-25 | Las direcciones de RF-37 son datos sensibles: agrupan el patrimonio del usuario. Se guardan solo en `<datos>/watch.json` (permisos de RNF-18) y salen únicamente en la respuesta del comando `watch` al cliente que lo pidió, donde se muestran; no aparecen en el journal, los logs, los avisos, el `Snapshot` ni la muestra `value`. Al explorador solo llega una dirección por petición. La documentación avisa de que quien opera el explorador puede relacionar esas direcciones entre sí y con la IP del daemon. No se añade ninguna dependencia criptográfica: el checksum se valida con la biblioteca estándar. |
+| RNF-25 | Las direcciones de RF-37 son datos sensibles: agrupan el patrimonio del usuario. Se guardan solo en `<datos>/watch.json` (permisos de RNF-18) y salen únicamente en la respuesta del comando `watch` al cliente que lo pidió, donde se muestran; no aparecen en el journal, los logs, los avisos, el `Snapshot` ni la muestra `value`. Al explorador solo llega una dirección por petición. La documentación avisa de que quien opera el explorador puede relacionar esas direcciones entre sí y con la IP del daemon. La única dependencia criptográfica de la autocustodia es `bip-utils`, que valida el checksum de bech32, bech32m y base58check (D-88). Se eligió por ser la más usada de las comparadas, por estrellas y forks en GitHub; no deriva claves ni firma. |
 
 Fuente de los límites de Neoxa: [documentación de su API](https://neoxa.exchange/api-docs).
 

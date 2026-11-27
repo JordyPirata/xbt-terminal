@@ -336,7 +336,7 @@ lee esas filas con las de las dobles y las devuelve en `Report.values`, así que
 la serie viaja al cliente con `results {range}` sin comando nuevo.
 
 Autocustodia (RF-37 a RF-39, D-85): `core/address.py` valida una dirección
-mainnet (bech32, bech32m, base58check) con la biblioteca estándar.
+mainnet (bech32, bech32m, base58check) con `bip-utils` (D-88).
 `adapters/explorer.py` pide `GET <url>/address/<dirección>` a una API tipo
 Esplora y devuelve el saldo (confirmado + mempool) y si la dirección tiene
 transacciones. `CustodyService` (`services/custody.py`) escanea al arrancar y

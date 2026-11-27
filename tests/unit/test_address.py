@@ -47,6 +47,11 @@ INVALID = {
     "v1 with bech32": _segwit(1, bytes(32), _BECH32),
     "base58 checksum": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN3",
     "base58 testnet": "mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn",
+    "p2sh checksum": "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLz",
+    "base58 character outside the alphabet": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN0",
+    "bech32 character outside the alphabet": "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3tb",
+    "v0 program of 21 bytes": _segwit(0, bytes(21), _BECH32),
+    "witness version 17": _segwit(17, bytes(20), _BECH32M),
     "empty": "",
     "free text": "not an address",
 }
