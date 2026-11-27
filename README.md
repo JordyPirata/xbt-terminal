@@ -1,6 +1,7 @@
 # xbt-terminal
+<img width="1365" height="644" alt="image" src="https://github.com/user-attachments/assets/1bab413e-de87-46c6-970c-5e6567edbaf7" />
 
-Terminal de consola para operar BTCB2 contra BTC en NonKYC y Neoxa desde una
+Terminal de consola para operar XBT contra BTC en NonKYC y Neoxa desde una
 sola pantalla: dos gráficos, dos libros de órdenes, panel de spread cruzado,
 balances y órdenes límite simples o dobles. Se opera a mano; lo único
 automático es un bot de arbitraje taker opcional, apagado por defecto.
