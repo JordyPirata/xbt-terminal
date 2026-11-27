@@ -239,7 +239,7 @@ class ResultsScreen(ModalScreen[None]):
         """Series summary (RF-32) and what it is not: deposits and withdrawals unadjusted,
         gaps without daemon."""
         values = self.report.values if self.report is not None else ()
-        summary = summarize(values)
+        summary = summarize(values, self.report.value_count if self.report else 0)
         if summary is None:
             return (
                 "aún sin muestras en el rango: el daemon apunta una cada `value_every_s` "

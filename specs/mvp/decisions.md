@@ -76,6 +76,7 @@ dicen en su propia nota.
 | D-64 | 2026-10-25 | NonKYC corrige la fee de un fill después (requirements v0.19, T-59) |
 | D-65 | 2026-10-25 | Fees en token valoradas en resultados (requirements v0.20, T-60) |
 | D-66 | 2026-10-25 | El daemon es el servidor y la TUI, su cliente (requirements v0.21, T-61 a T-66) |
+| D-87 | 2026-11-27 | La serie `values` de `results` se reduce en el daemon; el límite de línea sube (T-110) |
 | D-67 | 2026-10-25 | Piernas de la doble junto a los balances (T-67) |
 | D-68 | 2026-10-25 | Al arrancar, el journal se pone al día con los trades del venue (T-68) |
 | D-69 | 2026-10-25 | Valor de la cuenta muestreado en el journal (requirements v0.22, T-69) |
@@ -2251,3 +2252,18 @@ técnicos genéricos pasan a CONTRIBUTING §Trampas conocidas. Los ejemplos de
 docs usan `miservidor`.
 **Toca:** CLAUDE.md, README, CONTRIBUTING, specs/README, docs/despliegue.md,
 .gitignore. Las menciones a HANDOFF en entradas D-NN antiguas son historia.
+
+## D-87 · 2026-11-27 · La serie `values` de `results` se reduce en el daemon
+
+**Contexto:** `results todo` con el journal real (8.491 muestras `value`, 3.116
+dobles) era una línea de 4,21 MB, sobre el `LIMIT` de 4 MiB del cliente. El
+`ValueError` de `readline` se trataba como caída del daemon y reconectaba en
+bucle. La serie crece con cada día.
+**Decisión:** el daemon manda como mucho 1.000 muestras (`decimate`: primera y
+última, ambos lados de huecos y de saltos > 5 %, máx. y mín. de cada cubo), más
+`Report.value_count` con el nº real; el resumen y `z` dan lo mismo que con la serie
+entera, salvo el nº de muestras del último tramo, que cuenta las enviadas. Los dobles
+no se tocan. `LIMIT` sube a 16 MiB y una línea mayor es un error propio, no una
+conexión perdida. Descartado: solo subir `LIMIT` (retrasa el problema).
+**Toca:** `core/valuation.py`, `core/results.py`, `services/control.py`,
+`services/remote.py`, `ui/screens/results.py`, T-110.

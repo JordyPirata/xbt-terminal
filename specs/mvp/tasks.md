@@ -309,3 +309,6 @@ En este orden. Sustituye los xpub de M21; ninguna cambia lo que el bot decide.
 
 ### T-109 Comando `watch` · `done` · RF-37, RF-39, RNF-25, CA-22 · dep T-108 · D-85
 
+## M23 — Resultados largos por el socket (D-87)
+
+### T-110 Rango `todo` sin pasar el límite del socket · `done` · RF-32, RF-31, RF-25 · dep T-94 · D-87

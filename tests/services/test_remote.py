@@ -168,6 +168,36 @@ class TestReconnect:
             task.cancel()
             await remote.aclose()
 
+    @pytest.mark.spec("RF-31")
+    async def test_oversized_line_is_not_reported_as_a_lost_daemon(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        from xbt_terminal.services import remote as remote_module
+
+        monkeypatch.setattr(remote_module, "LIMIT", 1024)
+
+        async def serve(reader, writer):
+            writer.write(b'{"type":"hello","mode":"dry-run"}\n')
+            writer.write(b'{"type":"x","pad":"' + b"a" * 5_000 + b'"}\n')
+            await writer.drain()
+            await asyncio.sleep(0.2)
+            writer.close()
+
+        path = tmp_path / "big.sock"
+        server = await asyncio.start_unix_server(serve, path=str(path))
+        remote = RemoteEngine(path, has_bot=False, retry_s=0.02)
+        notices = []
+        remote.subscribe(notices.append)
+        task = asyncio.create_task(remote.run())
+        try:
+            await until(lambda: any("demasiado grande" in notice.text for notice in notices))
+        finally:
+            task.cancel()
+            await remote.aclose()
+            server.close()
+        assert not any("perdida" in notice.text for notice in notices)
+        assert "too large" in caplog.text
+
     async def test_unconnected_order_does_not_leave_and_says_so(self, tmp_path):
         remote = RemoteEngine(tmp_path / "no.sock", has_bot=True)
         notices = []

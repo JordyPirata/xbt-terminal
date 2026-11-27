@@ -10,6 +10,7 @@ from xbt_terminal.core.results import compute
 from xbt_terminal.core.valuation import (
     ValueSample,
     VenueValue,
+    decimate,
     last_stretch,
     sample,
     sample_data,
@@ -206,3 +207,38 @@ class TestLastStretch:
 
     def test_empty(self):
         assert last_stretch(()) == ()
+
+
+@pytest.mark.spec("RF-32", "RF-31")
+class TestDecimate:
+    def test_under_the_limit_is_untouched(self):
+        value_sample = [simple(T0 + i * EVERY, "1.0") for i in range(10)]
+        assert decimate(value_sample, 10) == tuple(value_sample)
+
+    def test_reduces_and_keeps_first_and_last(self):
+        value_sample = [simple(T0 + i * EVERY, f"1.00{i % 7}") for i in range(5_000)]
+        kept = decimate(value_sample, 200)
+        assert len(kept) <= 200
+        assert kept[0] == value_sample[0] and kept[-1] == value_sample[-1]
+        assert list(kept) == sorted(kept, key=lambda item: item.ts)
+
+    def test_keeps_the_extremes_of_the_range(self):
+        value_sample = [simple(T0 + i * EVERY, "1.0") for i in range(5_000)]
+        value_sample[1_234] = simple(T0 + 1_234 * EVERY, "1.04")
+        value_sample[3_456] = simple(T0 + 3_456 * EVERY, "0.96")
+        summary = summarize(decimate(value_sample, 200))
+        assert (summary.high, summary.low) == (D("1.04"), D("0.96"))
+
+    def test_keeps_both_sides_of_a_jump(self):
+        value_sample = [simple(T0 + i * EVERY, "1.0") for i in range(3_000)]
+        value_sample += [simple(T0 + i * EVERY, "0.5") for i in range(3_000, 6_000)]
+        kept = decimate(value_sample, 100)
+        assert last_stretch(kept)[0] == value_sample[3_000]
+
+    def test_keeps_the_edges_of_a_gap(self):
+        before = [simple(T0 + i * EVERY, "1.0") for i in range(3_000)]
+        after = [simple(T0 + (i + 3_100) * EVERY, "1.0") for i in range(3_000)]
+        kept = decimate(before + after, 100)
+        assert before[-1] in kept and after[0] in kept
+        gap = kept.index(after[0])
+        assert kept[gap - 1] == before[-1]

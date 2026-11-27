@@ -163,6 +163,8 @@ class Report:
     curve: tuple[tuple[int, Decimal], ...]  # (double start, cumulative)
     # account value in the range (RF-32, D-69): `value` samples of the journal
     values: tuple[ValueSample, ...] = ()
+    # real number of samples when `values` was reduced for the wire (D-87); 0 if not
+    value_count: int = 0
 
 
 def _part(order_leg: _Leg, quantity: Decimal) -> Decimal:

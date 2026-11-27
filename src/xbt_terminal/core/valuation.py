@@ -9,7 +9,8 @@ PnL: deposits and withdrawals show as jumps, unadjusted.
 With self-custody wallets (RF-39, D-84) the total includes them and the sample carries
 a `custody` entry; samples from before, without it, still read.
 
-Spec: RF-05, RF-32, RF-39, RNF-10, CA-17, CA-22 · design.md §6.5 · D-69, D-84 · Tasks: T-69, T-105
+Spec: RF-05, RF-32, RF-31, RF-39, RNF-10, CA-17, CA-22 · design.md §6.5
+Decisions: D-69, D-84, D-87 · Tasks: T-69, T-105, T-110
 """
 
 from __future__ import annotations
@@ -181,7 +182,8 @@ def series(
     return tuple(out), bad
 
 
-def summarize(values: Sequence[ValueSample]) -> ValueSummary | None:
+def summarize(values: Sequence[ValueSample], count: int = 0) -> ValueSummary | None:
+    """`count`: the real number of samples when `values` is the reduced series (D-87)."""
     if not values:
         return None
     first, last = values[0].value, values[-1].value
@@ -195,7 +197,7 @@ def summarize(values: Sequence[ValueSample]) -> ValueSummary | None:
         change_pct=(last - first) / first * HUNDRED if first != ZERO else None,
         high=max(nums),
         low=min(nums),
-        count=len(values),
+        count=count or len(values),
     )
 
 
@@ -227,22 +229,51 @@ def _jumped(before: Decimal, after: Decimal) -> bool:
     return abs(after - before) / before * HUNDRED > JUMP_PCT
 
 
+def _transfer_between(prev: ValueSample, cur: ValueSample) -> bool:
+    """A jump above `JUMP_PCT` between two samples in a row, in the total, a venue or
+    the wallets."""
+    pairs = [(prev.value, cur.value)]
+    before = {venue_value.venue: venue_value.value for venue_value in prev.venues}
+    pairs += [
+        (before[venue_value.venue], venue_value.value)
+        for venue_value in cur.venues
+        if venue_value.venue in before
+    ]
+    if prev.custody is not None and cur.custody is not None:
+        pairs.append((prev.custody.value, cur.custody.value))
+    return any(_jumped(earlier, later) for earlier, later in pairs)
+
+
 def last_stretch(values: Sequence[ValueSample]) -> tuple[ValueSample, ...]:
     """Samples since the last jump above `JUMP_PCT` between two in a row, in the total
     or a venue: a transfer in transit crushes the scale and hides what price and bot
     move (D-69)."""
     start = 0
     for i in range(1, len(values)):
-        prev, cur = values[i - 1], values[i]
-        pairs = [(prev.value, cur.value)]
-        before = {venue_value.venue: venue_value.value for venue_value in prev.venues}
-        pairs += [
-            (before[venue_value.venue], venue_value.value)
-            for venue_value in cur.venues
-            if venue_value.venue in before
-        ]
-        if prev.custody is not None and cur.custody is not None:
-            pairs.append((prev.custody.value, cur.custody.value))
-        if any(_jumped(earlier, later) for earlier, later in pairs):
+        if _transfer_between(values[i - 1], values[i]):
             start = i
     return tuple(values[start:])
+
+
+def decimate(values: Sequence[ValueSample], limit: int) -> tuple[ValueSample, ...]:
+    """About `limit` samples at most for the wire (D-87): the whole range would be
+    megabytes. Unlike `thin` it keeps what the summary and `z` read: first and last, both
+    sides of every gap and jump, and the highest and lowest total of each bucket."""
+    if len(values) <= limit:
+        return tuple(values)
+    keep = {0, len(values) - 1}
+    for i in range(1, len(values)):
+        prev, cur = values[i - 1], values[i]
+        if cur.ts - prev.ts > 2 * cur.every_ms or _transfer_between(prev, cur):
+            keep |= {i - 1, i}
+    buckets = max(1, (limit - len(keep)) // 4)
+    size = -(-len(values) // buckets)
+    for start in range(0, len(values), size):
+        chunk = range(start, min(start + size, len(values)))
+        keep |= {
+            chunk[0],
+            chunk[-1],
+            max(chunk, key=lambda i: values[i].value),
+            min(chunk, key=lambda i: values[i].value),
+        }
+    return tuple(values[i] for i in sorted(keep))

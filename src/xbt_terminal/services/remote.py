@@ -76,11 +76,17 @@ REPLIES: dict[str, type] = {
         CancelPlan, CancelRefused, CancelResult,
     )
 }  # fmt: skip
-LIMIT = 2**22  # a snapshot with many doubles fits easily
+# the `todo` results of a long journal are one line: 8,500 value samples and 3,100 doubles
+# were 4.2 MB, over the old 4 MiB (the reader then raised and looked like a lost daemon)
+LIMIT = 2**24
 
 
 class DaemonGoneError(Exception):
     pass
+
+
+class ReplyTooBigError(Exception):
+    """A daemon line over `LIMIT`: the stream is out of step, so the link is reopened."""
 
 
 class DaemonRefusedError(Exception):
@@ -568,8 +574,12 @@ class RemoteEngine:
             except DaemonGoneError:
                 await asyncio.sleep(self._retry_s)
                 continue
+            lost = "⚠ conexión con el daemon perdida: reintentando"
             try:
                 await self._read(reader)
+            except ReplyTooBigError:
+                log.warning("daemon reply too large (over %d bytes): reopening the link", LIMIT)
+                lost = "⚠ respuesta del daemon demasiado grande: reconectando"
             except (ConnectionError, OSError, ValueError) as exception:
                 log.warning("connection with the daemon lost: %s", exception)
             finally:
@@ -578,11 +588,21 @@ class RemoteEngine:
                 self._abandon()
                 if self.connected:
                     self._set_link(False)
-                    self._say("⚠ conexión con el daemon perdida: reintentando", error=True)
+                    self._say(lost, error=True)
             await asyncio.sleep(self._retry_s)
 
+    @staticmethod
+    async def _readline(reader: asyncio.StreamReader) -> bytes:
+        try:
+            return await reader.readline()
+        except ValueError as error:
+            # asyncio chains the overrun implicitly, not with `from`
+            if isinstance(error.__context__, asyncio.LimitOverrunError):
+                raise ReplyTooBigError from error
+            raise
+
     async def _read(self, reader: asyncio.StreamReader) -> None:
-        while line := await reader.readline():
+        while line := await self._readline(reader):
             msg = loads(line)
             try:
                 self._handle(msg)

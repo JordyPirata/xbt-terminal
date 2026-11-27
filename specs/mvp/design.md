@@ -726,7 +726,7 @@ Dos formas de arrancar el mismo binario:
     `prepare {PlaceOrder}` → `Pending` + `token` | `Rejected`; `confirm
     {token}` → `Sent | Failed | Uncertain | Rejected`; `prepare_double
     {DoubleOrder}` / `confirm_double {token}`; `plan_cancel {CancelOrders}` /
-    `execute_cancel {token}`; `results {range}` → `Report`; `deposits` →
+    `execute_cancel {token}`; `results {range}` → `Report` (con `values` reducida a ≤ 1.000 muestras y `value_count`, D-87); `deposits` →
     `[DepositRow]`; `withdrawal_fees` → comisiones de retiro; `watch {action, chain, address}`
     → la lista de direcciones vigiladas (RF-37; solo aquí viajan las direcciones, RNF-25).
   - Propuestas (`Pending`, `PendingDouble`, `CancelPlan`) guardadas en el

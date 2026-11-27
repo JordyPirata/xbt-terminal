@@ -1354,3 +1354,14 @@ ni los textos que ve el usuario.
 ### T-109 Comando `watch` · `done` · RF-37, RF-39, RNF-25, CA-22 · dep T-108 · D-85
 Gramática en `core/commands.py`, comando del control y del protocolo (`watch`, `watch add`, `watch rm`), ayuda de la app, `docs/uso.md` §Autocustodia y comprobación de que ninguna dirección sale por journal, logs, avisos ni `Snapshot`.
 - Hecho: `watch [add|rm btc|xbt <dirección>]` en `core/commands.py`, `watch` en el control del daemon (`Watched`, la única respuesta donde viajan las direcciones), `RemoteWatch`, `WatchScreen` y la ayuda. Una negativa del daemon sale en la barra sin la dirección.
+
+### T-110 Rango `todo` sin pasar el límite del socket · `done` · RF-32, RF-31, RF-25 · dep T-94 · D-87
+- `results todo` con 8.491 muestras `value` y 3.116 dobles medía 4,21 MB y pasaba el
+  `LIMIT` del cliente (4 MiB): `readline` lanzaba `ValueError` y `RemoteEngine.run` lo
+  tomaba por caída del daemon, en bucle.
+- `core/valuation.decimate`: ≤ 1.000 muestras en el daemon (`control.WIRE_VALUES`) que
+  conservan primera y última, bordes de huecos y saltos > 5 % y máx/mín por cubo;
+  `Report.value_count` lleva el nº real y el resumen lo usa.
+- `LIMIT` a 16 MiB; una línea mayor da `ReplyTooBigError` y el aviso "respuesta del
+  daemon demasiado grande", no "conexión perdida".
+

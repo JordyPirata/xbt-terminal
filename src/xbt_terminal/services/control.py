@@ -29,6 +29,7 @@ import logging
 import os
 import secrets
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -36,6 +37,7 @@ from .. import __version__
 from ..core.commands import CancelAll, CancelOrder, CancelVenue, DoubleOrder, PlaceOrder
 from ..core.models import BookDelta, BookSnapshot, ConnState, Trade, VenueId
 from ..core.results import Range
+from ..core.valuation import decimate
 from .custody import WatchError
 from .engine import Engine, Notice
 from .faults import Fault
@@ -57,6 +59,7 @@ log = logging.getLogger(__name__)
 
 SOCKET_NAME = "xbt.sock"
 MarketEvent = BookSnapshot | BookDelta | Trade | ConnState
+WIRE_VALUES = 1_000  # value samples per `results` reply: more than a chart can tell apart
 MAX_SOCKET_PATH = 107  # bytes: Linux sun_path (108) minus the final NUL
 
 
@@ -435,7 +438,15 @@ class ControlServer:
         rng = decode(Range, args["range"])
         await results.refresh_prices()
         # reading the journals of the whole range is disk: off the loop
-        return await asyncio.to_thread(results.load, rng), None
+        report = await asyncio.to_thread(results.load, rng)
+        if len(report.values) > WIRE_VALUES:
+            # `todo` grows every day: the whole series was over the client's line limit (D-87)
+            report = replace(
+                report,
+                values=decimate(report.values, WIRE_VALUES),
+                value_count=len(report.values),
+            )
+        return report, None
 
     async def _deposits(self, args: dict[str, Any]) -> tuple[Any, str | None]:
         deposits = self._engine.deposits

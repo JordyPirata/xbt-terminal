@@ -92,6 +92,19 @@ class TestResultList:
             assert values == results.load("dia").values
             assert [value_item.value for value_item in values] == [D("1.5")]
 
+    @pytest.mark.spec("RF-32", "RF-31")
+    async def test_long_series_is_reduced_and_still_fits(self, tmp_path):
+        jdir = tmp_path / "j"
+        rows = [value_row(T0 + i * 300_000, "1.5", nk="1", nx="0.5") for i in range(8_500)]
+        write(jdir, "20261022", rows)
+        results = ResultsService(jdir, clock=lambda: T0)
+        async with Daemon(tmp_path, results=results) as daemon:
+            await daemon.remote.results.refresh("todo")
+            report = daemon.remote.results.load("todo")
+            assert len(report.values) <= 1_000
+            assert report.value_count == 8_500
+            assert daemon.remote.connected
+
     async def test_no_results_in_daemon(self, tmp_path):
         async with Daemon(tmp_path) as daemon:
             await daemon.remote.results.refresh("dia")
