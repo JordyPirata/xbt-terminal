@@ -9,3 +9,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 dist/
+
+# Contexto personal del mantenedor (D-86)
+HANDOFF.md
+specs/archive/handoff-historia.md
