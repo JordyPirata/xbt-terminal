@@ -36,9 +36,12 @@ WantedBy=default.target
 systemctl --user daemon-reload
 systemctl --user enable --now xbt
 loginctl enable-linger "$USER"     # que siga corriendo sin sesión abierta
-journalctl --user -u xbt -f        # la línea de arranque y los errores de arranque
+journalctl --user -u xbt -f        # el log de diagnóstico del daemon
+journalctl --user -u xbt -p warning --since today   # solo avisos y errores
 ```
 
+- El daemon escribe su log de diagnóstico en stderr (nivel en `[log]` de la
+  config): journald lo guarda y lo rota, con la prioridad de cada línea.
 - Quita `--live` para dejarlo en dry-run.
 - Reiniciar es seguro para el bot: arranca **apagado** y hay que armarlo otra
   vez desde la pantalla con `bot on`. Las órdenes abiertas siguen en el
@@ -108,7 +111,6 @@ En `~/.local/state/xbt/`:
 | Fichero | Qué es |
 | --- | --- |
 | `journal-YYYYMMDD.jsonl` | Un evento por línea, un fichero por día UTC: órdenes, fills, bot, valor de la cuenta. De aquí salen los resultados (`r`). |
-| `diag.log` | Log de diagnóstico del daemon (nivel en `[log]` de la config). |
 | `client.log` | Log de la pantalla. |
 | `xbt.lock`, `xbt.sock` | Lock de instancia única y socket de la pantalla. No hace falta guardarlos. |
 

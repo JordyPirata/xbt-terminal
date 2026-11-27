@@ -316,3 +316,7 @@ En este orden. Sustituye los xpub de M21; ninguna cambia lo que el bot decide.
 ## M24 — Validador con `bip-utils` (v0.35, D-88)
 
 ### T-111 Validador de direcciones con `bip-utils` · `done` · RNF-25, RF-37, CA-22 · dep T-107 · D-88
+
+## M25 — Diagnóstico del daemon en journald (v0.36, D-89)
+
+### T-112 Log de diagnóstico del daemon por stderr · `done` · RNF-19, RNF-24, RNF-18 · D-89

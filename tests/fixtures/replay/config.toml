@@ -71,4 +71,4 @@ competitor_pct = "0"
 seed = 1
 
 [log]
-level = "info"               # RNF-19: debug | info | warning | error (diag.log en los datos)
+level = "info"               # RNF-19: debug | info | warning | error (stderr del daemon: journalctl)

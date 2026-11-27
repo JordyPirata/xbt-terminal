@@ -820,10 +820,13 @@ y no coincidiría.
 - Instancia única (RNF-17): `InstanceLock` hace `flock` exclusivo sobre
   `<datos>/xbt.lock` antes de montar la app, en todos los modos, y lo suelta
   al salir. La segunda instancia sale con el pid de la primera.
-- Log de diagnóstico (`diaglog.py`, RNF-19, D-33): `<datos>/diag.log`, 1 MB × 5
-  ficheros, `0600`, UTC. Logger `xbt_terminal` (cada módulo con
+- Log de diagnóstico (`diaglog.py`, RNF-19, D-33, D-89): el daemon escribe en
+  stderr (`setup_daemon_diagnostics`); con `JOURNAL_STREAM`, cada línea con el
+  prefijo de prioridad `<N>`. La pantalla escribe en `<datos>/client.log`, 1 MB × 5
+  ficheros, `0600`. Línea al estilo logback en las dos:
+  `2026-11-27 19:20:27.967Z WARN  módulo - mensaje` (UTC; `WARN`, `FATAL`). Logger `xbt_terminal` (cada módulo con
   `getLogger(__name__)`), sin propagar al root y con un `NullHandler` desde la
-  importación, para que nada llegue a stderr. El formatter pasa la línea entera,
+  importación, para que nada llegue a stderr sin configurarlo. El formatter pasa la línea entera,
   traceback incluido, por el `Redactor`. Nivel en `[log] level` (opcional,
   `info`). Apuntan: el supervisor (WS conectado/caído con la causa y el
   reintento, polling REST de respaldo), el hub (carga del mercado), la cuenta

@@ -83,4 +83,4 @@ band_pct = "10"              # puntos a cada lado (15-35 %); el bot no dispara s
 # seed = 0                   # misma semilla, mismo resultado
 
 [log]
-level = "info"               # RNF-19: debug | info | warning | error (diag.log en los datos)
+level = "info"               # RNF-19: debug | info | warning | error (stderr del daemon: journalctl)

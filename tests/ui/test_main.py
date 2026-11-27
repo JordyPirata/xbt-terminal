@@ -280,8 +280,9 @@ def test_daemon_runs_engine_without_screen(xdg, served, monkeypatch, capsys):
     assert served["socket"] == data / "xbt.sock"
     assert served["book_depth"] == 15
     assert isinstance(served["view"], ClientView) and served["view"].timeframe == "1m"
-    assert "xbt daemon en dry-run" in capsys.readouterr().err
-    assert "starting in dry-run" in (data / "diag.log").read_text()  # RNF-19
+    err = capsys.readouterr().err
+    assert "xbt daemon en dry-run" in err
+    assert "starting in dry-run" in err and not (data / "diag.log").exists()  # RNF-19
     assert not (Path.cwd() / "logs").exists()
     with InstanceLock(data):  # released on exit
         pass

@@ -78,6 +78,7 @@ dicen en su propia nota.
 | D-66 | 2026-10-25 | El daemon es el servidor y la TUI, su cliente (requirements v0.21, T-61 a T-66) |
 | D-87 | 2026-11-27 | La serie `values` de `results` se reduce en el daemon; el límite de línea sube (T-110) |
 | D-88 | 2026-11-27 | `bip-utils` valida las direcciones, elegida por popularidad en GitHub (requirements v0.35, T-111) |
+| D-89 | 2026-11-27 | El log de diagnóstico del daemon sale por stderr para journald; fuera `diag.log` (requirements v0.36, T-112; corrige D-33) |
 | D-67 | 2026-10-25 | Piernas de la doble junto a los balances (T-67) |
 | D-68 | 2026-10-25 | Al arrancar, el journal se pone al día con los trades del venue (T-68) |
 | D-69 | 2026-10-25 | Valor de la cuenta muestreado en el journal (requirements v0.22, T-69) |
@@ -2296,3 +2297,27 @@ decisión: si se quiere reducirlo, el paso siguiente sería `base58` + `bech32m`
 mantenimiento), y mantener la biblioteca estándar (sin auditoría externa).
 **Toca:** requirements v0.35 (RNF-25), design.md §6.5, `core/address.py`,
 `tests/unit/test_address.py`, `pyproject.toml`, `uv.lock`, T-111.
+
+## D-89 · 2026-11-27 · El log de diagnóstico del daemon sale por stderr para journald (requirements v0.36, T-112)
+**Contexto:** D-33 llevó el diagnóstico a `<datos>/diag.log` porque la TUI ocupaba
+la pantalla. Desde D-66 el daemon no tiene pantalla y corre bajo `systemd --user`:
+`journalctl --user -u xbt` solo enseñaba la línea de arranque, y para ver una caída
+del WS había que abrir el fichero en el servidor. El usuario pide verlo en el journal
+de systemd.
+**Decisión:** el daemon instala en el logger `xbt_terminal` un `StreamHandler` a
+stderr, con el mismo formatter que redacta la línea entera. Si existe
+`JOURNAL_STREAM` (systemd lo pone cuando stderr va a journald), cada línea lleva el
+prefijo `<N>` de sd-daemon (debug 7, info 6, warning 4, error 3, critical 2):
+`journalctl -p warning` filtra. La línea, en las dos salidas y en `client.log`,
+sigue el patrón de logback `%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger - %msg`,
+en UTC con `Z` (`2026-11-27 19:20:27.967Z WARN  xbt_terminal.adapters.nonkyc - …`),
+con sus nombres de nivel (`WARN`, `FATAL`). Bajo journald la hora sale dos veces
+(la de journald, en hora local, y la de la línea, en UTC): el usuario la quiere en
+la línea, que es lo que se copia y se compara con el journal de operaciones. El daemon deja de escribir `diag.log`: journald
+ya guarda y rota, y dos copias del mismo log no aportan nada. La pantalla sigue con
+`client.log` (rotativo, `0600`): ella sí ocupa la terminal.
+**Descartado:** escribir en los dos sitios (elegido por el usuario: solo stderr) y
+`systemd-python`/`JournalHandler` (dependencia nativa para lo que da el prefijo `<N>`).
+**Toca:** requirements v0.36 (RNF-18, RNF-19, RNF-24), design.md §8, `diaglog.py`,
+`__main__.py`, `tests/unit/test_diaglog.py`, `tests/ui/test_main.py`,
+`docs/despliegue.md`, `config.example.toml`, T-112.

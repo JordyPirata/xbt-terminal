@@ -197,3 +197,8 @@ Es historia: la spec vigente es la de `requirements.md`.
 > criptográfica" y nombra `bip-utils` como la que valida el checksum de
 > `core/address.py`, elegida por estrellas y forks en GitHub frente a `bech32`
 > (archivado, sin bech32m), `bech32m` (una estrella) y `base58`. Pedido por el usuario.
+
+> **Cambio v0.35 → v0.36 (D-89):** el log de diagnóstico del daemon (RNF-19) deja
+> `<datos>/diag.log` y sale por stderr, para leerlo con `journalctl` bajo systemd,
+> que lo guarda y lo rota. La pantalla sigue con `client.log`. RNF-18 y RNF-24 se
+> ajustan. Pedido por el usuario.

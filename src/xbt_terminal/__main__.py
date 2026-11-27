@@ -38,7 +38,7 @@ from .core.models import VenueId
 from .core.ratelimit import RateLimiter
 from .core.replay import ReplayReport, render
 from .core.secrets import Redactor
-from .diaglog import setup_diagnostics
+from .diaglog import setup_daemon_diagnostics, setup_diagnostics
 from .paths import AlreadyRunningError, InstanceLock, private_dir, resolve_paths
 from .services.account import AccountService
 from .services.bot import BotService
@@ -82,7 +82,6 @@ def limiter(rl: RateLimitConfig) -> RateLimiter:
     )
 
 
-CLIENT_LOG = "client.log"
 DESCRIPTION = "xbt-terminal: daemon, pantalla e informe sobre una grabación."
 
 
@@ -338,7 +337,7 @@ def client(data: Path, socket: Path) -> None:
         raise SystemExit(f"No se puede conectar: {error}.") from None
     private_dir(data)
     # the client has no keys to redact
-    diag = setup_diagnostics(data, Redactor([]), "INFO", name=CLIENT_LOG)
+    diag = setup_diagnostics(data, Redactor([]), "INFO")
     logging.getLogger(__name__).info("client of %s (%s)", socket, hello.mode)
     try:
         build_client_app(socket, hello).run()
@@ -484,7 +483,7 @@ def main() -> None:
         lock.acquire()
     except AlreadyRunningError as error:
         raise SystemExit(str(error)) from None
-    diag = setup_diagnostics(paths.data, settings.redactor, settings.config.log.level)
+    diag = setup_daemon_diagnostics(settings.redactor, settings.config.log.level)
     logging.getLogger(__name__).info("starting in %s, data in %s", settings.mode, paths.data)
     try:
         asyncio.run(serve(settings, paths.data, socket, record=args.record, venues=venues))

@@ -1365,3 +1365,10 @@ Gramática en `core/commands.py`, comando del control y del protocolo (`watch`, 
 - `LIMIT` a 16 MiB; una línea mayor da `ReplyTooBigError` y el aviso "respuesta del
   daemon demasiado grande", no "conexión perdida".
 
+### T-112 Log de diagnóstico del daemon por stderr · `done` · RNF-19, RNF-24, RNF-18 · D-89
+`setup_daemon_diagnostics` en `diaglog.py` (stderr, redactado, prefijo `<N>` con `JOURNAL_STREAM`), el daemon sin `diag.log`, la pantalla con `client.log`; tests, `docs/despliegue.md` y comentarios de la config.
+- Hecho: el daemon instala `DaemonHandler` (stderr) con el formatter que redacta;
+  con `JOURNAL_STREAM`, prefijo `<N>` de sd-daemon (`journalctl -p` filtra). Línea
+  al estilo logback (`yyyy-MM-dd HH:mm:ss.SSSZ LEVEL logger - msg`, UTC) en el daemon
+  y en `client.log`. Ya no hay `diag.log`; `setup_diagnostics` queda para `client.log`, y
+  `CLIENT_LOG` pasa de `__main__` a `diaglog`.
